@@ -1,0 +1,8 @@
+flask
+python-dotenv
+openai-whisper
+transformers
+sentencepiece
+torch
+moviepy
+edge-tts
