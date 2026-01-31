@@ -27,12 +27,14 @@ def upload():
         
         output_filename = "dubbed_" + filename
         task_id = str(uuid.uuid4())
+
+        translator_mode = request.form.get('translator_mode', 'marianmt')
         
         # Khởi tạo trạng thái task
         update_task_status(task_id, 'PENDING', {'status': 'Đang chờ...', 'current': 0, 'total': 100, 'error': None})
         
         # Chạy xử lý trong thread riêng
-        thread = threading.Thread(target=dubbing_process, args=(task_id, filepath, output_filename))
+        thread = threading.Thread(target=dubbing_process, args=(task_id, filepath, output_filename, translator_mode))
         thread.daemon = True
         thread.start()
         
@@ -43,7 +45,7 @@ def upload():
 @app.route('/status/<task_id>')
 def task_status_route(task_id):
     if task_id not in task_status:
-        return jsonify({'state': 'PENDING', 'current': 0, 'total': 100, 'status': 'Đang khởi tạo...', 'error': None}), 200
+        return jsonify({'state': 'PENDING', 'current': 0, 'total': 100, 'status': 'Đang khởi tạo...', 'error': None, 'metrics': None}), 200
     
     task_info = task_status[task_id]
     state = task_info['state']
@@ -54,7 +56,8 @@ def task_status_route(task_id):
         'current': meta.get('current', 0),
         'total': meta.get('total', 100),
         'status': meta.get('status', ''),
-        'error': meta.get('error', None)
+        'error': meta.get('error', None),
+        'metrics': meta.get('metrics', None)
     }
     
     if state == 'SUCCESS':

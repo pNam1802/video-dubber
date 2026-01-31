@@ -87,6 +87,8 @@ async function startProcessing() {
 
     const formData = new FormData();
     formData.append('video', selectedFile);
+    const translatorMode = document.getElementById('translatorMode')?.value || 'marianmt';
+    formData.append('translator_mode', translatorMode);
 
     // Hide upload section, show progress
     document.getElementById('uploadSection').style.display = 'none';
@@ -142,6 +144,11 @@ async function checkStatus() {
                 const secs = Math.floor(duration % 60);
                 document.getElementById('videoDuration').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
             });
+            
+            // Display quality metrics if available
+            if (data.metrics) {
+                displayQualityMetrics(data.metrics);
+            }
         } else if (data.state === 'FAILURE') {
             // Show error
             showError('Xử lý thất bại: ' + (data.error || 'Lỗi không xác định'));
@@ -170,6 +177,40 @@ async function checkStatus() {
         // Continue trying
         setTimeout(checkStatus, 3000);
     }
+}
+
+// Display quality metrics
+function displayQualityMetrics(metrics) {
+    const metricsDiv = document.getElementById('qualityMetrics');
+    if (!metricsDiv) return;
+    
+    metricsDiv.style.display = 'block';
+    
+    // Update quality score with color coding
+    const score = metrics.quality_score || 0;
+    document.getElementById('qualityScore').textContent = score.toFixed(1) + '%';
+    document.getElementById('qualityScoreBar').style.width = Math.min(score, 100) + '%';
+    
+    // Color based on score
+    let barColor = 'linear-gradient(90deg, #10b981, #f59e0b)'; // Green-Orange by default
+    if (score >= 85) {
+        barColor = 'linear-gradient(90deg, #10b981, #059669)'; // Dark green
+    } else if (score >= 70) {
+        barColor = 'linear-gradient(90deg, #f59e0b, #f97316)'; // Orange
+    } else if (score >= 50) {
+        barColor = 'linear-gradient(90deg, #f97316, #ef4444)'; // Orange-Red
+    } else {
+        barColor = 'linear-gradient(90deg, #ef4444, #dc2626)'; // Red
+    }
+    document.getElementById('qualityScoreBar').style.background = barColor;
+    
+    // Update label
+    document.getElementById('qualityLabel').textContent = metrics.quality_label || 'N/A';
+    
+    // Update other metrics
+    document.getElementById('timingAccuracy').textContent = (metrics.timing_accuracy || 0).toFixed(1);
+    document.getElementById('lengthRatio').textContent = (metrics.length_ratio || 0).toFixed(2) + 'x';
+    document.getElementById('totalSegments').textContent = metrics.total_segments || 0;
 }
 
 // Video player controls

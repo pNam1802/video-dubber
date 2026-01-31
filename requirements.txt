@@ -6,3 +6,5 @@ sentencepiece
 torch
 moviepy
 edge-tts
+demucs
+openai

@@ -1,398 +1,251 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Dubber AI - Thuyết Minh Tự Động</title>
+    <title>Video Dubber AI</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%236366f1' width='100' height='100'/><text x='50' y='70' font-size='60' font-weight='bold' fill='white' text-anchor='middle'>V</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --success: #10b981;
-            --danger: #ef4444;
-            --dark: #1f2937;
-            --light: #f9fafb;
-        }
-
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-
-        .main-container {
-            max-width: 800px;
-            margin: 3rem auto;
-            padding: 0 1rem;
-        }
-
-        .hero-section {
-            text-align: center;
-            color: white;
-            margin-bottom: 2rem;
-        }
-
-        .hero-section h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .hero-section p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        .card {
-            border: none;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
-            background: white;
-            overflow: hidden;
-        }
-
-        .upload-section {
-            padding: 3rem;
-            text-align: center;
-        }
-
-        .upload-zone {
-            border: 3px dashed #cbd5e1;
-            border-radius: 15px;
-            padding: 3rem 2rem;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            background: var(--light);
-        }
-
-        .upload-zone:hover {
-            border-color: var(--primary);
-            background: #eef2ff;
-        }
-
-        .upload-zone.dragover {
-            border-color: var(--primary);
-            background: #eef2ff;
-            transform: scale(1.02);
-        }
-
-        .upload-icon {
-            font-size: 4rem;
-            color: var(--primary);
-            margin-bottom: 1rem;
-        }
-
-        .file-info {
-            display: none;
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: #f0fdf4;
-            border-radius: 10px;
-            border-left: 4px solid var(--success);
-        }
-
-        .btn-primary {
-            background: var(--primary);
-            border: none;
-            padding: 0.875rem 3rem;
-            font-size: 1.1rem;
-            border-radius: 12px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            background: var(--primary-dark);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
-        }
-
-        .btn-primary:disabled {
-            background: #9ca3af;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .progress-section {
-            padding: 2rem 3rem 3rem;
-            display: none;
-        }
-
-        .progress {
-            height: 12px;
-            border-radius: 10px;
-            background: #e5e7eb;
-            overflow: visible;
-            margin-bottom: 1rem;
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, var(--primary), #8b5cf6);
-            border-radius: 10px;
-            transition: width 0.3s ease;
-            position: relative;
-        }
-
-        .progress-bar::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            animation: shimmer 1.5s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        .status-text {
-            font-size: 1rem;
-            color: var(--dark);
-            margin-bottom: 1rem;
-            font-weight: 500;
-        }
-
-        .result-section {
-            padding: 3rem;
-            text-align: center;
-            display: none;
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        }
-
-        .video-player-wrapper {
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            max-width: 100%;
-        }
-
-        .video-player-wrapper video {
-            display: block;
-            width: 100%;
-            height: auto;
-        }
-
-        .player-controls {
-            display: flex;
-            gap: 0.75rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .video-info {
-            text-align: left;
-            border: 1px solid #e5e7eb;
-        }
-
-        .video-info small {
-            display: block;
-            line-height: 1.8;
-        }
-
-        .result-section {
-            padding: 3rem;
-            text-align: center;
-            display: none;
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-        }
-
-        .success-icon {
-            font-size: 4rem;
-            color: var(--success);
-            margin-bottom: 1rem;
-        }
-
-        .btn-success {
-            background: var(--success);
-            border: none;
-            padding: 1rem 3rem;
-            font-size: 1.1rem;
-            border-radius: 12px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .btn-success:hover {
-            background: #059669;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-        }
-
-        .features {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 1rem;
-            margin-top: 2rem;
-            color: white;
-            text-align: center;
-        }
-
-        .feature-item {
-            padding: 1rem;
-            background: rgba(255,255,255,0.1);
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-        }
-
-        .feature-item i {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .error-message {
-            display: none;
-            padding: 1rem;
-            background: #fef2f2;
-            border-left: 4px solid var(--danger);
-            border-radius: 8px;
-            margin-top: 1rem;
-            color: #991b1b;
-        }
-
-        @media (max-width: 768px) {
-            .hero-section h1 { font-size: 2rem; }
-            .upload-section, .progress-section, .result-section { padding: 2rem 1.5rem; }
-            .features { grid-template-columns: 1fr 1fr; }
-        }
+        :root { --primary: #6366f1; --primary-dark: #4f46e5; --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --dark: #1f2937; --light: #f9fafb; --sidebar-width: 280px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; width: 100%; }
+        body { background: #f5f7fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: var(--sidebar-width); background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); color: white; padding: 2rem 0; height: 100vh; position: fixed; left: 0; top: 0; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2); z-index: 1000; }
+        .sidebar-header { text-align: center; padding: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .sidebar-logo { font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        .sidebar-subtitle { font-size: 0.8rem; opacity: 0.9; font-weight: 500; }
+        .sidebar-menu { list-style: none; padding: 1.5rem 0; margin: 0; }
+        .sidebar-menu li { margin: 0; }
+        .sidebar-menu a { display: flex; align-items: center; padding: 0.875rem 1.5rem; color: rgba(255,255,255,0.85); text-decoration: none; transition: all 0.3s ease; font-size: 0.95rem; border-left: 3px solid transparent; }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.15); color: white; border-left-color: white; padding-left: 1.75rem; }
+        .sidebar-menu a i { margin-right: 0.75rem; width: 20px; text-align: center; }
+        .sidebar-footer { position: absolute; bottom: 0; left: 0; right: 0; padding: 1.5rem; border-top: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.1); }
+        .sidebar-info { font-size: 0.8rem; opacity: 0.9; line-height: 1.6; margin: 0; }
+        .sidebar-info p { margin: 0.25rem 0; }
+        
+        /* MAIN CONTENT */
+        .main-content { margin-left: var(--sidebar-width); flex: 1; padding: 2rem; overflow-y: auto; display: flex; flex-direction: column; }
+        .page-header { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .page-title h1 { font-size: 1.75rem; font-weight: 700; color: var(--dark); margin: 0; }
+        .page-title p { font-size: 0.9rem; color: #6b7280; margin: 0.25rem 0 0 0; }
+        .status-badge { background: var(--success); color: white; padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; display: flex; align-items: center; gap: 0.5rem; }
+        
+        /* CARD */
+        .content-card { background: white; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 2rem; flex: 1; }
+        .card-title { font-size: 1.2rem; font-weight: 700; color: var(--dark); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .card-title i { color: var(--primary); }
+        
+        /* UPLOAD */
+        .upload-zone { border: 3px dashed #cbd5e1; border-radius: 14px; padding: 3rem 2rem; text-align: center; transition: all 0.3s ease; cursor: pointer; background: #f9fafb; }
+        .upload-zone:hover { border-color: var(--primary); background: #eef2ff; }
+        .upload-zone.dragover { border-color: var(--primary); background: #eef2ff; transform: scale(1.02); }
+        .upload-icon { font-size: 3.5rem; color: var(--primary); margin-bottom: 1rem; }
+        .upload-zone h5 { font-weight: 700; color: var(--dark); }
+        .upload-zone p { color: #6b7280; }
+        .file-input-label { display: inline-block; padding: 0.875rem 2rem; background: var(--primary); color: white; border-radius: 10px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; }
+        .file-input-label:hover { background: var(--primary-dark); transform: translateY(-2px); }
+        
+        /* FILE INFO */
+        .file-info { display: none; background: #f0fdf4; border-left: 4px solid var(--success); padding: 1rem; border-radius: 10px; margin-top: 1.5rem; animation: slideIn 0.3s ease; }
+        .file-info.show { display: block; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* TRANSLATOR MODE */
+        .translator-mode { margin-top: 1.5rem; padding: 1.5rem; background: linear-gradient(135deg, #eef2ff 0%, #f3e8ff 100%); border-radius: 12px; }
+        .translator-mode label { font-weight: 700; color: var(--dark); margin-bottom: 0.75rem; display: block; }
+        .form-select { border: 2px solid var(--primary); border-radius: 8px; padding: 0.75rem 1rem; font-weight: 500; color: var(--dark); }
+        .form-select:focus { border-color: var(--primary-dark); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+        .translator-hint { font-size: 0.85rem; color: #6b7280; margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .translator-hint i { color: var(--warning); }
+        
+        /* ERROR */
+        .error-message { display: none; background: #fef2f2; border-left: 4px solid var(--danger); padding: 1rem; border-radius: 8px; margin-top: 1rem; color: #991b1b; }
+        .error-message.show { display: block; }
+        
+        /* BUTTONS */
+        .btn-process { width: 100%; padding: 1rem; font-size: 1rem; font-weight: 700; border-radius: 10px; border: none; background: var(--primary); color: white; margin-top: 1.5rem; transition: all 0.3s ease; cursor: pointer; }
+        .btn-process:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(99,102,241,0.3); }
+        .btn-process:disabled { background: #9ca3af; cursor: not-allowed; opacity: 0.6; }
+        
+        /* PROGRESS */
+        .progress-section { display: none; text-align: center; }
+        .progress-section.show { display: block; }
+        .spinner-border { width: 3rem; height: 3rem; margin: 2rem auto 1rem; border-width: 4px; }
+        .status-text { font-size: 1.1rem; font-weight: 600; color: var(--dark); margin-bottom: 1.5rem; }
+        .progress { height: 14px; border-radius: 10px; background: #e5e7eb; overflow: hidden; margin-bottom: 1rem; }
+        .progress-bar { background: linear-gradient(90deg, var(--primary) 0%, #8b5cf6 100%); border-radius: 10px; transition: width 0.3s ease; position: relative; box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
+        .progress-bar::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shimmer 1.5s infinite; }
+        @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+        .progress-hint { color: #6b7280; font-size: 0.9rem; }
+        
+        /* RESULT */
+        .result-section { display: none; text-align: center; }
+        .result-section.show { display: block; }
+        .success-icon { font-size: 4rem; color: var(--success); margin-bottom: 1rem; animation: bounceIn 0.6s ease; }
+        @keyframes bounceIn { 0% { transform: scale(0); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        .video-player-wrapper { background: #000; border-radius: 12px; overflow: hidden; margin-top: 1.5rem; margin-bottom: 1.5rem; }
+        .video-player-wrapper video { display: block; width: 100%; height: auto; }
+        .player-controls { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+        .btn-control { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 600; transition: all 0.3s ease; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; }
+        .btn-control.primary { background: var(--primary); color: white; }
+        .btn-control.primary:hover { background: var(--primary-dark); transform: translateY(-2px); }
+        .btn-control.success { background: var(--success); color: white; }
+        .btn-control.success:hover { background: #059669; transform: translateY(-2px); }
+        .btn-control.info { background: #3b82f6; color: white; }
+        .btn-control.info:hover { background: #2563eb; transform: translateY(-2px); }
+        .video-info { background: #f9fafb; padding: 1.5rem; border-radius: 12px; text-align: left; margin-top: 1.5rem; border: 1px solid #e5e7eb; }
+        .video-info h6 { font-weight: 700; color: var(--dark); margin-bottom: 1rem; }
+        .btn-restart { padding: 0.875rem 2rem; background: #f3f4f6; color: var(--dark); border: 2px solid #d1d5db; border-radius: 10px; font-weight: 600; cursor: pointer; margin-top: 1rem; transition: all 0.3s ease; }
+        .btn-restart:hover { background: white; border-color: var(--primary); color: var(--primary); }
+        
+        @media (max-width: 768px) { :root { --sidebar-width: 220px; } .main-content { padding: 1rem; } .page-header { flex-direction: column; gap: 1rem; text-align: center; } .page-title h1 { font-size: 1.3rem; } .content-card { padding: 1.5rem; } .upload-zone { padding: 2rem 1rem; } .upload-icon { font-size: 2.5rem; } }
+        @media (max-width: 480px) { :root { --sidebar-width: 0px; } .sidebar { display: none; } .main-content { margin-left: 0; } }
     </style>
 </head>
 <body>
-    <div class="main-container">
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <h1><i class="fas fa-video"></i> Video Dubber AI</h1>
-            <p>Chuyển đổi giọng nói tiếng Anh sang tiếng Việt tự động bằng AI</p>
-            
-            <div class="features">
-                <div class="feature-item">
-                    <i class="fas fa-microphone"></i>
-                    <p class="mb-0 small">Nhận diện giọng</p>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-language"></i>
-                    <p class="mb-0 small">Dịch tự động</p>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-waveform-lines"></i>
-                    <p class="mb-0 small">Tổng hợp giọng</p>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-check-circle"></i>
-                    <p class="mb-0 small">Chất lượng cao</p>
-                </div>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo"><i class="fas fa-waveform-lines"></i></div>
+            <div class="sidebar-subtitle">Video Dubber AI</div>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="#"><i class="fas fa-home"></i> Trang chủ</a></li>
+            <li><a href="#"><i class="fas fa-file-video"></i> Video của tôi</a></li>
+            <li><a href="#"><i class="fas fa-cog"></i> Cài đặt</a></li>
+            <li><a href="#"><i class="fas fa-question-circle"></i> Trợ giúp</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <div class="sidebar-info">
+                <p><i class="fas fa-spark"></i> <strong>v1.0.0</strong></p>
+                <p><i class="fas fa-server"></i> <strong>Hoạt động</strong></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <div class="page-header">
+            <div class="page-title">
+                <h1><i class="fas fa-video"></i> Video Dubber AI</h1>
+                <p>Chuyển đổi giọng nói tiếng Anh sang tiếng Việt tự động</p>
+            </div>
+            <div class="page-status">
+                <div class="status-badge"><i class="fas fa-circle-check"></i> Sẵn sàng</div>
             </div>
         </div>
 
-        <!-- Main Card -->
-        <div class="card">
-            <!-- Upload Section -->
-            <div class="upload-section" id="uploadSection">
+        <div class="content-card">
+            <!-- UPLOAD SECTION -->
+            <div id="uploadSection">
+                <div class="card-title"><i class="fas fa-cloud-upload-alt"></i> Tải lên video</div>
                 <div class="upload-zone" id="uploadZone">
-                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <div class="upload-icon"><i class="fas fa-video"></i></div>
                     <h5>Kéo thả video vào đây</h5>
                     <p class="text-muted mb-3">hoặc</p>
                     <input type="file" id="videoInput" accept="video/*" style="display:none;">
-                    <label for="videoInput" class="btn btn-outline-primary">
-                        <i class="fas fa-folder-open"></i> Chọn file từ máy
-                    </label>
-                    <p class="text-muted small mt-3">Hỗ trợ: MP4, AVI, MOV, WebM (Tối đa 500MB)</p>
+                    <label for="videoInput" class="file-input-label"><i class="fas fa-folder-open"></i> Chọn file từ máy</label>
+                    <p class="text-muted small mt-3"><i class="fas fa-info-circle"></i> Hỗ trợ: MP4, AVI, MOV, WebM (Tối đa 500MB)</p>
                 </div>
 
+                <!-- FILE INFO -->
                 <div class="file-info" id="fileInfo">
-                    <i class="fas fa-file-video text-success"></i>
-                    <strong id="fileName"></strong>
-                    <span class="text-muted" id="fileSize"></span>
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <i class="fas fa-file-video" style="color: var(--success); font-size: 1.5rem;"></i>
+                        <div>
+                            <strong id="fileName"></strong><br>
+                            <small id="fileSize" class="text-muted"></small>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- ERROR MESSAGE -->
                 <div class="error-message" id="errorMessage"></div>
 
-                <button onclick="startProcessing()" class="btn btn-primary mt-4" id="processBtn" disabled>
-                    <i class="fas fa-magic"></i> Bắt đầu xử lý
-                </button>
+                <!-- TRANSLATOR MODE -->
+                <div class="translator-mode">
+                    <label for="translatorMode"><i class="fas fa-language"></i> Chế độ dịch</label>
+                    <select id="translatorMode" class="form-select">
+                        <option value="marianmt" selected>Product (MarianMT - Nhanh, ổn định)</option>
+                        <option value="openai">Research (OpenAI LLM - Chất lượng cao)</option>
+                    </select>
+                    <div class="translator-hint"><i class="fas fa-lightbulb"></i><span>Chọn OpenAI để có chất lượng dịch tốt hơn (cần API key)</span></div>
+                </div>
+
+                <!-- PROCESS BUTTON -->
+                <button onclick="startProcessing()" class="btn-process" id="processBtn" disabled><i class="fas fa-magic"></i> Bắt đầu xử lý</button>
             </div>
 
-            <!-- Progress Section -->
-            <div class="progress-section" id="progressSection">
-                <div class="text-center mb-3">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
+            <!-- PROGRESS SECTION -->
+            <div id="progressSection" class="progress-section">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
                 </div>
                 <p class="status-text" id="statusText">Đang khởi tạo...</p>
                 <div class="progress">
                     <div class="progress-bar" id="progressBar" style="width: 0%"></div>
                 </div>
-                <div class="text-center">
-                    <small class="text-muted">Quá trình này có thể mất vài phút, vui lòng chờ...</small>
-                </div>
+                <p class="progress-hint"><i class="fas fa-hourglass-half"></i> Quá trình này có thể mất vài phút, vui lòng chờ...</p>
             </div>
 
-            <!-- Result Section -->
-            <div class="result-section" id="resultSection">
-                <i class="fas fa-check-circle success-icon"></i>
-                <h4 class="mb-3">Hoàn tất!</h4>
+            <!-- RESULT SECTION -->
+            <div id="resultSection" class="result-section">
+                <div class="success-icon"><i class="fas fa-check-circle"></i></div>
+                <h4>Hoàn tất!</h4>
                 <p class="text-muted">Video của bạn đã được xử lý thành công</p>
-                
-                <!-- Video Player -->
-                <div class="video-player-wrapper mt-4">
-                    <video id="resultVideo" controls width="100%" height="auto" style="border-radius: 12px;">
+                <div class="video-player-wrapper">
+                    <video id="resultVideo" controls width="100%" height="auto">
                         <source src="" type="video/mp4">
-                        Trình duyệt của bạn không hỗ trợ video player
+                        Trình duyệt không hỗ trợ video player
                     </video>
                 </div>
-                
-                <!-- Player Controls -->
-                <div class="player-controls mt-3">
-                    <button onclick="togglePlayPause()" class="btn btn-sm btn-outline-primary">
-                        <i class="fas fa-play"></i> Phát/Dừng
-                    </button>
-                    <button onclick="downloadVideo()" class="btn btn-sm btn-success">
-                        <i class="fas fa-download"></i> Tải về máy
-                    </button>
-                    <button onclick="shareVideo()" class="btn btn-sm btn-info">
-                        <i class="fas fa-share-alt"></i> Chia sẻ
-                    </button>
+                <div class="player-controls">
+                    <button onclick="togglePlayPause()" class="btn-control primary"><i class="fas fa-play"></i> Phát/Dừng</button>
+                    <button onclick="downloadVideo()" class="btn-control success"><i class="fas fa-download"></i> Tải về máy</button>
+                    <button onclick="shareVideo()" class="btn-control info"><i class="fas fa-share-alt"></i> Chia sẻ</button>
                 </div>
                 
-                <!-- Video Info -->
-                <div class="video-info mt-4" style="background: #f9fafb; padding: 1.5rem; border-radius: 12px; text-align: left;">
-                    <h6 class="mb-3"><i class="fas fa-info-circle text-primary"></i> Thông tin video</h6>
+                <!-- QUALITY METRICS -->
+                <div id="qualityMetrics" class="video-info" style="display:none; border-left-color: #f59e0b; border-left-width: 4px;">
+                    <h6><i class="fas fa-chart-bar" style="color: #f59e0b;"></i> Đánh giá chất lượng</h6>
                     <div class="row">
-                        <div class="col-md-6">
-                            <small><strong>Kích thước:</strong> <span id="videoSize" class="text-muted">-</span></small>
+                        <div class="col-md-6 mb-3">
+                            <small><strong>Điểm chất lượng:</strong></small><br>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                                <div style="flex: 1; background: #e5e7eb; border-radius: 8px; height: 8px; overflow: hidden;">
+                                    <div id="qualityScoreBar" style="background: linear-gradient(90deg, #10b981, #f59e0b); height: 100%; width: 0%; border-radius: 8px;"></div>
+                                </div>
+                                <span id="qualityScore" style="font-weight: 600; min-width: 45px;">0%</span>
+                            </div>
+                            <small id="qualityLabel" style="color: #6b7280; margin-top: 0.25rem;">N/A</small>
                         </div>
-                        <div class="col-md-6">
-                            <small><strong>Thời lượng:</strong> <span id="videoDuration" class="text-muted">-</span></small>
+                        <div class="col-md-6 mb-3">
+                            <small><strong>Timing Accuracy:</strong> <span id="timingAccuracy" class="text-muted">-</span>%</small>
                         </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-md-6">
-                            <small><strong>Định dạng:</strong> <span class="text-muted">MP4 (H.264)</span></small>
+                        <div class="col-md-6 mb-3">
+                            <small><strong>Length Ratio:</strong> <span id="lengthRatio" class="text-muted">-</span></small>
                         </div>
-                        <div class="col-md-6">
-                            <small><strong>Chất lượng:</strong> <span class="text-muted">1080p (CRF 18)</span></small>
+                        <div class="col-md-6 mb-3">
+                            <small><strong>Total Segments:</strong> <span id="totalSegments" class="text-muted">-</span></small>
                         </div>
                     </div>
                 </div>
                 
-                <button onclick="location.reload()" class="btn btn-outline-secondary mt-3">
-                    <i class="fas fa-redo"></i> Xử lý video khác
-                </button>
+                <div class="video-info">
+                    <h6><i class="fas fa-info-circle" style="color: var(--primary);"></i> Thông tin video</h6>
+                    <div class="row">
+                        <div class="col-md-6"><small><strong>Kích thước:</strong> <span id="videoSize" class="text-muted">-</span></small></div>
+                        <div class="col-md-6"><small><strong>Thời lượng:</strong> <span id="videoDuration" class="text-muted">-</span></small></div>
+                        <div class="col-md-6 mt-2"><small><strong>Định dạng:</strong> <span class="text-muted">MP4 (H.264)</span></small></div>
+                        <div class="col-md-6 mt-2"><small><strong>Chất lượng:</strong> <span class="text-muted">1080p (CRF 18)</span></small></div>
+                    </div>
+                </div>
+                <button onclick="location.reload()" class="btn-restart"><i class="fas fa-redo"></i> Xử lý video khác</button>
             </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="text-center mt-4 text-white">
-            <small>
-                <i class="fas fa-robot"></i> Powered by Whisper, MarianMT & Edge TTS
-            </small>
         </div>
     </div>
 
