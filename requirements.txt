@@ -5,6 +5,6 @@ transformers
 sentencepiece
 torch
 moviepy
-edge-tts
+vieneu
 demucs
 openai

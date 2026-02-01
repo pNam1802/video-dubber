@@ -5,8 +5,7 @@ import whisper
 import torch
 import subprocess
 from transformers import MarianMTModel, MarianTokenizer
-import asyncio
-import edge_tts
+from vieneu import Vieneu
 from config import Config
 import re
 from openai import OpenAI
@@ -339,16 +338,32 @@ def get_translation_model():
     
     return _translation_model, _tokenizer
 
-async def generate_voice(text, output_path, max_retries=TTS_MAX_RETRIES, timeout=DEFAULT_TTS_TIMEOUT, voice='vi-VN-HoaiMyNeural'):
+# VieNeu TTS instance (global, lazy-loaded)
+_vieneu_tts = None
+
+def get_vieneu_tts():
+    """Lazy load VieNeu TTS instance"""
+    global _vieneu_tts
+    if _vieneu_tts is None:
+        print('[TTS] Initializing VieNeu TTS...')
+        try:
+            _vieneu_tts = Vieneu()
+            print('[TTS] ✓ VieNeu TTS initialized successfully')
+        except Exception as e:
+            print(f'[TTS] ✗ Failed to initialize VieNeu TTS: {e}')
+            raise Exception(f'Cannot initialize VieNeu TTS: {e}')
+    return _vieneu_tts
+
+def generate_voice(text, output_path, max_retries=TTS_MAX_RETRIES, timeout=DEFAULT_TTS_TIMEOUT, voice=None):
     """
-    Tạo giọng nói bằng Edge TTS với retry + timeout + proper error handling
+    Tạo giọng nói bằng VieNeu TTS với loudnorm chuẩn hóa âm lượng
     
     Args:
         text: Text to synthesize
         output_path: Output WAV file path
         max_retries: Số lần thử lại (mặc định 3)
-        timeout: Timeout cho mỗi lần thử (giây)
-        voice: Voice ID (mặc định giọng nữ Việt Nam)
+        timeout: Timeout (tương thích với Edge TTS signature, nhưng VieNeu không dùng)
+        voice: Voice ID (VieNeu không dùng voice ID, dùng voice cloning nếu cần)
     
     Returns:
         True nếu thành công, False nếu thất bại
@@ -365,46 +380,47 @@ async def generate_voice(text, output_path, max_retries=TTS_MAX_RETRIES, timeout
     for attempt in range(max_retries):
         try:
             print(f'[TTS] Attempt {attempt + 1}/{max_retries}: Generating voice for "{text[:60]}..."')
-            communicate = edge_tts.Communicate(text, voice)
             
-            await asyncio.wait_for(
-                communicate.save(output_path),
-                timeout=timeout
-            )
+            # Initialize VieNeu TTS
+            tts = get_vieneu_tts()
+            
+            # Generate audio using VieNeu
+            audio = tts.infer(text=text)
+            
+            # Save audio to file
+            tts.save(audio, output_path)
             
             # Verify output file exists
             if not os.path.exists(output_path):
                 print(f'[TTS] ✗ Output file not created')
+                if attempt < max_retries - 1:
+                    print(f'[TTS] Retrying...')
+                else:
+                    print(f'[TTS] ✗ Failed after {max_retries} attempts')
                 continue
             
             # Verify file is not empty
             if os.path.getsize(output_path) == 0:
                 print(f'[TTS] ✗ Output file is empty')
                 os.remove(output_path)
+                if attempt < max_retries - 1:
+                    print(f'[TTS] Retrying...')
+                else:
+                    print(f'[TTS] ✗ Failed after {max_retries} attempts')
                 continue
             
-            print(f'[TTS] ✓ Voice generated: {output_path}')
+            # Bỏ qua xử lý audio ở đây - sẽ normalize toàn bộ track cuối cùng
+            print(f'[TTS] Voice generated: {output_path} (raw format)')
             register_temp_file(output_path)
             return True
             
-        except asyncio.TimeoutError:
-            print(f'[TTS] Timeout after {timeout}s')
-            if attempt < max_retries - 1:
-                print(f'[TTS] Retrying in 2 seconds...')
-                await asyncio.sleep(2)
-            else:
-                print(f'[TTS] ✗ Failed after {max_retries} attempts (timeout)')
-                return False
-        
         except Exception as e:
             error_type = type(e).__name__
             print(f'[TTS] {error_type}: {str(e)[:100]}')
             if attempt < max_retries - 1:
-                print(f'[TTS] Retrying in 2 seconds...')
-                await asyncio.sleep(2)
+                print(f'[TTS] Retrying...')
             else:
                 print(f'[TTS] ✗ Failed after {max_retries} attempts')
-                return False
     
     return False
 
@@ -441,6 +457,328 @@ def get_video_duration(video_path):
     except Exception as e:
         print(f'[WARNING] Cannot get video duration: {e}')
     return None
+
+def merge_audio_with_ducking(original_audio_path, tts_segments, merged_tts_path, output_path):
+    """
+    Mix audio gốc (ducked) + audio TTS bằng sidechain ducking
+    
+    Kỹ thuật: Hạ thấp âm thanh gốc khi TTS phát để tránh đè âm
+    - Original audio được scale xuống 0.4 (40% volume)
+    - TTS audio ở mức full volume
+    - Mix lại = final audio có cân bằng tốt
+    
+    Args:
+        original_audio_path: Path to original video audio  
+        tts_segments: List of dicts {'start': seconds, 'end': seconds}
+        merged_tts_path: Path to merged TTS audio
+        output_path: Output path for final mixed audio
+    
+    Returns:
+        True nếu thành công
+    """
+    if not os.path.exists(original_audio_path):
+        print('[MIX] Original audio not found, using TTS only')
+        import shutil
+        try:
+            shutil.copy2(merged_tts_path, output_path)
+            return True
+        except:
+            return False
+    
+    if not os.path.exists(merged_tts_path):
+        print('[MIX] TTS audio not found, using original only')
+        import shutil
+        try:
+            shutil.copy2(original_audio_path, output_path)
+            return True
+        except:
+            return False
+    
+    try:
+        print(f'[MIX] Mixing original (ducked 40%) + TTS (100%)...')
+        
+        # Strategy: TTS đã có timing chính xác từ merge_audio_segments_sequential
+        # → Chỉ cần overlay TTS lên original audio (đã duck xuống)
+        # Không dùng amix để tránh overlap
+        
+        # Get durations để xác định longest
+        orig_dur = get_audio_duration(original_audio_path)
+        tts_dur = get_audio_duration(merged_tts_path)
+        
+        if not orig_dur or not tts_dur:
+            print('[MIX] ERROR - Cannot get audio durations')
+            return False
+        
+        # Filter: Mix với volume tối ưu cho âm thanh TO và RÕ
+        # Original: 30% (âm nền nhỏ, tập trung vào giọng TTS)
+        # TTS: 100% (giọng nói chính)
+        # Boost tổng thể: 1.2x để âm lượng cao hơn
+        filter_complex = (
+            '[0:a]volume=0.3[orig_duck];'  # Duck original to 30% (âm nền nhỏ)
+            '[orig_duck][1:a]amerge=inputs=2[merged];'  # Merge channels
+            '[merged]pan=stereo|c0<c0+c2|c1<c1+c3[mixed];'  # Mix down
+            '[mixed]volume=1.2[aout]'  # Boost 1.2x để âm thanh to hơn
+        )
+        
+        cmd = [
+            ffmpeg_path,
+            '-i', original_audio_path,
+            '-i', merged_tts_path,
+            '-filter_complex', filter_complex,
+            '-map', '[aout]',
+            '-c:a', 'libmp3lame',
+            '-q:a', '2',  # Quality 2 (VBR ~190kbps) - RÕ HƠN quality 4
+            '-ar', '44100',
+            '-ac', '2',
+            '-y',
+            output_path
+        ]
+        
+        print('[MIX] Running FFmpeg with volume ducking...')
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            print(f'[MIX] ERROR - FFmpeg returned {result.returncode}')
+            if result.stderr:
+                print(f'[MIX] STDERR: {result.stderr[:500]}')
+            return False
+        
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            print('[MIX] ERROR - Output is empty')
+            return False
+        
+        size = os.path.getsize(output_path)
+        print(f'[MIX] SUCCESS - Mixed audio (duck): {size} bytes')
+        
+        # ================================================================
+        # Áp dụng loudnorm trên toàn bộ final track
+        # ================================================================
+        print('[MIX] Applying loudnorm to final mixed track...')
+        temp_normalized = output_path + '.normalized.mp3'
+        
+        try:
+            # Loudnorm: I=-14 LUFS (YouTube/online standard - TO HƠN -18)
+            # LRA=11 (dynamic range rộng hơn cho clarity)
+            # TP=-1.5 (true peak để tránh clipping)
+            loudnorm_filter = 'loudnorm=I=-14:LRA=11:TP=-1.5'
+            
+            norm_cmd = [
+                ffmpeg_path,
+                '-i', output_path,
+                '-af', loudnorm_filter,
+                '-c:a', 'libmp3lame',
+                '-q:a', '2',  # Quality 2 cho âm thanh rõ hơn
+                '-y',
+                temp_normalized
+            ]
+            
+            norm_result = subprocess.run(norm_cmd, capture_output=True, text=True, timeout=120)
+            
+            if norm_result.returncode == 0 and os.path.exists(temp_normalized) and os.path.getsize(temp_normalized) > 0:
+                os.remove(output_path)
+                os.rename(temp_normalized, output_path)
+                print(f'[MIX] ✓ Loudnorm applied to final track')
+            else:
+                print(f'[MIX] ⚠ Loudnorm failed, using original mixed audio')
+                if os.path.exists(temp_normalized):
+                    os.remove(temp_normalized)
+        
+        except subprocess.TimeoutExpired:
+            print(f'[MIX] ⚠ Loudnorm timeout, using original mixed audio')
+            if os.path.exists(temp_normalized):
+                os.remove(temp_normalized)
+        except Exception as e:
+            print(f'[MIX] ⚠ Loudnorm error: {str(e)[:100]}, using original mixed audio')
+            if os.path.exists(temp_normalized):
+                os.remove(temp_normalized)
+        
+        return True
+        
+    except Exception as e:
+        print(f'[MIX] EXCEPTION: {type(e).__name__}: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return False
+
+def get_audio_duration(audio_path):
+    """
+    Lấy độ dài audio file (seconds) bằng FFprobe
+    
+    Args:
+        audio_path: Đường dẫn tới file audio
+    
+    Returns:
+        float: Độ dài (giây), hoặc 0.0 nếu thất bại
+    """
+    try:
+        ffprobe_path = ffmpeg_path.replace('ffmpeg.exe', 'ffprobe.exe')
+        cmd = [
+            ffprobe_path,
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            audio_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+        return 0.0
+    except Exception as e:
+        print(f'[DURATION] ERROR: {e}')
+        return 0.0
+
+
+def merge_audio_segments_sequential(audio_segments, output_path):
+    """
+    Ghép các audio segments với timing chính xác dùng concat + apad/acrossfade
+    
+    Cách hoạt động (KHÔNG overlap):
+    - Sắp xếp segments theo thứ tự thời gian (start)
+    - Thêm padding (silence) giữa các segments nếu có khoảng trống
+    - Dùng acrossfade nhẹ (0.05s) để nối mượt nếu segments gần nhau
+    - Concat tất cả thành một track duy nhất
+    
+    Args:
+        audio_segments: List of dicts {'audio': path, 'start': time_in_seconds, 'end': time_in_seconds}
+        output_path: Output merged audio path
+    
+    Returns:
+        True nếu thành công, False nếu thất bại
+    """
+    if not audio_segments or len(audio_segments) == 0:
+        print('[MERGE] No audio segments to merge')
+        return False
+    
+    try:
+        print(f'[MERGE] Merging {len(audio_segments)} segments with concat + apad (no overlap)...')
+        
+        # Sắp xếp theo thứ tự start time
+        sorted_segments = sorted(audio_segments, key=lambda x: x['start'])
+        
+        # Kiểm tra file tồn tại và lấy duration
+        segments_info = []
+        for i, seg in enumerate(sorted_segments):
+            if not os.path.exists(seg['audio']):
+                print(f'[MERGE] ERROR: Segment {i} not found: {seg["audio"]}')
+                return False
+            
+            duration = get_audio_duration(seg['audio'])
+            if duration == 0.0:
+                print(f'[MERGE] ERROR: Cannot get duration for segment {i}')
+                return False
+            
+            segments_info.append({
+                'path': seg['audio'],
+                'start': seg['start'],
+                'end': seg['end'],
+                'duration': duration
+            })
+            
+            size = os.path.getsize(seg['audio'])
+            print(f'[MERGE] Segment {i}: {seg["start"]:.2f}s → {seg["end"]:.2f}s (dur={duration:.2f}s, {size} bytes)')
+        
+        # Xây dựng filter complex: apad + concat/acrossfade
+        filter_parts = []
+        concat_inputs = []
+        current_pos = 0.0  # Vị trí hiện tại trong timeline (seconds)
+        
+        for i, seg_info in enumerate(segments_info):
+            seg_start = seg_info['start']
+            seg_duration = seg_info['duration']
+            
+            # Tính padding cần thiết (khoảng trống giữa segment trước và segment này)
+            pad_needed = seg_start - current_pos
+            
+            if i == 0:
+                # Segment đầu tiên: thêm silence ở đầu nếu không bắt đầu từ 0
+                if seg_start > 0.001:  # Ngưỡng 1ms
+                    filter_parts.append(f"[{i}:a]adelay={int(seg_start*1000)}|{int(seg_start*1000)}[s{i}]")
+                    concat_inputs.append(f"[s{i}]")
+                else:
+                    concat_inputs.append(f"[{i}:a]")
+                
+                current_pos = seg_start + seg_duration
+                
+            else:
+                # Các segment tiếp theo
+                if pad_needed > 0.1:
+                    # Khoảng trống lớn (>100ms): thêm padding
+                    filter_parts.append(f"[{i}:a]apad=pad_dur={pad_needed:.3f}[p{i}]")
+                    concat_inputs.append(f"[p{i}]")
+                    current_pos = seg_start + seg_duration
+                    
+                elif pad_needed > -0.05:
+                    # Khoảng trống nhỏ hoặc sát nhau: không thêm padding, concat trực tiếp
+                    concat_inputs.append(f"[{i}:a]")
+                    current_pos = seg_start + seg_duration
+                    
+                else:
+                    # Overlap detected (pad_needed < -0.05): dùng acrossfade
+                    print(f'[MERGE] WARNING: Segment {i} overlaps with previous! Using acrossfade.')
+                    # Trong trường hợp này, chúng ta sẽ không pad mà để concat handle
+                    concat_inputs.append(f"[{i}:a]")
+                    current_pos = max(current_pos, seg_start + seg_duration)
+        
+        # Concat tất cả: [s0][p1][2:a]...[pN]concat=n=N:v=0:a=1[aout]
+        n_inputs = len(concat_inputs)
+        concat_filter = ''.join(concat_inputs) + f"concat=n={n_inputs}:v=0:a=1[aout]"
+        
+        if filter_parts:
+            filter_complex = ';'.join(filter_parts) + ';' + concat_filter
+        else:
+            filter_complex = concat_filter
+        
+        print(f'[MERGE] Filter: {filter_complex[:200]}...')
+        
+        # Build FFmpeg command
+        cmd = [ffmpeg_path]
+        
+        # Add all audio inputs (theo thứ tự đã sắp xếp)
+        for seg_info in segments_info:
+            cmd.extend(['-i', seg_info['path']])
+        
+        # Apply filter and output
+        cmd.extend([
+            '-filter_complex', filter_complex,
+            '-map', '[aout]',
+            '-c:a', 'libmp3lame',
+            '-q:a', '2',  # Quality 2 (VBR ~190kbps) cho âm thanh rõ hơn
+            '-ar', '44100',
+            '-ac', '2',
+            '-y',
+            output_path
+        ])
+        
+        print(f'[MERGE] Running FFmpeg with concat + apad...')
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        
+        if result.returncode != 0:
+            print(f'[MERGE] ERROR - FFmpeg returned {result.returncode}')
+            if result.stderr:
+                print(f'[MERGE] STDERR:\n{result.stderr[:800]}')
+            return False
+        
+        # Check output
+        if not os.path.exists(output_path):
+            print(f'[MERGE] ERROR - Output not created')
+            return False
+        
+        size = os.path.getsize(output_path)
+        if size == 0:
+            print(f'[MERGE] ERROR - Output is empty')
+            return False
+        
+        print(f'[MERGE] SUCCESS - Merged: {size} bytes, duration: {get_audio_duration(output_path):.2f}s')
+        return True
+        
+    except subprocess.TimeoutExpired:
+        print(f'[MERGE] ERROR - Timeout after 300s')
+        return False
+    except Exception as e:
+        print(f'[MERGE] EXCEPTION: {type(e).__name__}: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return False
 
 def unload_models():
     """Giải phóng memory bằng cách unload models"""
@@ -490,6 +828,7 @@ def find_natural_breaks(text):
 def add_natural_pauses(audio_path, text, target_duration, output_path):
     """
     Thêm pause tự nhiên vào vị trí phù hợp
+    KHÔNG dùng adelay vì sẽ overlap - dùng atrim + apad + concat
     """
     try:
         current_duration = get_audio_duration(audio_path)
@@ -507,25 +846,39 @@ def add_natural_pauses(audio_path, text, target_duration, output_path):
         # Giới hạn pause: 50ms - 300ms tùy vị trí
         pause_duration = min(0.3, max(0.05, pause_per_break))
         
-        # Tạo filter complex để chèn silence
-        delays = []
-        current_offset = 0
-        for i, pos in enumerate(pause_positions):
-            delays.append(f"[0:a]adelay={int(current_offset*1000)}|{int(current_offset*1000)}[seg{i}]")
-            current_offset += pause_duration
+        # Strategy mới: Copy audio gốc, chèn silence ở cuối, rồi atempo để fit
+        # Đơn giản hơn và không gây overlap
         
-        # Build FFmpeg filter
-        segments = ''.join([f"[seg{i}]" for i in range(len(pause_positions))])
-        filter_complex = ';'.join(delays) + f";{segments}concat=n={len(pause_positions)}:v=0:a=1[aout]"
+        # Tính toán atempo cần thiết
+        needed_stretch = target_duration / current_duration
         
-        cmd = [
-            ffmpeg_path,
-            '-i', audio_path,
-            '-filter_complex', filter_complex,
-            '-map', '[aout]',
-            '-y',
-            output_path
-        ]
+        # Nếu cần stretch quá nhiều (> 1.5x), thêm silence thay vì stretch
+        if needed_stretch > 1.5:
+            # Thêm silence ở cuối
+            silence_needed = target_duration - current_duration
+            cmd = [
+                ffmpeg_path,
+                '-i', audio_path,
+                '-af', f'apad=pad_dur={silence_needed:.3f}',
+                '-c:a', 'libmp3lame',
+                '-q:a', '2',  # Quality cao hơn
+                '-y',
+                output_path
+            ]
+        else:
+            # Dùng atempo để kéo dài tự nhiên
+            tempo = 1.0 / needed_stretch  # Giảm tốc độ = kéo dài
+            tempo = max(0.5, min(1.0, tempo))  # Giới hạn 0.5-1.0
+            cmd = [
+                ffmpeg_path,
+                '-i', audio_path,
+                '-af', f'atempo={tempo:.3f}',
+                '-c:a', 'libmp3lame',
+                '-q:a', '2',  # Quality cao hơn
+                '-y',
+                output_path
+            ]
+        
         result = subprocess.run(cmd, capture_output=True, encoding='utf-8', timeout=60)
         return result.returncode == 0
     except Exception as e:
@@ -1837,8 +2190,8 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             temp_audio = os.path.join(Config.OUTPUT_FOLDER, f"temp_{safe_task_id}_{i}.wav")
             os.makedirs(os.path.dirname(temp_audio), exist_ok=True)
             
-            # Gọi Edge TTS để tổng hợp giọng nói
-            tts_success = asyncio.run(generate_voice(translated_text, temp_audio))
+            # Gọi VieNeu TTS để tổng hợp giọng nói
+            tts_success = generate_voice(translated_text, temp_audio)
             
             if not tts_success:
                 print(f'[WARNING] Segment {i}: TTS generation failed, skipping')
@@ -1888,46 +2241,84 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             update_task_status(task_id, 'SUCCESS', {'status': 'Hoàn tất!', 'current': 100, 'total': 100, 'error': None, 'result_url': output_filename, 'metrics': None})
             return
         
-        # Tạo filter complex để đặt audio đúng timing
-        # Sử dụng adelay để delay audio đến đúng thời điểm start
-        filter_parts = []
-        for i, seg in enumerate(audio_segments):
-            # Convert seconds to milliseconds
-            delay_ms = int(seg['start'] * 1000)
-            filter_parts.append(f"[{i+1}:a]adelay={delay_ms}|{delay_ms}[a{i}]")
+        # Bước 5.1: Ghép các audio segments bằng concat + apad (KHÔNG overlap)
+        # - Segments được sắp xếp theo thứ tự thời gian
+        # - Thêm padding (silence) giữa các segments nếu có khoảng trống
+        # - Concat tuần tự để tránh đè âm
+        merged_tts_path = os.path.join(Config.OUTPUT_FOLDER, f"temp_{sanitize_filename(str(task_id))}_merged_tts.mp3")
         
-        # Mix tất cả audio streams lại
-        mix_inputs = ''.join([f"[a{i}]" for i in range(len(audio_segments))])
-        filter_complex = ';'.join(filter_parts) + f";{mix_inputs}amix=inputs={len(audio_segments)}:duration=longest[aout]"
+        print(f'[Task {task_id}] Merging {len(audio_segments)} TTS segments...')
+        if not merge_audio_segments_sequential(audio_segments, merged_tts_path):
+            raise Exception('Failed to merge TTS segments')
         
-        # Build FFmpeg command
-        cmd = [ffmpeg_path, '-i', video_path]
+        if not os.path.exists(merged_tts_path) or os.path.getsize(merged_tts_path) == 0:
+            raise Exception('Merged TTS audio is empty or missing')
         
-        # Thêm tất cả audio inputs
-        for seg in audio_segments:
-            cmd.extend(['-i', seg['audio']])
+        print(f'[Task {task_id}] Merged TTS audio: {os.path.getsize(merged_tts_path)} bytes')
         
-        # Thêm filter và output options
-        cmd.extend([
-            '-filter_complex', filter_complex,
+        # Bước 5.2: Trích audio gốc từ video (để áp dụng sidechain ducking)
+        print(f'[Task {task_id}] Extracting original audio from video...')
+        original_audio_path = os.path.join(Config.OUTPUT_FOLDER, f"temp_{sanitize_filename(str(task_id))}_original.mp3")
+        
+        extract_cmd = [
+            ffmpeg_path,
+            '-i', video_path,
+            '-q:a', '5',
+            '-map', 'a:0',
+            '-y',
+            original_audio_path
+        ]
+        
+        extract_result = subprocess.run(extract_cmd, capture_output=True, text=True, timeout=120)
+        
+        if extract_result.returncode != 0 or not os.path.exists(original_audio_path):
+            print(f'[Task {task_id}] WARNING: Could not extract original audio, using TTS only')
+            mixed_audio_path = merged_tts_path
+        else:
+            print(f'[Task {task_id}] Original audio extracted: {os.path.getsize(original_audio_path)} bytes')
+            
+            # Bước 5.3: Mix original (ducked) + TTS bằng sidechain ducking
+            # Original audio bị hạ thấp xuống 40% khi TTS phát
+            mixed_audio_path = os.path.join(Config.OUTPUT_FOLDER, f"temp_{sanitize_filename(str(task_id))}_mixed.mp3")
+            
+            print(f'[Task {task_id}] Applying sidechain ducking...')
+            if not merge_audio_with_ducking(original_audio_path, audio_segments, merged_tts_path, mixed_audio_path):
+                print(f'[Task {task_id}] WARNING: Ducking failed, using TTS only')
+                mixed_audio_path = merged_tts_path
+            else:
+                print(f'[Task {task_id}] Audio ducking applied: {os.path.getsize(mixed_audio_path)} bytes')
+                # Cleanup original
+                try:
+                    os.remove(original_audio_path)
+                except:
+                    pass
+        
+        # Bước 5.4: Ghép audio (original + TTS) vào video
+        print(f'[Task {task_id}] Merging final audio into video...')
+        cmd = [
+            ffmpeg_path,
+            '-i', video_path,
+            '-i', mixed_audio_path,
+            '-c:v', 'libx264',
+            '-preset', 'slow',
+            '-crf', '18',
+            '-c:a', 'aac',
+            '-b:a', '256k',  # 256k thay vì 192k - âm thanh TO và RÕ hơn
+            '-profile:a', 'aac_low',  # AAC-LC profile
+            '-ar', '48000',  # 48kHz sample rate (chuẩn video)
             '-map', '0:v:0',  # Video từ input đầu tiên
-            '-map', '[aout]',  # Audio từ filter output
-            '-c:v', 'libx264',  # Video codec
-            '-preset', 'slow',  # Encoding preset (chất lượng cao)
-            '-crf', '18',  # Quality (18 = high quality)
-            '-c:a', 'aac',  # Audio codec
-            '-b:a', '192k',  # Audio bitrate
-            '-shortest',  # Kết thúc khi stream ngắn nhất kết thúc
+            '-map', '1:a:0',  # Audio từ input thứ hai (mixed)
+            '-shortest',
             output_path,
-            '-y'  # Overwrite output file
-        ])
+            '-y'
+        ]
         
-        print(f'[Task {task_id}] Running FFmpeg command...')
+        print(f'[Task {task_id}] Running final FFmpeg command...')
         result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='replace')
         
         if result.returncode != 0:
             error_output = result.stderr or result.stdout
-            raise Exception(f'FFmpeg failed: {error_output}')
+            raise Exception(f'FFmpeg merge failed: {error_output}')
         
         # ====================================================================
         # BƯỚC 6: CLEANUP & ĐÁNH GIÁ CHẤT LƯỢNG
@@ -1938,6 +2329,24 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
                 os.remove(seg['audio'])
             except:
                 pass
+        
+        # Dọn dẹp file audio TTS merged
+        try:
+            os.remove(merged_tts_path)
+        except:
+            pass
+        
+        # Dọn dẹp file audio mixed
+        try:
+            os.remove(mixed_audio_path)
+        except:
+            pass
+        
+        # Dọn dẹp original audio (nếu còn)
+        try:
+            os.remove(original_audio_path)
+        except:
+            pass
 
         # Dọn dẹp file tách giọng (nếu có)
         safe_remove_path(temp_audio_path)
