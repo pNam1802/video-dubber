@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xem Video Dubbing - {{ video_filename }}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .player-container {
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        .timeline-container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+        }
+        .timeline-segment {
+            padding: 12px;
+            margin-bottom: 8px;
+            background-color: #f9f9f9;
+            border-left: 4px solid #000;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .timeline-segment:hover {
+            background-color: #f0f0f0;
+            border-left-color: #4b5563;
+        }
+        .timeline-segment.active {
+            background-color: #e8e8e8;
+            border-left-color: #4b5563;
+        }
+        .segment-time {
+            font-size: 12px;
+            color: #666;
+            font-weight: bold;
+        }
+        .segment-duration {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .segment-text {
+            font-size: 13px;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+        .segment-original {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 4px;
+        }
+        .segment-translated {
+            color: #000;
+            font-weight: 500;
+        }
+        .header {
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .btn-group-custom {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .footer {
+            background-color: #fff;
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid" style="max-width: 1200px; margin: 20px auto;">
+        <!-- Header -->
+        <div class="header">
+            <h2><i class="fas fa-video"></i> Xem Video Dubbing</h2>
+            <p class="text-muted mb-0">{{ video_filename }}</p>
+        </div>
+
+        <!-- Video Player -->
+        <div class="player-container">
+            <video id="videoPlayer" controls>
+                <source src="{{ video_url }}" type="video/mp4">
+                Trình duyệt của bạn không hỗ trợ video HTML5
+            </video>
+        </div>
+
+        <!-- Download & Back -->
+        <div class="btn-group-custom">
+            <a href="{{ video_url }}" class="btn btn-primary" download>
+                <i class="fas fa-download"></i> Tải video
+            </a>
+            {% if timeline_url %}
+            <a href="{{ timeline_url }}" class="btn btn-success" download>
+                <i class="fas fa-file-json"></i> Tải timeline JSON
+            </a>
+            {% else %}
+            <button class="btn btn-outline-secondary" disabled title="Chưa có file timeline JSON">
+                <i class="fas fa-file-json"></i> Tải timeline JSON (chưa có)
+            </button>
+            {% endif %}
+            <a href="/list-outputs" class="btn btn-secondary">
+                <i class="fas fa-list"></i> Danh sách videos
+            </a>
+        </div>
+        {% if not timeline_url %}
+        <div class="alert alert-warning mt-3" role="alert">
+            <i class="fas fa-exclamation-triangle"></i>
+            Chưa có file timeline JSON cho video này. Vui lòng chạy dubbing lại để hệ thống tạo timeline.
+        </div>
+        {% endif %}
+
+        <!-- Timeline / Segments -->
+        {% if timeline_data %}
+        <div style="margin-top: 30px;">
+            <h4><i class="fas fa-bars"></i> Timeline Dubbing ({{ timeline_data.total_segments }} segments)</h4>
+            <p class="text-muted">Tổng thời lượng: {{ "%.2f"|format(timeline_data.total_duration) }} giây</p>
+            
+            <div class="timeline-container" id="timelineContainer">
+                {% for seg in timeline_data.segments %}
+                <div class="timeline-segment" data-time="{{ seg.start }}">
+                    <div class="segment-time">
+                        <i class="fas fa-clock"></i> {{ "%02d:%06.3f"|format(seg.start // 60, seg.start % 60) }} → {{ "%02d:%06.3f"|format(seg.end // 60, seg.end % 60) }}
+                    </div>
+                    <div class="segment-duration">
+                        <i class="fas fa-hourglass-half"></i> Duration: {{ "%.3f"|format(seg.duration) }}s
+                    </div>
+                    <div class="segment-text">
+                        <div class="segment-original">
+                            <strong>ENG:</strong> {{ seg.original_text[:80] }}{% if seg.original_text|length > 80 %}...{% endif %}
+                        </div>
+                        <div class="segment-translated">
+                            <strong>VI:</strong> {{ seg.translated_text[:80] }}{% if seg.translated_text|length > 80 %}...{% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p><i class="fas fa-info-circle"></i> Bạn có thể nhấp vào từng segment để jump đến thời điểm đó trong video</p>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoPlayer');
+        
+        // Gắn click handler cho tất cả timeline segments
+        document.querySelectorAll('.timeline-segment').forEach(segment => {
+            segment.addEventListener('click', function() {
+                const time = parseFloat(this.getAttribute('data-time'));
+                seekToTime(this, time);
+            });
+        });
+        
+        function seekToTime(element, time) {
+            video.currentTime = time;
+            video.play();
+            
+            // Highlight current segment
+            document.querySelectorAll('.timeline-segment').forEach(seg => {
+                seg.classList.remove('active');
+            });
+            element.classList.add('active');
+        }
+
+        // Update timeline highlight khi video play
+        video.addEventListener('timeupdate', function() {
+            const currentTime = video.currentTime;
+            document.querySelectorAll('.timeline-segment').forEach(seg => {
+                const segTime = parseFloat(seg.getAttribute('data-time'));
+                const nextSegs = Array.from(document.querySelectorAll('.timeline-segment')).filter(s => parseFloat(s.getAttribute('data-time')) > segTime);
+                const nextTime = nextSegs.length > 0 ? parseFloat(nextSegs[0].getAttribute('data-time')) : Infinity;
+                
+                if (currentTime >= segTime && currentTime < nextTime) {
+                    seg.classList.add('active');
+                } else {
+                    seg.classList.remove('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

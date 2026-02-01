@@ -10,40 +10,152 @@ import edge_tts
 from config import Config
 import re
 from openai import OpenAI
+import platform
+import threading
 
-# Set FFmpeg path - try multiple locations
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+MAX_VIDEO_DURATION = 3600  # 1 hour
+DEFAULT_TTS_TIMEOUT = 30
+TTS_MAX_RETRIES = 3
+TEMP_FILE_CLEANUP_TIMEOUT = 10
+MODEL_CACHE_MAX_SIZE = 5  # GB
+TRANSLATION_CACHE_MAX_ITEMS = 1000
+SEGMENT_MAX_DURATION = 8.0
+SEGMENT_MIN_DURATION = 2.0
+WORDS_PER_SECOND = 2.7  # Tốc độ đọc tiếng Việt: 2.6-2.8 từ/giây (160-170 từ/phút)
+
+# ============================================================================
+# FFmpeg PATH DETECTION - Cross-platform
+# ============================================================================
 def get_ffmpeg_path():
-    """Tìm ffmpeg trong system PATH hoặc các vị trí thường gặp"""
-    # Cách 1: Tìm trong PATH (nếu ffmpeg được cài đặt toàn cục)
+    """Tìm ffmpeg trong system PATH hoặc các vị trí thường gặp (Windows & Linux)"""
+    system = platform.system()
+    
+    # Cách 1: Tìm trong PATH
     try:
-        result = subprocess.run(['where', 'ffmpeg'], capture_output=True, text=True)
+        if system == "Windows":
+            result = subprocess.run(['where', 'ffmpeg'], capture_output=True, text=True, timeout=5)
+        else:  # Linux, macOS
+            result = subprocess.run(['which', 'ffmpeg'], capture_output=True, text=True, timeout=5)
+        
         if result.returncode == 0:
             return result.stdout.strip().split('\n')[0]
-    except:
-        pass
+    except Exception as e:
+        print(f'[DEBUG] PATH lookup failed: {e}')
     
-    # Cách 2: Các vị trí thường gặp trên Windows
-    common_paths = [
-        r'C:\ffmpeg-master-latest-win64-gpl\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe',
-        r'C:\ffmpeg\bin\ffmpeg.exe',
-        r'C:\Program Files\ffmpeg\bin\ffmpeg.exe',
-        r'C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe',
-    ]
+    # Cách 2: Vị trí thường gặp theo OS
+    common_paths = []
+    
+    if system == "Windows":
+        common_paths = [
+            r'C:\ffmpeg-master-latest-win64-gpl\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe',
+            r'C:\ffmpeg\bin\ffmpeg.exe',
+            r'C:\Program Files\ffmpeg\bin\ffmpeg.exe',
+            r'C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe',
+        ]
+    elif system == "Linux":
+        common_paths = [
+            '/usr/local/bin/ffmpeg',
+            '/usr/bin/ffmpeg',
+            '/snap/bin/ffmpeg',
+        ]
+    elif system == "Darwin":  # macOS
+        common_paths = [
+            '/usr/local/bin/ffmpeg',
+            '/opt/homebrew/bin/ffmpeg',  # Apple Silicon
+            '/usr/bin/ffmpeg',
+        ]
     
     for path in common_paths:
         if os.path.exists(path):
             return path
     
-    # Cách 3: Đơn giản là "ffmpeg" (sẽ search trong PATH)
+    # Cách 3: Fallback - giả sử ffmpeg trong PATH
     return 'ffmpeg'
 
 ffmpeg_path = get_ffmpeg_path()
 print(f'[INFO] Using FFmpeg: {ffmpeg_path}')
 
-# Thêm thư mục chứa ffmpeg vào PATH
-ffmpeg_dir = os.path.dirname(ffmpeg_path)
-if ffmpeg_dir and os.path.exists(ffmpeg_dir):
-    os.environ['PATH'] = ffmpeg_dir + ';' + os.environ.get('PATH', '')
+# Thêm thư mục chứa ffmpeg vào PATH (Windows only)
+if platform.system() == "Windows":
+    ffmpeg_dir = os.path.dirname(ffmpeg_path)
+    if ffmpeg_dir and os.path.exists(ffmpeg_dir):
+        os.environ['PATH'] = ffmpeg_dir + ';' + os.environ.get('PATH', '')
+
+# ============================================================================
+# Thread-safe temp file cleanup
+# ============================================================================
+_temp_files_lock = threading.Lock()
+_temp_files = set()
+
+def register_temp_file(path):
+    """Đăng ký temp file để cleanup sau"""
+    with _temp_files_lock:
+        _temp_files.add(path)
+
+def safe_remove_path(path):
+    """Xóa file/thư mục tạm an toàn với locking"""
+    if not path:
+        return
+    
+    try:
+        with _temp_files_lock:
+            if path in _temp_files:
+                _temp_files.discard(path)
+        
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        elif os.path.exists(path):
+            os.remove(path)
+        print(f'[CLEANUP] Removed: {path}')
+    except Exception as e:
+        print(f'[WARNING] Cleanup failed for {path}: {e}')
+
+def sanitize_filename(filename):
+    """
+    Sanitize filename để tránh Unicode encoding issues
+    Thay thế ký tự đặc biệt bằng ASCII safe equivalents
+    """
+    # Normalize Unicode (NFD decomposition)
+    import unicodedata
+    filename = unicodedata.normalize('NFD', filename)
+    # Remove combining characters
+    filename = ''.join(c for c in filename if unicodedata.category(c) != 'Mn')
+    # Replace problematic characters
+    filename = filename.replace(' ', '_')
+    # Keep only safe ASCII characters + digits + underscore
+    filename = ''.join(c if c.isalnum() or c in '._-' else '_' for c in filename)
+    return filename
+
+# ============================================================================
+# Translation Cache with memory limits
+# ============================================================================
+_translation_cache = {}
+_translation_cache_lock = threading.Lock()
+
+def cache_translation(key, value):
+    """Lưu translation vào cache với kiểm soát kích thước"""
+    with _translation_cache_lock:
+        if len(_translation_cache) >= TRANSLATION_CACHE_MAX_ITEMS:
+            # Xóa 10% cache cũ nhất (FIFO)
+            keys_to_remove = list(_translation_cache.keys())[:int(TRANSLATION_CACHE_MAX_ITEMS * 0.1)]
+            for k in keys_to_remove:
+                del _translation_cache[k]
+        
+        _translation_cache[key] = value
+
+def get_cached_translation(key):
+    """Lấy translation từ cache"""
+    with _translation_cache_lock:
+        return _translation_cache.get(key)
+
+def clear_translation_cache():
+    """Xóa bộ nhớ cache dịch"""
+    with _translation_cache_lock:
+        _translation_cache.clear()
+    print('[INFO] Translation cache cleared')
 
 # Dictionary các từ khóa chuyên ngành ML cần giữ nguyên
 ML_KEYWORDS = {
@@ -108,6 +220,43 @@ ML_KEYWORDS = {
     'pandas': '__ML_TERM_47__',
 }
 
+# ============================================================================
+# Diagnostic Functions
+# ============================================================================
+def diagnose_system():
+    """Chẩn đoán hệ thống để debug MarianMT issues"""
+    print("=" * 60)
+    print("SYSTEM DIAGNOSTICS")
+    print("=" * 60)
+    
+    # Python version
+    print(f"Python: {sys.version}")
+    
+    # PyTorch version
+    print(f"PyTorch: {torch.__version__}")
+    
+    # CUDA
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    if torch.cuda.is_available():
+        print(f"CUDA version: {torch.version.cuda}")
+        print(f"CUDA device: {torch.cuda.get_device_name(0)}")
+        props = torch.cuda.get_device_properties(0)
+        print(f"Total memory: {props.total_memory / 1e9:.2f} GB")
+        print(f"Allocated: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"Cached: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+    
+    # Transformers
+    try:
+        import transformers
+        print(f"Transformers: {transformers.__version__}")
+    except:
+        print("Transformers: NOT INSTALLED")
+    
+    # FFmpeg
+    print(f"FFmpeg path: {ffmpeg_path}")
+    
+    print("=" * 60)
+
 # Global task status store
 task_status = {}
 
@@ -120,7 +269,28 @@ _device = None
 def get_device():
     global _device
     if _device is None:
-        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            try:
+                # Check CUDA memory
+                total_memory = torch.cuda.get_device_properties(0).total_memory
+                allocated_memory = torch.cuda.memory_allocated(0)
+                free_memory = total_memory - allocated_memory
+                
+                # Cần ít nhất 2GB free memory
+                min_required = 2 * 1024 * 1024 * 1024  # 2GB
+                
+                if free_memory < min_required:
+                    print(f'[WARNING] Low CUDA memory: {free_memory / 1e9:.1f}GB free, falling back to CPU')
+                    _device = "cpu"
+                else:
+                    _device = "cuda"
+                    print(f'[INFO] Using CUDA with {free_memory / 1e9:.1f}GB free memory')
+            except Exception as e:
+                print(f'[WARNING] CUDA check failed: {e}, using CPU')
+                _device = "cpu"
+        else:
+            _device = "cpu"
+            print('[INFO] CUDA not available, using CPU')
     return _device
 
 def get_whisper_model():
@@ -130,16 +300,113 @@ def get_whisper_model():
     return _whisper_model
 
 def get_translation_model():
-    global _translation_model, _tokenizer
+    """
+    Load MarianMT model với error handling và CUDA fallback
+    """
+    global _translation_model, _tokenizer, _device
+    
     if _translation_model is None:
         model_name = "Helsinki-NLP/opus-mt-en-vi"
-        _tokenizer = MarianTokenizer.from_pretrained(model_name)
-        _translation_model = MarianMTModel.from_pretrained(model_name).to(get_device())
+        
+        try:
+            print(f'[MODEL] Loading MarianMT: {model_name}')
+            _tokenizer = MarianTokenizer.from_pretrained(model_name)
+            
+            # Load model to device với error handling
+            device = get_device()
+            print(f'[MODEL] Target device: {device}')
+            
+            try:
+                _translation_model = MarianMTModel.from_pretrained(model_name)
+                _translation_model = _translation_model.to(device)
+                print(f'[MODEL] ✓ Model loaded to {device}')
+            
+            except RuntimeError as e:
+                # CUDA Out of Memory - fallback to CPU
+                if 'out of memory' in str(e).lower() or 'cuda' in str(e).lower():
+                    print(f'[MODEL] CUDA failed ({e}), falling back to CPU')
+                    _device = 'cpu'
+                    torch.cuda.empty_cache()  # Clear CUDA cache
+                    _translation_model = MarianMTModel.from_pretrained(model_name)
+                    _translation_model = _translation_model.to('cpu')
+                    print(f'[MODEL] ✓ Model loaded to CPU')
+                else:
+                    raise
+        
+        except Exception as e:
+            print(f'[ERROR] Failed to load MarianMT: {e}')
+            raise Exception(f'Cannot load translation model: {e}')
+    
     return _translation_model, _tokenizer
 
-async def generate_voice(text, output_path):
-    communicate = edge_tts.Communicate(text, "vi-VN-HoaiMyNeural") # Giọng nữ VN
-    await communicate.save(output_path)
+async def generate_voice(text, output_path, max_retries=TTS_MAX_RETRIES, timeout=DEFAULT_TTS_TIMEOUT, voice='vi-VN-HoaiMyNeural'):
+    """
+    Tạo giọng nói bằng Edge TTS với retry + timeout + proper error handling
+    
+    Args:
+        text: Text to synthesize
+        output_path: Output WAV file path
+        max_retries: Số lần thử lại (mặc định 3)
+        timeout: Timeout cho mỗi lần thử (giây)
+        voice: Voice ID (mặc định giọng nữ Việt Nam)
+    
+    Returns:
+        True nếu thành công, False nếu thất bại
+    """
+    if not text or len(text.strip()) == 0:
+        print(f'[TTS] ✗ Empty text, skipping')
+        return False
+    
+    # Validate text length
+    if len(text) > 1000:
+        print(f'[TTS] ⚠ Text too long ({len(text)} chars), truncating to 1000')
+        text = text[:1000]
+    
+    for attempt in range(max_retries):
+        try:
+            print(f'[TTS] Attempt {attempt + 1}/{max_retries}: Generating voice for "{text[:60]}..."')
+            communicate = edge_tts.Communicate(text, voice)
+            
+            await asyncio.wait_for(
+                communicate.save(output_path),
+                timeout=timeout
+            )
+            
+            # Verify output file exists
+            if not os.path.exists(output_path):
+                print(f'[TTS] ✗ Output file not created')
+                continue
+            
+            # Verify file is not empty
+            if os.path.getsize(output_path) == 0:
+                print(f'[TTS] ✗ Output file is empty')
+                os.remove(output_path)
+                continue
+            
+            print(f'[TTS] ✓ Voice generated: {output_path}')
+            register_temp_file(output_path)
+            return True
+            
+        except asyncio.TimeoutError:
+            print(f'[TTS] Timeout after {timeout}s')
+            if attempt < max_retries - 1:
+                print(f'[TTS] Retrying in 2 seconds...')
+                await asyncio.sleep(2)
+            else:
+                print(f'[TTS] ✗ Failed after {max_retries} attempts (timeout)')
+                return False
+        
+        except Exception as e:
+            error_type = type(e).__name__
+            print(f'[TTS] {error_type}: {str(e)[:100]}')
+            if attempt < max_retries - 1:
+                print(f'[TTS] Retrying in 2 seconds...')
+                await asyncio.sleep(2)
+            else:
+                print(f'[TTS] ✗ Failed after {max_retries} attempts')
+                return False
+    
+    return False
 
 def get_audio_duration(audio_path):
     """Lấy thời lượng audio bằng ffprobe"""
@@ -157,6 +424,43 @@ def get_audio_duration(audio_path):
     except Exception as e:
         print(f'[WARNING] Cannot get audio duration: {e}')
     return None
+
+def get_video_duration(video_path):
+    """Lấy thời lượng video bằng ffprobe"""
+    try:
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            video_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, encoding='utf-8', timeout=10)
+        if result.returncode == 0:
+            return float(result.stdout.strip())
+    except Exception as e:
+        print(f'[WARNING] Cannot get video duration: {e}')
+    return None
+
+def unload_models():
+    """Giải phóng memory bằng cách unload models"""
+    global _whisper_model, _translation_model, _tokenizer
+    try:
+        if _translation_model is not None:
+            del _translation_model
+            _translation_model = None
+        if _tokenizer is not None:
+            del _tokenizer
+            _tokenizer = None
+        
+        # Clear CUDA cache if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            print('[INFO] CUDA cache cleared')
+        
+        print('[INFO] Models unloaded from memory')
+    except Exception as e:
+        print(f'[WARNING] Error unloading models: {e}')
 
 def find_natural_breaks(text):
     """
@@ -322,10 +626,90 @@ def translate_with_openai(text):
         print(f'[WARNING] OpenAI translation failed: {e}')
     return None
 
-def translate_with_marian(text, translation_model, tokenizer, device):
-    inputs = tokenizer(text, return_tensors="pt", padding=True).to(device)
-    translated_tokens = translation_model.generate(**inputs)
-    return tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
+def translate_with_marian(text, translation_model, tokenizer, device, max_retries=2):
+    """
+    Dịch bằng MarianMT với error handling, validation, và retry
+    """
+    if not text or len(text.strip()) == 0:
+        print('[MARIAN] Empty input text')
+        return None
+    
+    # Truncate text nếu quá dài (MarianMT limit ~512 tokens)
+    words = text.split()
+    if len(words) > 400:
+        print(f'[MARIAN] Text too long ({len(words)} words), truncating to 400')
+        text = ' '.join(words[:400])
+    
+    for attempt in range(max_retries):
+        try:
+            # Tokenize với error handling
+            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+            
+            # Move to device với fallback
+            try:
+                inputs = inputs.to(device)
+            except RuntimeError as e:
+                if 'cuda' in str(e).lower() or 'out of memory' in str(e).lower():
+                    print(f'[MARIAN] Device error, using CPU: {e}')
+                    device = 'cpu'
+                    torch.cuda.empty_cache()
+                    inputs = inputs.to('cpu')
+                    # Move model to CPU too
+                    translation_model = translation_model.to('cpu')
+                else:
+                    raise
+            
+            # Generate translation
+            with torch.no_grad():  # Disable gradient to save memory
+                translated_tokens = translation_model.generate(
+                    **inputs,
+                    max_length=512,
+                    num_beams=4,  # Beam search for better quality
+                    early_stopping=True
+                )
+            
+            # Decode
+            translated = tokenizer.decode(translated_tokens[0], skip_special_tokens=True)
+            
+            # Validate output
+            if not translated or len(translated.strip()) == 0:
+                print(f'[MARIAN] Attempt {attempt + 1}: Empty translation output')
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    print('[MARIAN] ✗ All attempts returned empty')
+                    return None
+            
+            # Success
+            print(f'[MARIAN] ✓ Translated: "{text[:50]}..." → "{translated[:50]}..."')
+            return translated
+        
+        except RuntimeError as e:
+            error_msg = str(e).lower()
+            if 'out of memory' in error_msg:
+                print(f'[MARIAN] OOM error on attempt {attempt + 1}, clearing cache')
+                torch.cuda.empty_cache()
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    print('[MARIAN] ✗ OOM after all retries')
+                    return None
+            else:
+                print(f'[MARIAN] Runtime error: {e}')
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    return None
+        
+        except Exception as e:
+            print(f'[MARIAN] Attempt {attempt + 1} failed: {type(e).__name__}: {e}')
+            if attempt < max_retries - 1:
+                continue
+            else:
+                print('[MARIAN] ✗ Translation failed after all retries')
+                return None
+    
+    return None
 
 # Translation caching để tránh dịch lại cùng text
 _translation_cache = {}
@@ -353,6 +737,193 @@ def validate_translation_quality(original_text, translated_text):
         return False
     
     return True
+
+def optimize_translation_length(original_text, translated_text, target_ratio=1.0, tolerance=0.2):
+    """
+    Tối ưu hóa độ dài bản dịch để fit vào khoảng chấp nhận được
+    
+    Args:
+        original_text: Text gốc tiếng Anh
+        translated_text: Text dịch tiếng Việt
+        target_ratio: Tỷ lệ target (mặc định 1.0 = bằng gốc)
+        tolerance: Dung sai (±20% = 0.2)
+    
+    Returns:
+        Optimized translated text
+    """
+    if not original_text or not translated_text:
+        return translated_text
+    
+    original_words = original_text.split()
+    translated_words = translated_text.split()
+    original_len = len(original_words)
+    translated_len = len(translated_words)
+    
+    if original_len == 0:
+        return translated_text
+    
+    current_ratio = translated_len / original_len
+    
+    # Kiểm tra xem đã nằm trong khoảng chấp nhận được chưa
+    min_ratio = target_ratio * (1 - tolerance)
+    max_ratio = target_ratio * (1 + tolerance)
+    
+    if min_ratio <= current_ratio <= max_ratio:
+        print(f'[OPTIMIZE] Translation length OK: ratio={current_ratio:.2f} (target={target_ratio:.2f}±{tolerance:.0%})')
+        return translated_text
+    
+    print(f'[OPTIMIZE] Optimizing translation length from {current_ratio:.2f} to {target_ratio:.2f}±{tolerance:.0%}')
+    
+    # Nếu dịch quá dài (>130%), xóa các từ thừa (adjectives, adverbs)
+    if current_ratio > max_ratio:
+        print(f'[OPTIMIZE] Translation too long ({current_ratio:.2f}), removing redundant words...')
+        
+        # Các từ thường có thể bỏ mà không ảnh hưởng nhiều đến ý nghĩa
+        removable_words = {
+            'rất', 'khá', 'hơi', 'hết sức', 'cực kỳ',  # Intensive adverbs
+            'như', 'có thể', 'có lẽ', 'dường như',  # Tentative expressions
+            'thôi', 'thế', 'à', 'ơi',  # Particles
+            'lắm', 'quá', 'được', 'được rồi',  # Casual emphasis
+        }
+        
+        optimized_words = [w for w in translated_words if w.lower() not in removable_words]
+        
+        # Nếu vẫn quá dài, cút một số phrases
+        if len(optimized_words) > max_ratio * original_len:
+            target_len = int(max_ratio * original_len)
+            optimized_words = optimized_words[:target_len]
+        
+        optimized_text = ' '.join(optimized_words)
+        new_ratio = len(optimized_words) / original_len
+        print(f'[OPTIMIZE] Result: {len(translated_words)} → {len(optimized_words)} words (ratio: {new_ratio:.2f})')
+        return optimized_text
+    
+    # Nếu dịch quá ngắn (<75%), thêm các từ mô tả
+    elif current_ratio < min_ratio:
+        print(f'[OPTIMIZE] Translation too short ({current_ratio:.2f}), cannot easily expand')
+        # Không thể dễ dàng mở rộng mà không giống machine-generated
+        # Nên trả về nguyên bản
+        return translated_text
+    
+    return translated_text
+
+def estimate_reading_time(text_vietnamese):
+    """
+    Ước tính thời gian đọc text tiếng Việt
+    Tốc độ đọc: 2.6-2.8 từ/giây (trung bình 2.7)
+    
+    Args:
+        text_vietnamese: Text tiếng Việt
+    
+    Returns:
+        Thời gian ước tính (giây)
+    """
+    if not text_vietnamese:
+        return 0
+    
+    word_count = len(text_vietnamese.split())
+    estimated_time = word_count / WORDS_PER_SECOND
+    return estimated_time
+
+def optimize_translation_by_timing(original_text, translated_text, target_duration_seconds, use_llm=True):
+    """
+    Tối ưu hóa bản dịch dựa trên THỜI GIAN AUDIO thay vì chỉ tỷ lệ
+    Mục tiêu: thời gian đọc text = thời gian audio gốc
+    
+    Args:
+        original_text: Text gốc
+        translated_text: Text dịch
+        target_duration_seconds: Thời lượng audio (giây)
+        use_llm: Dùng LLM để tái dịch với độ dài cụ thể
+    
+    Returns:
+        Optimized translated text
+    """
+    if not translated_text or target_duration_seconds <= 0:
+        return translated_text
+    
+    # Ước tính thời gian đọc hiện tại
+    current_reading_time = estimate_reading_time(translated_text)
+    current_word_count = len(translated_text.split())
+    
+    # Tính số từ mong muốn dựa trên thời gian
+    # Sử dụng tốc độ đọc chuẩn WORDS_PER_SECOND
+    target_word_count = int(target_duration_seconds * WORDS_PER_SECOND)
+    
+    print(f'[TIMING] Audio duration: {target_duration_seconds:.1f}s')
+    print(f'[TIMING] Current reading time: {current_reading_time:.1f}s ({current_word_count} words)')
+    print(f'[TIMING] Target word count: {target_word_count} words (@ {WORDS_PER_SECOND} words/sec)')
+    
+    # Nếu đã match, trả về nguyên bản
+    if abs(current_reading_time - target_duration_seconds) < 0.5:  # Sai lệch < 0.5s
+        print(f'[TIMING] Already matches timing!')
+        return translated_text
+    
+    # Dùng LLM để tái dịch với độ dài cụ thể
+    if use_llm:
+        try:
+            client = get_openai_client()
+            if client:
+                print(f'[TIMING] Requesting LLM to retranslate with {target_word_count} words...')
+                
+                prompt = f"""Vui lòng dịch lại đoạn tiếng Anh này sang tiếng Việt với yêu cầu sau:
+
+YÊUCẦU ĐẶC BIỆT:
+- Số từ tiếng Việt PHẢI nằm trong khoảng: {int(target_word_count * 0.8)} - {int(target_word_count * 1.2)} từ
+- Dịch tự nhiên, không máy móc
+- Giữ nguyên ý nghĩa gốc
+
+ĐOẠN TIẾNG ANH:
+{original_text}
+
+BẢN DỊCH HIỆN TẠI ({current_word_count} từ):
+{translated_text}
+
+Tái dịch sao cho khoảng {target_word_count} từ, CHỈ TRẢVỀ BẢN DỊCH, không giải thích thêm."""
+                
+                model_name = os.getenv('OPENAI_TRANSLATE_MODEL', 'gpt-4o-mini')
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a professional Vietnamese translator. Follow the specific instructions about word count precisely."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.3,
+                    max_tokens=300
+                )
+                
+                optimized = response.choices[0].message.content.strip()
+                new_word_count = len(optimized.split())
+                new_reading_time = estimate_reading_time(optimized)
+                
+                print(f'[TIMING] LLM Result: {new_word_count} words → {new_reading_time:.1f}s reading time')
+                
+                # Validate LLM result
+                if abs(new_reading_time - target_duration_seconds) < 1.0:  # Trong 1s là ok
+                    return optimized
+                else:
+                    print(f'[TIMING] LLM result {new_reading_time:.1f}s vs target {target_duration_seconds:.1f}s, fallback to original')
+            
+        except Exception as e:
+            print(f'[TIMING] LLM optimization failed: {e}')
+    
+    # Fallback: Nếu không dùng LLM hoặc LLM lỗi, dùng cách cắt ngắn đơn giản
+    if current_word_count > target_word_count * 1.2:
+        print(f'[TIMING] Fallback: Truncating translation to {target_word_count} words')
+        words = translated_text.split()
+        truncated = ' '.join(words[:target_word_count])
+        # Thêm "..." nếu cắt quá nửa
+        if len(words) > target_word_count * 1.1:
+            truncated = truncated + '...'
+        return truncated
+    
+    return translated_text
 
 def build_context_prompt(current_segment, previous_texts, next_texts):
     """
@@ -422,6 +993,8 @@ def translate_with_context_openai(current_segment, previous_texts, next_texts):
         
         # Validate quality
         if validate_translation_quality(current_segment, translated):
+            # Tối ưu hóa độ dài dịch
+            translated = optimize_translation_length(current_segment, translated, target_ratio=1.0, tolerance=0.2)
             _translation_cache[cache_key] = translated
             return translated
         else:
@@ -434,29 +1007,50 @@ def translate_with_context_openai(current_segment, previous_texts, next_texts):
 
 def translate_with_context_marian(current_segment, previous_texts, next_texts, translation_model, tokenizer, device):
     """
-    Dịch có ngữ cảnh bằng MarianMT (nhỏ gọn hơn nhưng nhanh)
+    Dịch có ngữ cảnh bằng MarianMT với comprehensive error handling
     """
     try:
         # Kiểm tra cache
         cache_key = f"marian_{current_segment[:50]}"
-        if cache_key in _translation_cache:
+        cached = get_cached_translation(cache_key)
+        if cached:
             print(f'[CACHE] Using cached translation for: {current_segment[:40]}...')
-            return _translation_cache[cache_key]
+            return cached
+        
+        # Validate input
+        if not current_segment or len(current_segment.strip()) == 0:
+            print('[MARIAN] Empty input segment')
+            return None
         
         # Với MarianMT không cần ngữ cảnh phức tạp, dịch đơn giản
-        # nhưng vẫn lợi dụng độ dài của segment gốc
         translated = translate_with_marian(current_segment, translation_model, tokenizer, device)
+        
+        # Check for None or empty
+        if translated is None:
+            print('[MARIAN] Translation returned None')
+            return None
+        
+        if len(translated.strip()) == 0:
+            print('[MARIAN] Translation returned empty string')
+            return None
         
         # Validate quality
         if validate_translation_quality(current_segment, translated):
-            _translation_cache[cache_key] = translated
+            # Tối ưu hóa độ dài dịch để fit vào khoảng chấp nhận được
+            translated = optimize_translation_length(current_segment, translated, target_ratio=1.0, tolerance=0.2)
+            cache_translation(cache_key, translated)
             return translated
         else:
-            print(f'[WARNING] MarianMT translation quality check failed')
+            print(f'[WARNING] MarianMT quality check failed, but using it anyway')
+            # Vẫn tối ưu hóa dù quality check fail
+            translated = optimize_translation_length(current_segment, translated, target_ratio=1.0, tolerance=0.2)
+            cache_translation(cache_key, translated)
             return translated  # Vẫn trả về vì MarianMT ít có lựa chọn
     
     except Exception as e:
-        print(f'[WARNING] MarianMT context translation failed: {e}')
+        print(f'[ERROR] MarianMT context translation failed: {type(e).__name__}: {e}')
+        import traceback
+        print(traceback.format_exc())
         return None
 
 def clear_translation_cache():
@@ -490,6 +1084,11 @@ def separate_vocals_with_demucs(input_audio, output_dir, model_name='htdemucs'):
     """Tách giọng nói bằng Demucs (nếu cài đặt)"""
     try:
         os.makedirs(output_dir, exist_ok=True)
+        
+        # Fix Unicode encoding error on Windows with Vietnamese characters
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        
         cmd = [
             sys.executable,
             '-m', 'demucs',
@@ -498,7 +1097,7 @@ def separate_vocals_with_demucs(input_audio, output_dir, model_name='htdemucs'):
             '-o', output_dir,
             input_audio
         ]
-        result = subprocess.run(cmd, capture_output=True, encoding='utf-8', timeout=600)
+        result = subprocess.run(cmd, capture_output=True, encoding='utf-8', env=env, timeout=600)
         if result.returncode != 0:
             print(f'[WARNING] Demucs failed: {result.stderr or result.stdout}')
             return None
@@ -529,30 +1128,72 @@ def safe_remove_path(path):
         print(f'[WARNING] Cleanup failed for {path}: {e}')
 
 def preserve_ml_keywords(text):
-    """Thay thế các từ khóa ML bằng placeholder để giữ nguyên sau khi dịch"""
+    """
+    Thay thế các từ khóa ML bằng placeholder để giữ nguyên sau khi dịch
+    
+    Với validation:
+    - Kiểm tra text không rỗng
+    - Kiểm tra tìm thấy từ khóa
+    - Return metadata cho debugging
+    """
+    if not text or len(text.strip()) == 0:
+        return text, {}, {'found_keywords': 0, 'total_keywords': len(ML_KEYWORDS)}
+    
     preserved = text
     replacements = {}
+    found_count = 0
     
     # Sort by length (từ dài trước) để tránh conflict
     sorted_keywords = sorted(ML_KEYWORDS.items(), key=lambda x: len(x[0]), reverse=True)
     
     for keyword, placeholder in sorted_keywords:
         # Case-insensitive replacement
-        pattern = re.compile(re.escape(keyword), re.IGNORECASE)
-        if pattern.search(preserved):
+        pattern = re.compile(r'\b' + re.escape(keyword) + r'\b', re.IGNORECASE)
+        matches = pattern.findall(preserved)
+        
+        if matches:
+            found_count += len(matches)
             preserved = pattern.sub(placeholder, preserved)
             replacements[placeholder] = keyword
+            print(f'[KEYWORDS] Preserved: "{keyword}" ({len(matches)}x)')
     
-    return preserved, replacements
+    metadata = {
+        'found_keywords': found_count,
+        'total_keywords': len(ML_KEYWORDS),
+        'replacement_count': len(replacements),
+        'original_length': len(text),
+        'preserved_length': len(preserved)
+    }
+    
+    return preserved, replacements, metadata
 
 def restore_ml_keywords(text, replacements):
-    """Khôi phục các từ khóa ML từ placeholder"""
+    """
+    Khôi phục các từ khóa ML từ placeholder
+    
+    Với validation:
+    - Kiểm tra text không rỗng
+    - Kiểm tra placeholder tồn tại
+    - Log restorations
+    """
+    if not text or not replacements:
+        return text
+    
     restored = text
+    restore_count = 0
+    
     for placeholder, keyword in replacements.items():
-        restored = restored.replace(placeholder, keyword)
+        if placeholder in restored:
+            restored = restored.replace(placeholder, keyword)
+            restore_count += 1
+            print(f'[KEYWORDS] Restored: "{keyword}"')
+    
+    if restore_count < len(replacements):
+        print(f'[WARNING] Only restored {restore_count}/{len(replacements)} keywords')
+    
     return restored
 
-def merge_segments(segments, min_gap=1.0, max_duration=15.0):
+def merge_segments(segments, min_gap=1.0, max_duration=SEGMENT_MAX_DURATION):
     """Merge segments gần nhau để cải thiện ngữ cảnh và giảm số segments"""
     if not segments:
         return []
@@ -918,35 +1559,92 @@ def update_task_status(task_id, state, meta):
     task_status[task_id] = {'state': state, 'meta': meta}
 
 def dubbing_process(task_id, video_path, output_filename, translation_mode='marianmt'):
-    """Xử lý dubbing video"""
+    """
+    Xử lý dubbing video với timeout handling cho video dài
+    
+    Pipeline:
+    1. Transcribe (Whisper) - Nhận diện giọng nói thành text
+    2. Translate (MarianMT/OpenAI) - Dịch sang tiếng Việt
+    3. TTS (Edge TTS) - Tổng hợp giọng nói tiếng Việt
+    4. Merge (FFmpeg) - Ghép audio vào video
+    
+    Args:
+        task_id: ID của task để tracking progress
+        video_path: Đường dẫn video gốc
+        output_filename: Tên file output
+        translation_mode: 'marianmt' hoặc 'openai'
+    """
     temp_audio_path = None
     demucs_output_dir = None
+    
     try:
+        # ====================================================================
+        # BƯỚC 0: KHỞI TẠO & KIỂM TRA HỆ THỐNG
+        # ====================================================================
+        # Chạy diagnostic (chỉ 1 lần khi task đầu tiên)
+        if not hasattr(dubbing_process, '_diagnostic_done'):
+            diagnose_system()
+            dubbing_process._diagnostic_done = True
+        
         update_task_status(task_id, 'PROGRESS', {'status': 'Đang trích xuất văn bản (Whisper)...', 'current': 0, 'total': 100, 'error': None})
         
-        # Load models
+        # Kiểm tra video duration để điều chỉnh timeout
+        video_duration = get_video_duration(video_path)
+        if video_duration:
+            print(f'[INFO] Video duration: {video_duration:.1f}s')
+            # Giới hạn 1 giờ để tránh xử lý quá lâu
+            if video_duration > MAX_VIDEO_DURATION:
+                raise Exception(f'Video quá dài ({video_duration:.0f}s > {MAX_VIDEO_DURATION}s). Vui lòng upload video < 1 giờ.')
+        
+        # Tính dynamic timeout: video càng dài → timeout càng lớn
+        # Formula: timeout = min(1 giờ, video_duration * 1.5 + 5 phút buffer)
+        dynamic_timeout = min(3600, int((video_duration or 300) * 1.5 + 300)) if video_duration else 300
+        print(f'[INFO] Using dynamic timeout: {dynamic_timeout}s')
+        
+        # ====================================================================
+        # BƯỚC 1: LOAD MODELS
+        # ====================================================================
+        # Load Whisper model (speech-to-text)
         whisper_model = get_whisper_model()
-        device = get_device()
+        device = get_device()  # 'cuda' hoặc 'cpu'
 
-        # Translation mode
+        # Xác định translation mode
         translation_mode = (translation_mode or 'marianmt').lower()
         translation_model = None
         tokenizer = None
+        
+        # Nếu chọn OpenAI nhưng không có API key → fallback sang MarianMT
         if translation_mode == 'openai':
             if not os.getenv('OPENAI_API_KEY'):
                 print('[WARNING] OPENAI_API_KEY not set. Fallback to MarianMT.')
                 translation_mode = 'marianmt'
-        if translation_mode == 'marianmt':
-            translation_model, tokenizer = get_translation_model()
         
-        # 1. Transcribe (tùy chọn tách giọng nói trước)
+        # Load MarianMT model nếu cần
+        if translation_mode == 'marianmt':
+            try:
+                print('[INFO] Loading MarianMT translation model...')
+                translation_model, tokenizer = get_translation_model()
+                print('[INFO] MarianMT model loaded successfully')
+            except Exception as e:
+                error_msg = f'Failed to load MarianMT: {type(e).__name__}: {str(e)[:200]}'
+                print(f'[ERROR] {error_msg}')
+                raise Exception(f'Không thể tải model dịch thuật. Vui lòng thử lại hoặc dùng OpenAI mode. Chi tiết: {error_msg}')
+        
+        # ====================================================================
+        # BƯỚC 2: TRANSCRIBE (NHẬN DIỆN GIỌNG NÓI)
+        # ====================================================================
         transcribe_source = video_path
+        
+        # Tùy chọn: Tách giọng nói khỏi background music bằng Demucs (nếu enable)
         if getattr(Config, 'ENABLE_VOICE_SEPARATION', False):
             update_task_status(task_id, 'PROGRESS', {'status': 'Đang tách giọng nói (Demucs)...', 'current': 2, 'total': 100, 'error': None})
-            temp_audio_path = os.path.join(Config.OUTPUT_FOLDER, f"temp_audio_{task_id}.wav")
-            demucs_output_dir = os.path.join(Config.OUTPUT_FOLDER, f"demucs_{task_id}")
+            safe_task_id = sanitize_filename(str(task_id))
+            temp_audio_path = os.path.join(Config.OUTPUT_FOLDER, f"temp_audio_{safe_task_id}.wav")
+            demucs_output_dir = os.path.join(Config.OUTPUT_FOLDER, f"demucs_{safe_task_id}")
 
+            # Extract audio từ video
             if extract_audio_from_video(video_path, temp_audio_path):
+                # Tách vocals bằng Demucs
                 vocals_path = separate_vocals_with_demucs(
                     temp_audio_path,
                     demucs_output_dir,
@@ -957,15 +1655,22 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             else:
                 print(f'[WARNING] Cannot extract audio for separation, fallback to original video.')
 
+        # Chạy Whisper để nhận diện giọng nói
         result = whisper_model.transcribe(transcribe_source, verbose=False)
-        raw_segments = result['segments']
+        raw_segments = result['segments']  # Danh sách các đoạn text với timing
         
         update_task_status(task_id, 'PROGRESS', {'status': f'Đã nhận diện {len(raw_segments)} đoạn, đang tối ưu...', 'current': 10, 'total': 100, 'error': None})
         
-        # Optimize segments: Filter → Smart Merge
+        # ====================================================================
+        # BƯỚC 3: TỐI ƯU HÓA SEGMENTS
+        # ====================================================================
+        # Lọc bỏ các đoạn không có nội dung (noise, music markers, etc.)
         segments = filter_segments(raw_segments)
         
-        # Sử dụng smart merge dựa trên ngữ nghĩa + câu
+        # Smart merge: gộp các segments gần nhau để cải thiện ngữ cảnh dịch
+        # - Không gộp qua câu kết thúc
+        # - Không gộp qua chủ đề khác nhau
+        # - Max 8s per segment
         segments = smart_merge_segments(
             segments,
             max_duration=8.0,
@@ -987,16 +1692,19 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
 
         update_task_status(task_id, 'PROGRESS', {'status': 'Đang dịch sang tiếng Việt...', 'current': 20, 'total': 100, 'error': None})
         
-        # 2. Translate & TTS cho từng đoạn
-        audio_segments = []
+        # ====================================================================
+        # BƯỚC 4: DỊCH & TTS (LÕI CHÍNH - XỬ LÝ TỪNG SEGMENT)
+        # ====================================================================
+        audio_segments = []  # Lưu các audio clips đã tạo
         total_segments = len(segments)
         
         # Chuẩn bị danh sách text gốc cho dịch có ngữ cảnh
         original_texts = [seg['text'].strip() for seg in segments]
         
+        # Loop qua từng segment
         for i, seg in enumerate(segments):
-            # Update progress chi tiết
-            progress = 20 + (i / total_segments) * 50  # 20-70%
+            # Update progress (20% → 70%)
+            progress = 20 + (i / total_segments) * 50
             update_task_status(task_id, 'PROGRESS', {
                 'status': f'Đang xử lý đoạn {i+1}/{total_segments}: Dịch & tổng hợp giọng...',
                 'current': i + 1,
@@ -1004,75 +1712,156 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
                 'error': None
             })
             
+            # Extract timing và text
             start_time = seg['start']
             end_time = seg['end']
             original_text = seg['text'].strip()
             
-            # Skip empty or very short text (đã filter nhưng double-check)
+            # Skip empty or very short text
             if not original_text or len(original_text) < 3:
                 continue
             
-            # Bảo vệ từ khóa ML trước dịch
-            text_to_translate, ml_replacements = preserve_ml_keywords(original_text)
+            # ------------------------------------------------------------
+            # 4.1: BẢO VỆ TỪ KHÓA CHUYÊN NGÀNH (ML terms)
+            # ------------------------------------------------------------
+            # Thay thế các từ khóa ML bằng placeholder để không bị dịch sai
+            # Ví dụ: "neural network" → "__ML_TERM_0__"
+            text_to_translate, ml_replacements, _ = preserve_ml_keywords(original_text)
             
-            # Dịch có ngữ cảnh
-            # Thu thập text trước/sau cho ngữ cảnh
+            # ------------------------------------------------------------
+            # 4.2: THU THẬP NGỮ CẢNH (2 đoạn trước/sau)
+            # ------------------------------------------------------------
             previous_texts = original_texts[max(0, i-2):i]  # 2 đoạn trước
             next_texts = original_texts[i+1:min(len(original_texts), i+3)]  # 2 đoạn sau
             
-            # Dịch văn bản (MarianMT hoặc OpenAI)
+            # Tính thời gian audio của segment này (để tối ưu độ dài dịch)
+            segment_duration = end_time - start_time
+            
+            # ------------------------------------------------------------
+            # 4.3: DỊCH VĂN BẢN
+            # ------------------------------------------------------------
             if translation_mode == 'openai':
+                # === DÙNG OPENAI GPT ===
                 # Dịch có ngữ cảnh với OpenAI LLM
                 translated_text = translate_with_context_openai(
                     text_to_translate,
                     previous_texts,
                     next_texts
                 )
+                
+                # Fallback 1: Dịch đơn giản nếu context translation fail
                 if not translated_text:
-                    # Fallback: Dịch đơn giản
                     print(f'[Task {task_id}] Segment {i}: Falling back to simple OpenAI translation')
                     translated_text = translate_with_openai(text_to_translate)
+                    
+                    # Fallback 2: MarianMT nếu OpenAI lỗi hoàn toàn
                     if not translated_text:
-                        # Fallback 2: MarianMT nếu OpenAI lỗi
                         if translation_model is None or tokenizer is None:
                             translation_model, tokenizer = get_translation_model()
                         translated_text = translate_with_marian(text_to_translate, translation_model, tokenizer, device)
-            else:
-                # Dịch có ngữ cảnh với MarianMT
-                if translation_model is None or tokenizer is None:
-                    translation_model, tokenizer = get_translation_model()
                 
-                translated_text = translate_with_context_marian(
-                    text_to_translate,
-                    previous_texts,
-                    next_texts,
-                    translation_model,
-                    tokenizer,
-                    device
-                )
+                # Tối ưu hóa độ dài dịch dựa trên thời gian audio
+                # Mục tiêu: số từ phù hợp với segment_duration (2.7 từ/giây)
+                if translated_text:
+                    translated_text = optimize_translation_by_timing(
+                        text_to_translate, 
+                        translated_text, 
+                        segment_duration,
+                        use_llm=True  # Dùng LLM để tái dịch nếu cần
+                    )
+            else:
+                # === DÙNG MARIANMT ===
+                # Reload model nếu bị unload trước đó
+                if translation_model is None or tokenizer is None:
+                    try:
+                        translation_model, tokenizer = get_translation_model()
+                    except Exception as e:
+                        print(f'[ERROR] Cannot reload MarianMT model: {e}')
+                        print(f'[Task {task_id}] Segment {i}: Skipping due to model error')
+                        continue
+                
+                try:
+                    # Dịch có ngữ cảnh với MarianMT
+                    translated_text = translate_with_context_marian(
+                        text_to_translate,
+                        previous_texts,
+                        next_texts,
+                        translation_model,
+                        tokenizer,
+                        device
+                    )
+                    
+                    # Nếu MarianMT trả về None hoặc empty, skip segment
+                    if not translated_text:
+                        print(f'[WARNING] Segment {i}: MarianMT returned None/empty, skipping')
+                        continue
+                    
+                    # Tối ưu hóa độ dài (không dùng LLM vì MarianMT đã chậm)
+                    translated_text = optimize_translation_by_timing(
+                        text_to_translate,
+                        translated_text,
+                        segment_duration,
+                        use_llm=False  # Chỉ truncate, không tái dịch
+                    )
+                
+                except Exception as e:
+                    print(f'[ERROR] MarianMT translation failed for segment {i}: {type(e).__name__}: {e}')
+                    print(f'[Task {task_id}] Skipping segment {i}')
+                    continue
             
-            # Khôi phục từ khóa ML sau dịch
+            # ------------------------------------------------------------
+            # 4.4: KHÔI PHỤC TỪ KHÓA ML
+            # ------------------------------------------------------------
+            # Thay thế placeholder về từ khóa gốc
+            # Ví dụ: "__ML_TERM_0__" → "neural network"
             translated_text = restore_ml_keywords(translated_text, ml_replacements)
             
-            # Tạo file âm thanh tạm (WAV format - no compression)
-            temp_audio = f"outputs/temp_{task_id}_{i}.wav"
-            asyncio.run(generate_voice(translated_text, temp_audio))
+            # ------------------------------------------------------------
+            # 4.5: VALIDATION & CLEAN UP TEXT
+            # ------------------------------------------------------------
+            if not translated_text or len(translated_text.strip()) == 0:
+                print(f'[WARNING] Segment {i}: Empty translation, skipping')
+                continue
             
-            # Đo thời lượng TTS
+            # Làm sạch text: xóa khoảng trắng thừa, ký tự control
+            translated_text = ' '.join(translated_text.split())  # Normalize spaces
+            translated_text = ''.join(c for c in translated_text if ord(c) >= 32 or c in '\n\r\t')
+            
+            print(f'[DEBUG] Segment {i}: Translated text length={len(translated_text)}, content="{translated_text[:80]}"...')
+            
+            # ------------------------------------------------------------
+            # 4.6: TẠO GIỌNG NÓI (TTS)
+            # ------------------------------------------------------------
+            # Tạo file âm thanh tạm với sanitized filename (tránh lỗi Unicode)
+            safe_task_id = sanitize_filename(str(task_id))
+            temp_audio = os.path.join(Config.OUTPUT_FOLDER, f"temp_{safe_task_id}_{i}.wav")
+            os.makedirs(os.path.dirname(temp_audio), exist_ok=True)
+            
+            # Gọi Edge TTS để tổng hợp giọng nói
+            tts_success = asyncio.run(generate_voice(translated_text, temp_audio))
+            
+            if not tts_success:
+                print(f'[WARNING] Segment {i}: TTS generation failed, skipping')
+                continue
+            
+            # ------------------------------------------------------------
+            # 4.7: TỐI ƯU TIMING AUDIO
+            # ------------------------------------------------------------
             original_duration = end_time - start_time
-            
             print(f'[Task {task_id}] Segment {i}: Original duration={original_duration:.2f}s')
             
-            # Sử dụng chiến lược tối ưu timing thông minh
-            temp_audio_optimized = f"outputs/temp_{task_id}_{i}_optimized.wav"
+            # Điều chỉnh audio để khớp timing gốc
+            # - Nếu ngắn hơn: thêm pause
+            # - Nếu dài hơn: tăng tốc (max 1.3x)
+            temp_audio_optimized = os.path.join(Config.OUTPUT_FOLDER, f"temp_{safe_task_id}_{i}_optimized.wav")
             if optimize_audio_timing(original_duration, temp_audio, translated_text, temp_audio_optimized):
-                # Nếu có tối ưu hóa, dùng file đã tối ưu
                 if os.path.exists(temp_audio_optimized):
                     os.remove(temp_audio)
                     temp_audio = temp_audio_optimized
                     final_duration = get_audio_duration(temp_audio)
                     print(f'[Task {task_id}] Segment {i}: Optimized duration={final_duration:.2f}s')
             
+            # Lưu audio segment vào list
             audio_segments.append({
                 'audio': temp_audio,
                 'start': start_time,
@@ -1080,12 +1869,14 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
                 'text': translated_text
             })
         
-        # Xóa cache dịch sau khi hoàn tất task
+        # Xóa cache dịch sau khi hoàn tất
         clear_translation_cache()
 
         update_task_status(task_id, 'PROGRESS', {'status': f'Đã tạo {len(audio_segments)} audio clips, đang ghép vào video...', 'current': 80, 'total': 100, 'error': None})
 
-        # 3. Merge audio và video bằng ffmpeg
+        # ====================================================================
+        # BƯỚC 5: MERGE AUDIO VÀO VIDEO (FFMPEG)
+        # ====================================================================
         output_path = os.path.join(Config.OUTPUT_FOLDER, output_filename)
         
         # Nếu không có audio segments, copy video gốc
@@ -1097,31 +1888,38 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             update_task_status(task_id, 'SUCCESS', {'status': 'Hoàn tất!', 'current': 100, 'total': 100, 'error': None, 'result_url': output_filename, 'metrics': None})
             return
         
-        # Tạo filter complex để đặt audio đúng timing thay vì concat
+        # Tạo filter complex để đặt audio đúng timing
+        # Sử dụng adelay để delay audio đến đúng thời điểm start
         filter_parts = []
         for i, seg in enumerate(audio_segments):
-            filter_parts.append(f"[{i+1}:a]adelay={int(seg['start']*1000)}|{int(seg['start']*1000)}[a{i}]")
+            # Convert seconds to milliseconds
+            delay_ms = int(seg['start'] * 1000)
+            filter_parts.append(f"[{i+1}:a]adelay={delay_ms}|{delay_ms}[a{i}]")
         
+        # Mix tất cả audio streams lại
         mix_inputs = ''.join([f"[a{i}]" for i in range(len(audio_segments))])
         filter_complex = ';'.join(filter_parts) + f";{mix_inputs}amix=inputs={len(audio_segments)}:duration=longest[aout]"
         
         # Build FFmpeg command
         cmd = [ffmpeg_path, '-i', video_path]
+        
+        # Thêm tất cả audio inputs
         for seg in audio_segments:
             cmd.extend(['-i', seg['audio']])
         
+        # Thêm filter và output options
         cmd.extend([
             '-filter_complex', filter_complex,
-            '-map', '0:v:0',
-            '-map', '[aout]',
-            '-c:v', 'libx264',
-            '-preset', 'slow',
-            '-crf', '18',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-shortest',
+            '-map', '0:v:0',  # Video từ input đầu tiên
+            '-map', '[aout]',  # Audio từ filter output
+            '-c:v', 'libx264',  # Video codec
+            '-preset', 'slow',  # Encoding preset (chất lượng cao)
+            '-crf', '18',  # Quality (18 = high quality)
+            '-c:a', 'aac',  # Audio codec
+            '-b:a', '192k',  # Audio bitrate
+            '-shortest',  # Kết thúc khi stream ngắn nhất kết thúc
             output_path,
-            '-y'
+            '-y'  # Overwrite output file
         ])
         
         print(f'[Task {task_id}] Running FFmpeg command...')
@@ -1131,6 +1929,9 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             error_output = result.stderr or result.stdout
             raise Exception(f'FFmpeg failed: {error_output}')
         
+        # ====================================================================
+        # BƯỚC 6: CLEANUP & ĐÁNH GIÁ CHẤT LƯỢNG
+        # ====================================================================
         # Dọn dẹp temp audio files
         for seg in audio_segments:
             try:
@@ -1146,6 +1947,7 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
         translated_texts = [seg['text'] for seg in audio_segments]
         metrics = evaluate_quality_metrics(segments, audio_segments, translated_texts)
         
+        # Update status SUCCESS
         update_task_status(task_id, 'SUCCESS', {
             'status': 'Hoàn tất!',
             'current': 100,
@@ -1154,11 +1956,27 @@ def dubbing_process(task_id, video_path, output_filename, translation_mode='mari
             'result_url': output_filename,
             'metrics': metrics
         })
+        
+        # Unload models sau task hoàn tất để giải phóng memory
+        unload_models()
+        clear_translation_cache()
+        
     except Exception as e:
+        # ====================================================================
+        # XỬ LÝ LỖI
+        # ====================================================================
         import traceback
         error_msg = f'{type(e).__name__}: {str(e)}'
         print(f'[ERROR Task {task_id}] {error_msg}')
         print(traceback.format_exc())
+        
+        # Update status FAILURE
         update_task_status(task_id, 'FAILURE', {'status': f'Lỗi: {error_msg}', 'current': 0, 'total': 100, 'error': error_msg})
+        
+        # Cleanup temp files
         safe_remove_path(temp_audio_path)
         safe_remove_path(demucs_output_dir)
+        
+        # Cleanup models on error
+        unload_models()
+        clear_translation_cache()
