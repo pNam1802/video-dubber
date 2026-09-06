@@ -499,6 +499,146 @@ def test_cancel_awaiting_review_job_deletes_kept_upload(app, user, tmp_path):
     assert not video_path.exists()
 
 
+# ── API duyệt/sửa transcript ───────────────────────────────────
+def _awaiting_review_job(app, user, tmp_path, **job_kwargs):
+    """Tạo job AWAITING_REVIEW với 1 dòng transcript, trả về (job_id, seg_id, video_path)."""
+    from app.models import TranscriptSegment
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    with app.app_context():
+        defaults = dict(
+            status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path),
+            translator_engine="gemini", target_language="vi", source_language="en",
+        )
+        defaults.update(job_kwargs)
+        job = make_job(user, **defaults)
+        seg = TranscriptSegment(
+            job_id=job.id, idx=0, start_sec=0.0, end_sec=1.0,
+            text_source="Hello.", text_target="Xin chào.",
+        )
+        db.session.add(seg)
+        db.session.commit()
+        return job.id, seg.id, video_path
+
+
+def test_update_segment_requires_awaiting_review(app, as_user, user, tmp_path):
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path, status=JobStatus.DONE)
+    response = as_user.patch(f"/api/jobs/{job_id}/segments/{seg_id}", json={"target": "Sửa sau khi xong"})
+    assert response.status_code == 409
+
+
+def test_update_segment_edits_text_and_marks_edited(app, as_user, user, tmp_path):
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    response = as_user.patch(f"/api/jobs/{job_id}/segments/{seg_id}", json={"target": "Bản dịch đã sửa tay."})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["target"] == "Bản dịch đã sửa tay."
+    assert data["source"] == "Hello."  # không gửi "source" thì giữ nguyên
+    assert data["edited"] is True
+
+
+def test_update_segment_requires_at_least_one_field(app, as_user, user, tmp_path):
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    response = as_user.patch(f"/api/jobs/{job_id}/segments/{seg_id}", json={})
+    assert response.status_code == 400
+
+
+def test_update_segment_other_user_gets_404(app, as_other, user, tmp_path):
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    response = as_other.patch(f"/api/jobs/{job_id}/segments/{seg_id}", json={"target": "x"})
+    assert response.status_code == 404
+
+
+def test_retranslate_segment_uses_edited_source(app, as_user, user, monkeypatch, tmp_path):
+    """Dịch lại phải dùng bản GỐC hiện tại (có thể vừa được sửa), không phải
+    bản gốc lúc Whisper nhận dạng lần đầu."""
+    import app.api as api_mod
+
+    class FakeTranslator:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def translate_text(self, text):
+            return f"[dịch lại] {text}"
+
+    monkeypatch.setattr(api_mod, "get_translator", lambda engine, **kwargs: FakeTranslator(**kwargs))
+
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    as_user.patch(f"/api/jobs/{job_id}/segments/{seg_id}", json={"source": "Corrected source."})
+
+    response = as_user.post(
+        f"/api/jobs/{job_id}/segments/{seg_id}/retranslate", json={"gemini_api_key": "test-key"}
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["target"] == "[dịch lại] Corrected source."
+    assert data["edited"] is True
+
+
+def test_retranslate_segment_without_key_fails_clearly(app, as_user, user, tmp_path):
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    response = as_user.post(f"/api/jobs/{job_id}/segments/{seg_id}/retranslate", json={})
+    assert response.status_code == 400
+    assert "API key" in response.get_json()["error"]
+
+
+def test_retranslate_segment_surfaces_provider_error(app, as_user, user, monkeypatch, tmp_path):
+    import app.api as api_mod
+
+    def boom(engine, **kwargs):
+        raise RuntimeError("404 model không còn khả dụng")
+
+    monkeypatch.setattr(api_mod, "get_translator", boom)
+
+    job_id, seg_id, _ = _awaiting_review_job(app, user, tmp_path)
+    response = as_user.post(
+        f"/api/jobs/{job_id}/segments/{seg_id}/retranslate", json={"gemini_api_key": "test-key"}
+    )
+    assert response.status_code == 502
+    assert "Dịch lại thất bại" in response.get_json()["error"]
+
+
+def test_continue_spawns_phase2_and_moves_out_of_review(app, as_user, user, monkeypatch, tmp_path):
+    import app.api as api_mod
+
+    captured = {}
+    monkeypatch.setattr(
+        api_mod, "continue_job",
+        lambda flask_app, job_id, config: captured.update(job_id=job_id, config=config),
+    )
+
+    job_id, _, _ = _awaiting_review_job(
+        app, user, tmp_path, tts_voice="male", original_volume=0.3, subtitle_mode="target",
+    )
+    response = as_user.post(f"/api/jobs/{job_id}/continue")
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(Job, job_id).status == JobStatus.QUEUED
+
+    assert captured["job_id"] == job_id
+    # Phải dùng đúng lựa chọn TTS/phụ đề đã lưu từ lúc upload, không phải mặc định.
+    assert captured["config"].tts_voice == "male"
+    assert captured["config"].original_volume == 0.3
+    assert captured["config"].subtitle_mode == "target"
+
+
+def test_continue_requires_awaiting_review(app, as_user, user, tmp_path):
+    job_id, _, _ = _awaiting_review_job(app, user, tmp_path, status=JobStatus.DONE)
+    response = as_user.post(f"/api/jobs/{job_id}/continue")
+    assert response.status_code == 409
+
+
+def test_continue_without_segments_refused(app, as_user, user, tmp_path):
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path)).id
+    response = as_user.post(f"/api/jobs/{job_id}/continue")
+    assert response.status_code == 409
+
+
 def test_history_page_renders(as_user):
     body = as_user.get("/lich-su").get_data(as_text=True)
     assert 'id="search"' in body

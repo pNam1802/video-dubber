@@ -12,8 +12,8 @@ from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from app.extensions import db, limiter
-from app.jobs import cancel_job, start_job
-from app.models import Job, JobStatus
+from app.jobs import cancel_job, continue_job, start_job
+from app.models import Job, JobStatus, TranscriptSegment
 from app.quota import check_quota
 from app.storage import commit_uploads, commit_volume
 from config.settings import (
@@ -26,6 +26,7 @@ from config.settings import (
     UPLOAD_DIR,
 )
 from core.pipeline import DubbingConfig
+from core.translator import get_translator
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -115,6 +116,12 @@ def upload_video():
         tts_engine=tts_engine,
         whisper_model=whisper_model,
         target_language=target_language,
+        # Chi dung o giai doan 2 (xem app/jobs.py::run_job_phase2) — phai
+        # luu tu day vi /continue khong con DubbingConfig nao cua request
+        # nay de doc lai.
+        tts_voice=tts_voice,
+        original_volume=original_volume,
+        subtitle_mode=subtitle_mode,
     )
     db.session.add(job)
     db.session.commit()
@@ -281,3 +288,126 @@ def job_segments(job_id: int):
         "available": bool(segments),
         "segments": [segment.to_dict() for segment in segments],
     })
+
+
+def _json_body() -> dict:
+    return request.get_json(silent=True) or {}
+
+
+@bp.patch("/jobs/<int:job_id>/segments/<int:seg_id>")
+@login_required
+def update_segment(job_id: int, seg_id: int):
+    """Sửa tay một dòng transcript trước khi tạo giọng đọc.
+
+    Chỉ cho phép khi job đang AWAITING_REVIEW — sau đó dữ liệu đã được đọc
+    để chạy TTS, sửa lúc này không còn tác dụng và dễ khiến người dùng
+    tưởng nhầm là video sẽ tự cập nhật theo.
+    """
+    job = Job.query.filter_by(id=job_id, user_id=current_user.id).first()
+    if job is None:
+        return jsonify({"error": "Không tìm thấy job.", "code": 404}), 404
+    if job.status != JobStatus.AWAITING_REVIEW:
+        return jsonify({"error": "Job không ở trạng thái chờ duyệt.", "code": 409}), 409
+
+    segment = TranscriptSegment.query.filter_by(id=seg_id, job_id=job_id).first()
+    if segment is None:
+        return jsonify({"error": "Không tìm thấy dòng transcript.", "code": 404}), 404
+
+    body = _json_body()
+    if "source" not in body and "target" not in body:
+        return jsonify({"error": "Cần ít nhất một trong hai trường 'source' hoặc 'target'.", "code": 400}), 400
+
+    if "source" in body:
+        segment.text_source = str(body["source"] or "").strip()[:2000]
+    if "target" in body:
+        segment.text_target = str(body["target"] or "").strip()[:2000]
+    segment.edited = True
+    db.session.commit()
+    return jsonify(segment.to_dict())
+
+
+@bp.post("/jobs/<int:job_id>/segments/<int:seg_id>/retranslate")
+@login_required
+def retranslate_segment(job_id: int, seg_id: int):
+    """Dịch lại một dòng bằng đúng engine/ngôn ngữ đích của job.
+
+    Dùng khi người dùng sửa bản gốc (nghe nhầm ASR) và muốn máy dịch lại
+    theo bản mới, thay vì tự tay gõ luôn bản dịch. API key KHÔNG được lưu
+    lại sau lúc upload (chỉ giữ trong bộ nhớ lúc chạy pipeline) nên phải
+    nhận lại ở đây — rơi về key mặc định của hệ thống nếu client không gửi,
+    giống hệt cách /upload xử lý.
+    """
+    job = Job.query.filter_by(id=job_id, user_id=current_user.id).first()
+    if job is None:
+        return jsonify({"error": "Không tìm thấy job.", "code": 404}), 404
+    if job.status != JobStatus.AWAITING_REVIEW:
+        return jsonify({"error": "Job không ở trạng thái chờ duyệt.", "code": 409}), 409
+
+    segment = TranscriptSegment.query.filter_by(id=seg_id, job_id=job_id).first()
+    if segment is None:
+        return jsonify({"error": "Không tìm thấy dòng transcript.", "code": 404}), 404
+    if not segment.text_source.strip():
+        return jsonify({"error": "Không có gì để dịch — bản gốc đang rỗng.", "code": 400}), 400
+
+    body = _json_body()
+    # translator_engine cua job co the la "marian" (job tao truoc khi MarianMT
+    # bi khoa) — khong con dung duoc nua, rơi ve gemini cho chac.
+    engine = job.translator_engine if job.translator_engine in ("openai", "gemini") else "gemini"
+    if engine == "openai":
+        api_key = (body.get("openai_api_key") or "").strip() or OPENAI_API_KEY
+        model = OPENAI_MODEL
+    else:
+        api_key = (body.get("gemini_api_key") or "").strip() or GEMINI_API_KEY
+        model = GEMINI_MODEL
+    if not api_key:
+        return jsonify({"error": f"Cần {engine.upper()} API key để dịch lại.", "code": 400}), 400
+
+    try:
+        translator = get_translator(
+            engine, api_key=api_key, model=model,
+            source_language=job.source_language or "en",
+            target_language=job.target_language,
+        )
+        segment.text_target = (translator.translate_text(segment.text_source) or "").strip()
+    except Exception as exc:
+        current_app.logger.warning("Dịch lại segment %s của job %s thất bại: %s", seg_id, job_id, exc)
+        return jsonify({"error": f"Dịch lại thất bại: {exc}", "code": 502}), 502
+
+    segment.edited = True
+    db.session.commit()
+    return jsonify(segment.to_dict())
+
+
+@bp.post("/jobs/<int:job_id>/continue")
+@login_required
+def continue_after_review(job_id: int):
+    """Xác nhận đã duyệt xong transcript — chạy tiếp giai đoạn 2 (TTS + ghép
+    video). Không cần API key ở bước này: giai đoạn 2 không gọi translator.
+    """
+    job = Job.query.filter_by(id=job_id, user_id=current_user.id).first()
+    if job is None:
+        return jsonify({"error": "Không tìm thấy job.", "code": 404}), 404
+    if job.status != JobStatus.AWAITING_REVIEW:
+        return jsonify({"error": "Job không ở trạng thái chờ duyệt.", "code": 409}), 409
+    if not job.segments.count():
+        return jsonify({"error": "Không còn transcript để tạo giọng đọc.", "code": 409}), 409
+
+    # Chuyển trạng thái NGAY trong request này — tránh bấm "xác nhận" nhiều
+    # lần liên tiếp spawn trùng giai đoạn 2 trước khi trạng thái kịp đổi
+    # (nhất là với Modal: có độ trễ giữa lúc spawn và lúc run_job_phase2()
+    # thực sự bắt đầu chạy để tự đổi thành PROCESSING).
+    job.status = JobStatus.QUEUED
+    job.progress = 66
+    job.message = "Đã xác nhận, đang xếp hàng tạo giọng đọc..."
+    db.session.commit()
+
+    config = DubbingConfig(
+        translator_engine=job.translator_engine or "gemini",
+        tts_engine=job.tts_engine or "edge-tts",
+        tts_voice=job.tts_voice or "female",
+        original_volume=job.original_volume if job.original_volume is not None else 0.1,
+        subtitle_mode=job.subtitle_mode or "bilingual",
+        target_language=job.target_language,
+    )
+    continue_job(current_app._get_current_object(), job.id, config)
+    return jsonify({"job_id": job.id, "status": job.status})

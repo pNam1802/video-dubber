@@ -106,6 +106,13 @@ class Job(db.Model):
     source_language = db.Column(db.String(8), nullable=True)
     # Ngon ngu DICH — luon co gia tri, mac dinh tieng Viet nhu tu truoc gio.
     target_language = db.Column(db.String(8), nullable=False, default="vi", server_default="vi")
+    # Ba truong nay chi dung o GIAI DOAN 2 (TTS + ghep video), nhung phai luu
+    # tu luc tao job: /jobs/<id>/continue co the chay o mot request hoan
+    # toan khac, rat lau sau — khong con DubbingConfig cua giai doan 1 nao
+    # trong scope de doc lai, phai dung dung lua chon nguoi dung da chon.
+    tts_voice = db.Column(db.String(20), nullable=True)
+    original_volume = db.Column(db.Float, nullable=True)
+    subtitle_mode = db.Column(db.String(20), nullable=True)
 
     # ── Kết quả ───────────────────────────────────────────────
     video_name = db.Column(db.String(255), nullable=True)
