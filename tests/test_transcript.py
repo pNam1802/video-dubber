@@ -35,8 +35,8 @@ def test_segments_are_saved_with_both_languages(app, user):
 
         rows = TranscriptSegment.query.filter_by(job_id=job.id).order_by(TranscriptSegment.idx).all()
         assert [r.idx for r in rows] == [0, 1, 2]
-        assert rows[0].text_en.startswith("Gradient descent")
-        assert rows[0].text_vi.startswith("Gradient descent là")
+        assert rows[0].text_source.startswith("Gradient descent")
+        assert rows[0].text_target.startswith("Gradient descent là")
         assert rows[2].end_sec == 7.25
         assert rows[0].edited is False
 
@@ -46,8 +46,8 @@ def test_whitespace_is_trimmed(app, user):
         job = make_job(user)
         save_segments(app, job.id, SAMPLE)
         row = TranscriptSegment.query.filter_by(job_id=job.id, idx=1).one()
-        assert row.text_en == "It follows the slope."
-        assert row.text_vi == "Nó đi theo độ dốc."
+        assert row.text_source == "It follows the slope."
+        assert row.text_target == "Nó đi theo độ dốc."
 
 
 def test_saving_twice_replaces_instead_of_duplicating(app, user):
@@ -93,7 +93,7 @@ def test_endpoint_returns_segments_in_order(app, as_user, user):
     assert payload["available"] is True
     assert [s["idx"] for s in payload["segments"]] == [0, 1, 2]
     assert payload["segments"][0]["start"] == 0.0
-    assert set(payload["segments"][0]) == {"idx", "start", "end", "en", "vi", "edited"}
+    assert set(payload["segments"][0]) == {"idx", "start", "end", "source", "target", "edited"}
 
 
 def test_job_without_transcript_returns_empty_not_404(app, as_user, user):

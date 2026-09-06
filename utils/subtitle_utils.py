@@ -27,18 +27,21 @@ def segments_to_srt(
 		lines.append(str(idx))
 		lines.append(f"{_fmt_srt_time(seg.start)} --> {_fmt_srt_time(seg.end)}")
 
-		en_text = (seg.text or "").strip()
-		vi_text = (seg.translated or "").strip()
+		# "source" khong nhat thiet la tieng Anh, "target" khong nhat thiet
+		# la tieng Viet — ten trung lap vi source_language/target_language
+		# gio la tuy chon (Nhat/Trung/Han...), khong con co dinh nhu truoc.
+		source_text = (seg.text or "").strip()
+		target_text = (seg.translated or "").strip()
 
-		if mode == "en":
-			lines.append(en_text)
-		elif mode == "vi":
-			lines.append(vi_text or en_text)
+		if mode == "source":
+			lines.append(source_text)
+		elif mode == "target":
+			lines.append(target_text or source_text)
 		else:
-			if en_text:
-				lines.append(en_text)
-			if vi_text:
-				lines.append(vi_text)
+			if source_text:
+				lines.append(source_text)
+			if target_text:
+				lines.append(target_text)
 
 		lines.append("")
 

@@ -35,7 +35,7 @@ ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
 ALLOWED_TTS_ENGINES = {"edge-tts", "gtts"}
 ALLOWED_VOICES = {"female", "male"}
-ALLOWED_SUBTITLE_MODES = {"bilingual", "vi", "en", "none"}
+ALLOWED_SUBTITLE_MODES = {"bilingual", "target", "source", "none"}
 
 
 def _pick(field: str, allowed: set[str], default: str) -> str:

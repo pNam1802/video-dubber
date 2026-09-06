@@ -96,8 +96,8 @@ def save_segments(flask_app: Flask, job_id: int, segments) -> int:
                     idx=idx,
                     start_sec=float(segment.start),
                     end_sec=float(segment.end),
-                    text_en=(segment.text or "").strip(),
-                    text_vi=(segment.translated or "").strip(),
+                    text_source=(segment.text or "").strip(),
+                    text_target=(segment.translated or "").strip(),
                 )
                 for idx, segment in enumerate(segments)
             ]

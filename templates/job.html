@@ -234,15 +234,15 @@
       function renderRows() {
         list.innerHTML = segments.map(function (seg, i) {
           // Dịch câu này thất bại (kể cả sau khi hệ thống đã tự thử lại) thì
-          // seg.vi trùng hệt seg.en — đừng hiện hai dòng giống hệt nhau,
-          // hiện một dòng kèm dấu hiệu rõ ràng thay vì trông như lỗi hiển thị.
-          const untranslated = !!(seg.vi && seg.en && seg.vi.trim() === seg.en.trim());
-          const mainText = seg.vi || seg.en || "—";
+          // seg.target trùng hệt seg.source — đừng hiện hai dòng giống hệt
+          // nhau, hiện một dòng kèm dấu hiệu rõ ràng thay vì trông như lỗi hiển thị.
+          const untranslated = !!(seg.target && seg.source && seg.target.trim() === seg.source.trim());
+          const mainText = seg.target || seg.source || "—";
           const badge = untranslated
-            ? '<span class="font-label-sm text-label-sm text-tertiary flex-shrink-0" title="Không dịch được câu này, đang hiện bản gốc tiếng Anh">chưa dịch</span>'
+            ? '<span class="font-label-sm text-label-sm text-tertiary flex-shrink-0" title="Không dịch được câu này, đang hiện bản gốc">chưa dịch</span>'
             : "";
-          const secondLine = (seg.vi && seg.en && !untranslated)
-            ? '<span class="font-body-md text-body-md text-on-surface-variant pl-[52px]">' + escapeHtml(seg.en) + "</span>"
+          const secondLine = (seg.target && seg.source && !untranslated)
+            ? '<span class="font-body-md text-body-md text-on-surface-variant pl-[52px]">' + escapeHtml(seg.source) + "</span>"
             : "";
           return '<button type="button" data-i="' + i + '" ' +
             'class="transcript-row w-full text-left px-3 py-2 rounded-lg hover:bg-surface-container-high/60 transition-colors flex flex-col gap-0.5">' +
@@ -297,8 +297,8 @@
         list.querySelectorAll("[data-i]").forEach(function (row, i) {
           const seg = segments[i];
           const match = !q ||
-            (seg.en || "").toLowerCase().indexOf(q) !== -1 ||
-            (seg.vi || "").toLowerCase().indexOf(q) !== -1;
+            (seg.source || "").toLowerCase().indexOf(q) !== -1 ||
+            (seg.target || "").toLowerCase().indexOf(q) !== -1;
           row.classList.toggle("hidden", !match);
           if (match) visibleCount += 1;
         });

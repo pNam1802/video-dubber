@@ -192,10 +192,10 @@ def test_done_job_page_ships_transcript_panel(app, as_user, user):
     assert 'id="transcriptSearch"' in body
     assert "const IS_DONE = true;" in body
     assert f'"/api/jobs/" + JOB_ID + "/segments"' in body
-    # Câu dịch thất bại (seg.vi trùng hệt seg.en, xem test_llm_translation.py)
-    # phải hiện một dòng kèm dấu "chưa dịch", không phải hai dòng giống hệt
-    # nhau — bug thật từng gặp trên production trước khi vá.
-    assert "seg.vi.trim() === seg.en.trim()" in body
+    # Câu dịch thất bại (seg.target trùng hệt seg.source, xem
+    # test_llm_translation.py) phải hiện một dòng kèm dấu "chưa dịch", không
+    # phải hai dòng giống hệt nhau — bug thật từng gặp trên production.
+    assert "seg.target.trim() === seg.source.trim()" in body
     assert "chưa dịch" in body
 
 
@@ -260,6 +260,16 @@ def many_jobs(app, user):
                 elapsed_sec=20 + i,
             )
         make_job(user, status=JobStatus.PROCESSING, source_filename="dangchay.mp4")
+
+
+# ── Đa ngôn ngữ (nền tảng, chưa có UI chọn — xem giai đoạn 2/3) ──
+def test_job_defaults_to_vietnamese_target_with_no_source_yet(app, user):
+    """Job tạo trước khi có UI chọn ngôn ngữ vẫn phải xử lý được: đích mặc
+    định tiếng Việt như trước giờ, nguồn để trống (chưa nhận dạng/chưa chọn)."""
+    with app.app_context():
+        job = make_job(user)
+        assert job.target_language == "vi"
+        assert job.source_language is None
 
 
 def test_history_page_renders(as_user):

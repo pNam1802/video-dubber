@@ -86,6 +86,11 @@ class Job(db.Model):
     translator_engine = db.Column(db.String(30), nullable=True)
     tts_engine = db.Column(db.String(30), nullable=True)
     whisper_model = db.Column(db.String(30), nullable=True)
+    # Ma ngon ngu NGUON da nhan dang/nguoi dung chon that su (vd "en", "ja").
+    # Rong = job chay truoc khi co da ngon ngu, mac dinh coi la tieng Anh.
+    source_language = db.Column(db.String(8), nullable=True)
+    # Ngon ngu DICH — luon co gia tri, mac dinh tieng Viet nhu tu truoc gio.
+    target_language = db.Column(db.String(8), nullable=False, default="vi", server_default="vi")
 
     # ── Kết quả ───────────────────────────────────────────────
     video_name = db.Column(db.String(255), nullable=True)
@@ -175,11 +180,15 @@ class Job(db.Model):
 
 
 class TranscriptSegment(db.Model):
-    """Một dòng phụ đề đã có mốc thời gian, song ngữ.
+    """Một dòng phụ đề đã có mốc thời gian, kèm cả bản gốc lẫn bản dịch.
 
     Trước đây nội dung này chỉ đi vào file .srt trên Volume: không truy vấn
-    được, và mất hẳn khi người dùng chọn subtitle_mode "vi" hoặc "none".
+    được, và mất hẳn khi người dùng chọn subtitle_mode "source" hoặc "none".
     Database mới là nơi giữ nó — đây là nền cho sửa phụ đề, tóm tắt và hỏi đáp.
+
+    Tên cột trung lập (text_source/text_target) chứ không cứng text_en/text_vi
+    — hỗ trợ đa ngôn ngữ đích (Nhật/Trung/Hàn...) từ đây, xem
+    Job.source_language/target_language để biết đúng ngôn ngữ của từng cột.
 
     Tên khác với Segment trong core/transcriber.py cho khỏi nhầm: bên kia là
     dataclass chạy trong bộ nhớ, bên này là bảng.
@@ -197,8 +206,8 @@ class TranscriptSegment(db.Model):
     start_sec = db.Column(db.Float, nullable=False)
     end_sec = db.Column(db.Float, nullable=False)
 
-    text_en = db.Column(db.Text, nullable=False, default="", server_default="")
-    text_vi = db.Column(db.Text, nullable=False, default="", server_default="")
+    text_source = db.Column(db.Text, nullable=False, default="", server_default="")
+    text_target = db.Column(db.Text, nullable=False, default="", server_default="")
 
     #: Nguoi dung da sua tay dong nay chua — phan biet ban may dich voi ban da duyet.
     edited = db.Column(db.Boolean, nullable=False, default=False, server_default=db.text("false"))
@@ -224,8 +233,8 @@ class TranscriptSegment(db.Model):
             "idx": self.idx,
             "start": round(self.start_sec, 3),
             "end": round(self.end_sec, 3),
-            "en": self.text_en,
-            "vi": self.text_vi,
+            "source": self.text_source,
+            "target": self.text_target,
             "edited": self.edited,
         }
 

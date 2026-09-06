@@ -38,7 +38,7 @@ class DubbingConfig:
     tts_engine: str = "edge-tts"            # "edge-tts" | "gtts"
     tts_voice: str = "female"               # "female" | "male"
     original_volume: float = 0.1            # 0.0 – 1.0
-    subtitle_mode: str = "bilingual"        # "bilingual" | "vi" | "en" | "none"
+    subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
     translator_fallback: bool = True
     output_dir: Path = field(default_factory=lambda: OUTPUT_DIR)
