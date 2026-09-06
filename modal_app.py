@@ -146,7 +146,8 @@ class Dubber:
 
     @modal.method()
     def run(self, job_id: int, video_path: str, config_dict: dict) -> None:
-        """Chạy một job. Tiến trình ghi thẳng vào Postgres cho web đọc."""
+        """Giai đoạn 1 của một job (tới AWAITING_REVIEW). Tiến trình ghi
+        thẳng vào Postgres cho web đọc."""
         from pathlib import Path
 
         from app import create_app
@@ -164,6 +165,29 @@ class Dubber:
             run_job(flask_app, job_id, Path(video_path), config)
         finally:
             # Đẩy video/SRT kết quả lên volume để container web phục vụ được.
+            data_volume.commit()
+
+    @modal.method()
+    def run_phase2(self, job_id: int, video_path: str, config_dict: dict) -> None:
+        """Giai đoạn 2 (TTS + ghép video), gọi sau khi người dùng xác nhận
+        đã duyệt xong transcript ở trạng thái AWAITING_REVIEW."""
+        from pathlib import Path
+
+        from app import create_app
+        from app.jobs import run_job_phase2
+        from core.pipeline import DubbingConfig
+
+        # Video da nam san tren volume tu luc upload (giai doan 1 khong xoa
+        # no), nhung van reload() phong khi transcript vua duoc sua tu web.
+        data_volume.reload()
+
+        config_dict.pop("output_dir", None)
+        config = DubbingConfig(**config_dict)
+
+        flask_app = create_app()
+        try:
+            run_job_phase2(flask_app, job_id, Path(video_path), config)
+        finally:
             data_volume.commit()
 
 

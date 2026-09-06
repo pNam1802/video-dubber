@@ -107,6 +107,10 @@ def upload_video():
         message="Đã nhận video, đang khởi tạo tác vụ...",
         source_filename=video.filename,
         file_size=upload_path.stat().st_size,
+        # Luu lai duong dan that su tren dia/Volume: can dung o buoc duyet
+        # transcript (giai doan 2 doc lai tu day, xem app/jobs.py) va o
+        # /api/jobs (danh sach) neu can don file cua job bi bo do.
+        upload_path=str(upload_path),
         translator_engine=translator_engine,
         tts_engine=tts_engine,
         whisper_model=whisper_model,
@@ -186,7 +190,7 @@ def delete_job(job_id: int):
     job = Job.query.filter_by(id=job_id, user_id=current_user.id).first()
     if job is None:
         return jsonify({"error": "Không tìm thấy job.", "code": 404}), 404
-    if job.status in JobStatus.ACTIVE:
+    if job.status in JobStatus.OPEN:
         return jsonify({"error": "Job đang chạy, hãy huỷ trước khi xoá.", "code": 409}), 409
 
     # Xoá luôn file trên đĩa, không chỉ bản ghi — nếu không thì dung lượng
@@ -202,6 +206,18 @@ def delete_job(job_id: int):
                 removed += 1
         except OSError:
             current_app.logger.exception("Không xoá được file %s", name)
+
+    # upload_path bình thường đã được job.py dọn khi job kết thúc — còn sót
+    # lại chỉ khi job bị INTERRUPTED (server tắt giữa chừng, không ai dọn).
+    if job.upload_path:
+        try:
+            path = Path(job.upload_path)
+            if path.exists():
+                path.unlink()
+                removed += 1
+        except OSError:
+            current_app.logger.exception("Không xoá được file upload %s", job.upload_path)
+
     if removed:
         commit_volume()
 
@@ -216,7 +232,7 @@ def cancel(job_id: int):
     job = Job.query.filter_by(id=job_id, user_id=current_user.id).first()
     if job is None:
         return jsonify({"error": "Không tìm thấy job.", "code": 404}), 404
-    if job.status not in JobStatus.ACTIVE:
+    if job.status not in JobStatus.OPEN:
         return jsonify({"error": "Job đã kết thúc, không huỷ được.", "code": 409}), 409
 
     stopped = cancel_job(current_app._get_current_object(), job)

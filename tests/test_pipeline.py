@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -87,6 +88,112 @@ def test_fallback_can_be_disabled(fake_translators):
     with pytest.raises(Boom):
         DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
     assert fake_translators == ["gemini"]
+
+
+# ── Tách pipeline: duyệt transcript giữa dịch và TTS ──────────
+class FakeExtractor:
+    def extract(self, video_path, output_path=None):
+        Path(output_path).write_bytes(b"fake-audio")
+        return Path(output_path)
+
+    def get_duration(self, media_path):
+        return 12.0
+
+
+class FakeTranscriber:
+    def __init__(self, model_size="base", device="auto"):
+        pass
+
+    def transcribe(self, audio_path, language=None, sentence_resegment=True, silence_threshold=0.45):
+        return [Segment(start=0, end=1, text="Hello.")], "en"
+
+
+class FakeTTS:
+    def __init__(self, engine="edge-tts", voice="female", tts_dir=None):
+        self.tts_dir = Path(tts_dir)
+
+    def synthesize_all(self, segs):
+        self.tts_dir.mkdir(parents=True, exist_ok=True)
+        out = self.tts_dir / "seg_00000.mp3"
+        out.write_bytes(b"fake-audio")
+        return [(segs[0], out)]
+
+
+class FakeComposer:
+    def compose(self, video_path, segments, tts_paths, original_volume=0.1, tts_volume=1.6, video_duration=None):
+        out = Path(video_path).parent / "out_dubbed.mp4"
+        out.write_bytes(b"fake-video")
+        return out
+
+
+@pytest.fixture()
+def fake_collaborators(monkeypatch):
+    """Giả toàn bộ collaborator nặng (ffmpeg, Whisper, TTS) để test chỉ đo
+    hành vi ĐIỀU PHỐI của pipeline: dừng đúng chỗ, không dịch lại, gộp đúng
+    timings — không phải chạy pipeline thật."""
+    import core.pipeline as pipeline_mod
+
+    monkeypatch.setattr(pipeline_mod, "AudioExtractor", FakeExtractor)
+    monkeypatch.setattr(pipeline_mod, "Transcriber", FakeTranscriber)
+    monkeypatch.setattr(pipeline_mod, "TTSEngine", FakeTTS)
+    monkeypatch.setattr(pipeline_mod, "VideoComposer", FakeComposer)
+    calls: list[str] = []
+    monkeypatch.setattr(pipeline_mod, "get_translator",
+                        lambda engine, **kwargs: FakeTranslator(engine, calls))
+    return calls
+
+
+def test_transcribe_and_translate_never_touches_tts_or_compose(fake_collaborators, tmp_path, monkeypatch):
+    """Nửa đầu pipeline phải DỪNG LẠI sau khi dịch — không được tự chạy tiếp
+    TTS/ghép video, đó là lý do người dùng có cơ hội duyệt/sửa ở giữa."""
+    import core.pipeline as pipeline_mod
+
+    def boom_tts(*a, **k):
+        raise AssertionError("Không được gọi TTS ở giai đoạn 1")
+
+    monkeypatch.setattr(pipeline_mod, "TTSEngine", boom_tts)
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    config = DubbingConfig(translator_engine="openai", openai_api_key="x")
+
+    result = DubbingPipeline(config).transcribe_and_translate(video_path)
+
+    assert result.success
+    assert result.output_video is None
+    assert result.segments[0].translated.startswith("Học tăng cường")
+    assert set(result.timings) == {"extract", "transcribe", "translate"}
+
+
+def test_synthesize_and_compose_does_not_retranslate(fake_collaborators, tmp_path):
+    """Nửa sau pipeline phải dùng ĐÚNG segments truyền vào (có thể đã được
+    người dùng sửa tay) — không được gọi translator lần nữa."""
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    config = DubbingConfig(translator_engine="openai", openai_api_key="x")
+
+    edited_segments = [Segment(start=0, end=1, text="Hello.", translated="Bản đã người dùng sửa tay.")]
+    result = DubbingPipeline(config).synthesize_and_compose(video_path, edited_segments)
+
+    assert result.success
+    assert result.output_video is not None
+    assert result.segments[0].translated == "Bản đã người dùng sửa tay."
+    assert fake_collaborators == []  # get_translator() chưa từng được gọi
+
+
+def test_run_combines_both_phases(fake_collaborators, tmp_path):
+    """run() (dùng cho CLI, không có bước duyệt) phải cho kết quả tương
+    đương chạy 2 nửa nối tiếp: gộp timings, cộng dồn elapsed_seconds."""
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    config = DubbingConfig(translator_engine="openai", openai_api_key="x")
+
+    result = DubbingPipeline(config).run(video_path)
+
+    assert result.success
+    assert result.output_video is not None
+    assert result.source_language_detected == "en"
+    assert set(result.timings) == {"extract", "transcribe", "translate", "tts", "compose"}
 
 
 # ── Timeout cho lệnh ngoài ───────────────────────────────────

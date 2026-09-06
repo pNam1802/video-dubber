@@ -135,35 +135,39 @@ class DubbingPipeline:
             progress(50, f"{engine} gặp lỗi, đang chuyển sang {other}...")
             return build(other).translate_segments(segments), other, engine
 
-    def run(
-        self,
-        video_path: str | Path,
-        progress_cb: Optional[ProgressCallback] = None,
-    ) -> DubbingResult:
-        """
-        Chạy toàn bộ pipeline.
-
-        Args:
-            video_path:   Đường dẫn video đầu vào.
-            progress_cb:  Hàm callback (percent, message) để cập nhật tiến trình.
-
-        Returns:
-            DubbingResult với thông tin kết quả.
-        """
-        result = DubbingResult()
-        t0 = time.time()
-
+    @staticmethod
+    def _progress_fn(progress_cb: Optional[ProgressCallback]) -> Callable[[int, str], None]:
         def _progress(pct: int, msg: str):
             if progress_cb:
                 progress_cb(pct, msg)
             else:
                 print(f"[{pct:3d}%] {msg}")
+        return _progress
 
+    def transcribe_and_translate(
+        self,
+        video_path: str | Path,
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> DubbingResult:
+        """Nửa đầu pipeline: tách audio, nhận dạng giọng nói, dịch.
+
+        Dừng lại ở đây thay vì chạy tiếp TTS/ghép video — tốn ít công sức và
+        thời gian hơn hẳn (không có TTS/ffmpeg), hợp để người dùng dừng lại
+        xem/sửa transcript trước khi tốn công đoạn tốn thời gian nhất.
+        Không cần giữ lại audio đã tách: synthesize_and_compose() ở dưới đọc
+        thẳng từ video_path gốc (composer tự trích audio gốc bằng ffmpeg),
+        nên temp dir của bước này dọn ngay khi xong, không phải chờ tới
+        giai đoạn 2 — có thể diễn ra rất lâu sau, ở container khác.
+        """
+        result = DubbingResult()
+        t0 = time.time()
+        _progress = self._progress_fn(progress_cb)
+
+        job_temp_dir = None
         try:
             video_path = Path(video_path)
             cfg = self.config
-            job_id = uuid.uuid4().hex
-            job_temp_dir = TEMP_DIR / job_id
+            job_temp_dir = TEMP_DIR / uuid.uuid4().hex
             job_temp_dir.mkdir(parents=True, exist_ok=True)
 
             # ── Bước 1: Tách audio ─────────────────────────────────────
@@ -171,7 +175,6 @@ class DubbingPipeline:
             step_started = time.time()
             extractor = AudioExtractor()
             audio_path = extractor.extract(video_path, output_path=job_temp_dir / f"{video_path.stem}.wav")
-            video_duration = extractor.get_duration(video_path)
             result.timings["extract"] = round(time.time() - step_started, 2)
 
             # ── Bước 2: Transcribe ─────────────────────────────────────
@@ -195,10 +198,53 @@ class DubbingPipeline:
                 segments, cfg, _progress, source_language=result.source_language_detected
             )
             result.timings["translate"] = round(time.time() - step_started, 2)
-            _progress(65, "Dịch hoàn tất.")
+            _progress(65, "Dịch hoàn tất, đang chờ duyệt.")
+
+            result.segments = segments
+            result.success = True
+
+        except Exception as e:
+            result.error = str(e)
+            result.success = False
+            _progress(0, f"❌ Lỗi: {e}")
+
+        finally:
+            result.elapsed_seconds = time.time() - t0
+            if job_temp_dir is not None and job_temp_dir.exists():
+                shutil.rmtree(job_temp_dir, ignore_errors=True)
+
+        return result
+
+    def synthesize_and_compose(
+        self,
+        video_path: str | Path,
+        segments: List[Segment],
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> DubbingResult:
+        """Nửa sau pipeline: TTS rồi ghép video, dùng `segments` đã có sẵn
+        (từ transcribe_and_translate(), có thể đã được người dùng sửa tay).
+
+        Không đụng tới translator ở đây — segments coi như bản dịch cuối
+        cùng, đã qua bước duyệt. video_duration được ĐO LẠI từ video_path
+        (ffprobe, rẻ) thay vì nhận qua tham số, vì lệnh gọi này có thể tới
+        rất lâu sau transcribe_and_translate(), thậm chí ở container khác —
+        không có gì đảm bảo giữ được biến số đó qua ranh giới đó.
+        """
+        result = DubbingResult()
+        t0 = time.time()
+        _progress = self._progress_fn(progress_cb)
+
+        job_temp_dir = None
+        try:
+            video_path = Path(video_path)
+            cfg = self.config
+            job_temp_dir = TEMP_DIR / uuid.uuid4().hex
+            job_temp_dir.mkdir(parents=True, exist_ok=True)
+
+            video_duration = AudioExtractor().get_duration(video_path)
 
             # ── Bước 4: TTS ────────────────────────────────────────────
-            _progress(70, "Tổng hợp giọng nói tiếng Việt...")
+            _progress(70, "Tổng hợp giọng đọc...")
             step_started = time.time()
             tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts")
             tts_results = tts.synthesize_all(segments)
@@ -242,8 +288,36 @@ class DubbingPipeline:
 
         finally:
             result.elapsed_seconds = time.time() - t0
-            # Dọn file tạm riêng của job
-            if 'job_temp_dir' in locals() and job_temp_dir.exists():
+            if job_temp_dir is not None and job_temp_dir.exists():
                 shutil.rmtree(job_temp_dir, ignore_errors=True)
 
         return result
+
+    def run(
+        self,
+        video_path: str | Path,
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> DubbingResult:
+        """
+        Chạy toàn bộ pipeline end-to-end, không dừng lại để duyệt — dùng cho
+        CLI hay bất kỳ chỗ nào không cần bước duyệt transcript giữa chừng.
+        Ghép kết quả của transcribe_and_translate() + synthesize_and_compose().
+
+        Args:
+            video_path:   Đường dẫn video đầu vào.
+            progress_cb:  Hàm callback (percent, message) để cập nhật tiến trình.
+
+        Returns:
+            DubbingResult với thông tin kết quả.
+        """
+        first = self.transcribe_and_translate(video_path, progress_cb=progress_cb)
+        if not first.success:
+            return first
+
+        second = self.synthesize_and_compose(video_path, first.segments, progress_cb=progress_cb)
+        second.source_language_detected = first.source_language_detected
+        second.translator_used = first.translator_used
+        second.fallback_from = first.fallback_from
+        second.elapsed_seconds += first.elapsed_seconds
+        second.timings = {**first.timings, **second.timings}
+        return second

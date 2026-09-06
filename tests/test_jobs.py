@@ -384,6 +384,12 @@ def test_job_defaults_to_vietnamese_target_with_no_source_yet(app, user):
         assert job.source_language is None
 
 
+def _fake_segment(text="Hello.", translated="Xin chào."):
+    from core.transcriber import Segment
+
+    return Segment(start=0.0, end=1.0, text=text, translated=translated)
+
+
 def test_run_job_saves_detected_source_language(app, user, monkeypatch, tmp_path):
     """Whisper để "auto" thì phải LƯU LẠI ngôn ngữ thật đã nhận dạng được —
     không thì lần sau xem lại job chẳng biết video đó tiếng gì."""
@@ -394,8 +400,8 @@ def test_run_job_saves_detected_source_language(app, user, monkeypatch, tmp_path
         def __init__(self, config):
             pass
 
-        def run(self, video_path, progress_cb=None):
-            return DubbingResult(success=True, source_language_detected="ja")
+        def transcribe_and_translate(self, video_path, progress_cb=None):
+            return DubbingResult(success=True, source_language_detected="ja", segments=[_fake_segment()])
 
     monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
 
@@ -403,6 +409,94 @@ def test_run_job_saves_detected_source_language(app, user, monkeypatch, tmp_path
         job_id = make_job(user, status=JobStatus.PROCESSING).id
         jobs_mod.run_job(app, job_id, tmp_path / "khong-ton-tai.mp4", DubbingConfig())
         assert db.session.get(Job, job_id).source_language == "ja"
+
+
+# ── Duyệt transcript (giai đoạn 1 → AWAITING_REVIEW → giai đoạn 2) ────────
+def test_run_job_stops_at_awaiting_review_after_translate(app, user, monkeypatch, tmp_path):
+    """Giai đoạn 1 KHÔNG được tự chạy tiếp TTS/ghép video — phải dừng lại
+    chờ người dùng duyệt, và KHÔNG được xoá file upload (giai đoạn 2 còn cần)."""
+    import app.jobs as jobs_mod
+    from core.pipeline import DubbingConfig, DubbingResult
+
+    class FakePipeline:
+        def __init__(self, config):
+            pass
+
+        def transcribe_and_translate(self, video_path, progress_cb=None):
+            return DubbingResult(success=True, source_language_detected="en", segments=[_fake_segment()])
+
+    monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.PROCESSING, upload_path=str(video_path)).id
+        jobs_mod.run_job(app, job_id, video_path, DubbingConfig())
+        job = db.session.get(Job, job_id)
+        assert job.status == JobStatus.AWAITING_REVIEW
+        assert job.segments.count() == 1
+
+    assert video_path.exists()  # chưa bị xoá — giai đoạn 2 còn cần
+
+
+def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypatch, tmp_path):
+    """Giai đoạn 2 phải dùng ĐÚNG transcript đang có trong DB (có thể đã bị
+    người dùng sửa tay) — không được dịch lại từ đầu."""
+    import app.jobs as jobs_mod
+    from app.models import TranscriptSegment
+    from core.pipeline import DubbingConfig, DubbingResult
+
+    captured = {}
+
+    class FakePipeline:
+        def __init__(self, config):
+            pass
+
+        def synthesize_and_compose(self, video_path, segments, progress_cb=None):
+            captured["segments"] = list(segments)
+            return DubbingResult(success=True, output_video=tmp_path / "out.mp4")
+
+    monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+
+    with app.app_context():
+        job_id = make_job(
+            user, status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path), elapsed_sec=10.0,
+        ).id
+        db.session.add(TranscriptSegment(
+            job_id=job_id, idx=0, start_sec=0.0, end_sec=1.0,
+            text_source="Hello.", text_target="Câu đã được người dùng sửa tay.",
+        ))
+        db.session.commit()
+
+        jobs_mod.run_job_phase2(app, job_id, video_path, DubbingConfig())
+
+        job = db.session.get(Job, job_id)
+        assert job.status == JobStatus.DONE
+        assert captured["segments"][0].translated == "Câu đã được người dùng sửa tay."
+        # Thời gian giai đoạn 2 phải CỘNG DỒN với giai đoạn 1, không ghi đè.
+        assert job.elapsed_sec >= 10.0
+
+    assert not video_path.exists()  # giai đoạn 2 là lần cuối cần tới file gốc
+
+
+def test_cancel_awaiting_review_job_deletes_kept_upload(app, user, tmp_path):
+    """Huỷ job đang chờ duyệt thì không có gì đang chạy để dừng — nhưng vẫn
+    phải dọn file upload đang giữ lại, không thì nó nằm trên đĩa mãi mãi."""
+    from app.jobs import cancel_job
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+
+    with app.app_context():
+        job = make_job(user, status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path))
+        cancel_job(app, job)
+        assert db.session.get(Job, job.id).status == JobStatus.CANCELLED
+
+    assert not video_path.exists()
 
 
 def test_history_page_renders(as_user):

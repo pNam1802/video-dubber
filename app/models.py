@@ -20,13 +20,22 @@ def utcnow() -> datetime:
 class JobStatus:
     QUEUED = "queued"
     PROCESSING = "processing"
+    #: Đã dịch xong, dừng lại chờ người dùng duyệt/sửa transcript trước khi
+    #: tốn thời gian TTS + ghép video. Không có gì đang CHẠY ở trạng thái
+    #: này — khác PROCESSING, restart server không ảnh hưởng gì tới nó.
+    AWAITING_REVIEW = "awaiting_review"
     DONE = "done"
     FAILED = "failed"
     CANCELLED = "cancelled"
     INTERRUPTED = "interrupted"
 
-    #: Trạng thái chưa kết thúc — dùng để dò job mồ côi sau khi restart.
+    #: Đang thực sự chạy trên container — dùng để dò job mồ côi sau khi
+    #: restart. KHÔNG gồm AWAITING_REVIEW vì không có gì đang chạy cho nó cả.
     ACTIVE = (QUEUED, PROCESSING)
+
+    #: Chưa tới trạng thái cuối cùng — còn huỷ được, còn chặn xoá, và trang
+    #: job vẫn cần tiếp tục poll để biết khi nào chuyển trạng thái.
+    OPEN = (QUEUED, PROCESSING, AWAITING_REVIEW)
 
 
 class Role:
@@ -83,6 +92,12 @@ class Job(db.Model):
     # ── Đầu vào ───────────────────────────────────────────────
     source_filename = db.Column(db.String(255), nullable=True)
     file_size = db.Column(db.BigInteger, nullable=True)
+    # Duong dan THAT SU tren dia/Volume cua file da upload — khac
+    # source_filename (ten goc phia client). Can luu lai vi giai doan 2
+    # (TTS + ghep video sau khi duyet) co the chay o mot request/container
+    # hoan toan khac, rat lau sau luc upload — khong con bien video_path
+    # nao trong scope de dung nua, phai tra lai tu DB.
+    upload_path = db.Column(db.String(500), nullable=True)
     translator_engine = db.Column(db.String(30), nullable=True)
     tts_engine = db.Column(db.String(30), nullable=True)
     whisper_model = db.Column(db.String(30), nullable=True)
@@ -124,7 +139,7 @@ class Job(db.Model):
 
     @property
     def is_finished(self) -> bool:
-        return self.status not in JobStatus.ACTIVE
+        return self.status not in JobStatus.OPEN
 
     def to_list_dict(self) -> dict[str, Any]:
         """Payload gọn cho bảng lịch sử — không kèm thời gian từng bước."""

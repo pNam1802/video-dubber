@@ -75,7 +75,11 @@ def get_usage(user: User) -> Usage:
     )
     storage_bytes = (
         db.session.query(func.coalesce(func.sum(Job.file_size), 0))
-        .filter(Job.user_id == user.id, Job.status == JobStatus.DONE)
+        # DONE giu video ket qua; AWAITING_REVIEW van giu nguyen file upload
+        # goc tren dia cho toi khi nguoi dung duyet xong (xem app/jobs.py) —
+        # cả hai đều là dung lượng thật, không tính thì thành lỗ hổng: cứ
+        # upload rồi bỏ đó không duyệt là né được hạn mức vô thời hạn.
+        .filter(Job.user_id == user.id, Job.status.in_((JobStatus.DONE, JobStatus.AWAITING_REVIEW)))
         .scalar()
         or 0
     )
