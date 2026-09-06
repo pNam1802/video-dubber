@@ -19,6 +19,44 @@ def test_upload_without_file_rejected(as_user):
     assert response.is_json
 
 
+def _upload_and_capture_config(client, monkeypatch, **form_extra):
+    """start_job() thật sẽ chạy pipeline cần torch/ffmpeg thật — giả nó để
+    bắt đúng DubbingConfig được dựng, không cần chạy pipeline thật."""
+    import app.api as api_mod
+
+    captured: dict = {}
+
+    def fake_start_job(flask_app, job_id, path, config):
+        captured["config"] = config
+
+    monkeypatch.setattr(api_mod, "start_job", fake_start_job)
+
+    form = {"video": (io.BytesIO(b"fake"), "video.mp4")}
+    form.update(form_extra)
+    response = client.post("/api/upload", data=form, content_type="multipart/form-data")
+    return response, captured.get("config")
+
+
+def test_upload_passes_chosen_source_language_to_config(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(as_user, monkeypatch, source_language="ja")
+    assert response.status_code == 202
+    assert config.source_language == "ja"
+
+
+def test_upload_defaults_source_language_to_auto(app, as_user, monkeypatch):
+    """Không gửi source_language (form cũ, hoặc JS lỗi) thì phải tự nhận
+    dạng, không được vô tình ép về một ngôn ngữ cụ thể."""
+    response, config = _upload_and_capture_config(as_user, monkeypatch)
+    assert response.status_code == 202
+    assert config.source_language == "auto"
+
+
+def test_upload_invalid_source_language_falls_back_to_auto(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(as_user, monkeypatch, source_language="klingon")
+    assert response.status_code == 202
+    assert config.source_language == "auto"
+
+
 def test_upload_wrong_format_rejected(as_user):
     response = as_user.post(
         "/api/upload",
@@ -45,7 +83,7 @@ def test_index_page_ships_client_side_upload_validation(as_user):
 def test_create_page_keeps_every_field_the_api_reads(as_user):
     """Đổi tên một trường trong template là upload gãy im lặng."""
     body = as_user.get("/").get_data(as_text=True)
-    for field in ["video", "translator_engine", "whisper_model", "compute_device",
+    for field in ["video", "translator_engine", "whisper_model", "source_language", "compute_device",
                   "tts_engine", "tts_voice", "subtitle_mode", "original_volume",
                   "gemini_api_key", "gemini_model", "openai_api_key", "openai_model",
                   "csrf_token"]:
@@ -262,7 +300,7 @@ def many_jobs(app, user):
         make_job(user, status=JobStatus.PROCESSING, source_filename="dangchay.mp4")
 
 
-# ── Đa ngôn ngữ (nền tảng, chưa có UI chọn — xem giai đoạn 2/3) ──
+# ── Đa ngôn ngữ ────────────────────────────────────────────────
 def test_job_defaults_to_vietnamese_target_with_no_source_yet(app, user):
     """Job tạo trước khi có UI chọn ngôn ngữ vẫn phải xử lý được: đích mặc
     định tiếng Việt như trước giờ, nguồn để trống (chưa nhận dạng/chưa chọn)."""
@@ -270,6 +308,27 @@ def test_job_defaults_to_vietnamese_target_with_no_source_yet(app, user):
         job = make_job(user)
         assert job.target_language == "vi"
         assert job.source_language is None
+
+
+def test_run_job_saves_detected_source_language(app, user, monkeypatch, tmp_path):
+    """Whisper để "auto" thì phải LƯU LẠI ngôn ngữ thật đã nhận dạng được —
+    không thì lần sau xem lại job chẳng biết video đó tiếng gì."""
+    import app.jobs as jobs_mod
+    from core.pipeline import DubbingConfig, DubbingResult
+
+    class FakePipeline:
+        def __init__(self, config):
+            pass
+
+        def run(self, video_path, progress_cb=None):
+            return DubbingResult(success=True, source_language_detected="ja")
+
+    monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.PROCESSING).id
+        jobs_mod.run_job(app, job_id, tmp_path / "khong-ton-tai.mp4", DubbingConfig())
+        assert db.session.get(Job, job_id).source_language == "ja"
 
 
 def test_history_page_renders(as_user):

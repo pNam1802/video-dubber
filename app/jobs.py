@@ -146,6 +146,7 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
         job.tts_sec = result.timings.get("tts")
         job.compose_sec = result.timings.get("compose")
         job.segment_count = len(result.segments) if result.segments else None
+        job.source_language = result.source_language_detected or None
         job.finished_at = utcnow()
 
         if result.success and result.output_video:

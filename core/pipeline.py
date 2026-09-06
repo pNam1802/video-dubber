@@ -32,6 +32,9 @@ class DubbingConfig:
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     whisper_model: str = "base"
+    # "auto" = Whisper tu nhan dang tu am thanh; hoac ma ISO cu the ("en",
+    # "vi", "ja", "zh", "ko"...) khi nguoi dung tu chon vi tu nhan dang doan.
+    source_language: str = "auto"
     compute_device: str = "auto"           # "auto" | "cuda" | "cpu"
     sentence_resegment: bool = True
     silence_threshold: float = 0.45         # split by pauses >= threshold (seconds)
@@ -50,6 +53,9 @@ class DubbingResult:
     output_video: Optional[Path] = None
     srt_path: Optional[Path] = None
     segments: List[Segment] = field(default_factory=list)
+    #: Ma ngon ngu THAT SU da dung de nhan dang — luon la ma cu the (vd "en"),
+    #: kha nang khac config.source_language khi nguoi dung de "auto".
+    source_language_detected: str = ""
     elapsed_seconds: float = 0.0
     success: bool = False
     error: str = ""
@@ -77,6 +83,12 @@ class DubbingPipeline:
 
     def __init__(self, config: DubbingConfig):
         self.config = config
+
+    @staticmethod
+    def _whisper_language_arg(source_language: str) -> str | None:
+        """"auto" (mặc định, chọn qua UI) nghĩa là để Whisper tự nhận dạng —
+        Whisper hiểu "tự nhận dạng" là language=None, không phải chuỗi "auto"."""
+        return None if source_language == "auto" else source_language
 
     def _translate(self, segments, cfg: "DubbingConfig", progress) -> tuple[list, str, str]:
         """Dịch, và lùi về MarianMT nếu API bên ngoài hỏng.
@@ -145,13 +157,15 @@ class DubbingPipeline:
             _progress(25, f"Nhận dạng giọng nói (Whisper {cfg.whisper_model})...")
             step_started = time.time()
             transcriber = Transcriber(model_size=cfg.whisper_model, device=cfg.compute_device)
-            segments = transcriber.transcribe(
+            whisper_language = self._whisper_language_arg(cfg.source_language)
+            segments, result.source_language_detected = transcriber.transcribe(
                 audio_path,
+                language=whisper_language,
                 sentence_resegment=cfg.sentence_resegment,
                 silence_threshold=cfg.silence_threshold,
             )
             result.timings["transcribe"] = round(time.time() - step_started, 2)
-            _progress(40, f"Tìm thấy {len(segments)} segment.")
+            _progress(40, f"Tìm thấy {len(segments)} segment ({result.source_language_detected}).")
 
             # ── Bước 3: Dịch ───────────────────────────────────────────
             _progress(45, "Đang dịch...")

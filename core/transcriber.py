@@ -205,16 +205,19 @@ class Transcriber:
 		return merged
 
 	# ── Nhận dạng ────────────────────────────────────────────────
-	def _transcribe_faster(self, audio_path: Path, language: str) -> List[Segment]:
-		segments, _info = self.model.transcribe(str(audio_path), language=language, beam_size=5)
-		# transcribe() trả về generator — phải duyệt hết thì mới thực sự chạy.
-		return [
+	def _transcribe_faster(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str]:
+		segments, info = self.model.transcribe(str(audio_path), language=language, beam_size=5)
+		# transcribe() trả về generator — phải duyệt hết thì mới thực sự chạy,
+		# và info.language chỉ có giá trị thật (khác None) SAU khi duyệt xong
+		# nếu language=None (tự nhận dạng dựa trên đoạn âm thanh đầu tiên).
+		result = [
 			Segment(start=float(s.start), end=float(s.end), text=s.text.strip())
 			for s in segments
 			if (s.text or "").strip()
 		]
+		return result, (info.language or language or "en")
 
-	def _transcribe_openai(self, audio_path: Path, language: str) -> List[Segment]:
+	def _transcribe_openai(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str]:
 		try:
 			result = self.model.transcribe(str(audio_path), language=language, fp16=self.use_fp16)
 		except RuntimeError as exc:
@@ -247,28 +250,37 @@ class Transcriber:
 					text=text,
 				)
 			)
-		return segments
+		return segments, (result.get("language") or language or "en")
 
 	def transcribe(
 		self,
 		audio_path: str | Path,
-		language: str = "en",
+		language: str | None = None,
 		sentence_resegment: bool = True,
 		silence_threshold: float = 0.45,
-	) -> List[Segment]:
+	) -> tuple[List[Segment], str]:
+		"""Nhận dạng giọng nói. language=None (mặc định) là TỰ NHẬN DẠNG —
+		Whisper đoán ngôn ngữ từ ~30 giây âm thanh đầu. Truyền mã ISO cụ thể
+		("en", "ja"...) để ép ngôn ngữ khi tự nhận dạng đoán sai (video có
+		nhạc nền dài, giọng không rõ ở đầu video...).
+
+		Trả về (segments, ngôn_ngữ_đã_dùng) — ngôn ngữ này luôn là mã cụ thể,
+		kể cả khi gọi bằng language=None, để lưu lại đúng ngôn ngữ thật của
+		video thay vì giữ nguyên "auto"."""
 		audio_path = Path(audio_path)
 		if not audio_path.exists():
 			raise FileNotFoundError(f"Audio not found: {audio_path}")
 
 		if self.backend == "faster":
-			segments = self._transcribe_faster(audio_path, language)
+			segments, detected_language = self._transcribe_faster(audio_path, language)
 		else:
-			segments = self._transcribe_openai(audio_path, language)
+			segments, detected_language = self._transcribe_openai(audio_path, language)
 
 		if not sentence_resegment:
-			return segments
+			return segments, detected_language
 
-		return self._merge_segments_into_sentences(
+		merged = self._merge_segments_into_sentences(
 			segments,
 			silence_threshold=silence_threshold,
 		)
+		return merged, detected_language

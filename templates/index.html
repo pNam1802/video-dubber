@@ -113,6 +113,29 @@
 
         <div>
           <div class="flex items-center gap-1.5 mb-1">
+            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="source_language">Ngôn ngữ nguồn</label>
+            <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
+              data-tip="sourceLangTip" aria-expanded="false" aria-label="Giải thích ngôn ngữ nguồn">
+              <span class="material-symbols-outlined text-[16px]">info</span>
+            </button>
+          </div>
+          <p id="sourceLangTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
+            Để "Tự động nhận dạng" trong hầu hết trường hợp — Whisper đoán ngôn ngữ khá chính xác từ
+            đoạn âm thanh đầu video. Chỉ chọn tay khi tự nhận dạng đoán sai, ví dụ video mở đầu bằng
+            nhạc nền dài hoặc giọng nói không rõ ở những giây đầu.
+          </p>
+          <select name="source_language" id="source_language" class="{{ field_class }}">
+            <option value="auto" selected>Tự động nhận dạng</option>
+            <option value="en">English</option>
+            <option value="vi">Tiếng Việt</option>
+            <option value="ja">日本語</option>
+            <option value="zh">中文</option>
+            <option value="ko">한국어</option>
+          </select>
+        </div>
+
+        <div>
+          <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="whisper_model_select">Mô hình Whisper</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
               data-tip="whisperTip" aria-expanded="false" aria-label="Giải thích các mô hình Whisper">

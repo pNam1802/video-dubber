@@ -162,3 +162,14 @@ def test_parse_numbered_lines_handles_both_separators():
 
 def test_parse_numbered_lines_ignores_noise():
     assert parse_numbered_lines("Đây là bản dịch:\n1. Một\n\n2. Hai") == {1: "Một", 2: "Hai"}
+
+
+# ── Ngôn ngữ nguồn: "auto" ↔ Whisper language=None ────────────
+def test_auto_source_language_becomes_none_for_whisper():
+    """"auto" là giá trị chọn qua UI — Whisper không hiểu chuỗi này, nó cần
+    language=None để tự nhận dạng."""
+    assert DubbingPipeline._whisper_language_arg("auto") is None
+
+
+def test_manual_source_language_passed_through_unchanged():
+    assert DubbingPipeline._whisper_language_arg("ja") == "ja"

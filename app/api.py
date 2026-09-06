@@ -32,6 +32,9 @@ bp = Blueprint("api", __name__, url_prefix="/api")
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 ALLOWED_TRANSLATORS = {"openai", "gemini", "marian"}
 ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
+# "auto" = Whisper tu nhan dang; con lai la khi nguoi dung tu chon vi tu nhan
+# dang doan sai (video co nhac nen dai, giong khong ro o dau video...).
+ALLOWED_SOURCE_LANGUAGES = {"auto", "en", "vi", "ja", "zh", "ko"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
 ALLOWED_TTS_ENGINES = {"edge-tts", "gtts"}
 ALLOWED_VOICES = {"female", "male"}
@@ -66,6 +69,7 @@ def upload_video():
         return jsonify({"error": "Cần GEMINI API key để dùng Gemini translator."}), 400
 
     whisper_model = _pick("whisper_model", ALLOWED_WHISPER_MODELS, "base")
+    source_language = _pick("source_language", ALLOWED_SOURCE_LANGUAGES, "auto")
     compute_device = _pick("compute_device", ALLOWED_DEVICES, "auto")
     tts_engine = _pick("tts_engine", ALLOWED_TTS_ENGINES, "edge-tts")
     tts_voice = _pick("tts_voice", ALLOWED_VOICES, "female")
@@ -111,6 +115,7 @@ def upload_video():
         gemini_api_key=gemini_api_key,
         gemini_model=request.form.get("gemini_model", GEMINI_MODEL) or GEMINI_MODEL,
         whisper_model=whisper_model,
+        source_language=source_language,
         compute_device=compute_device,
         tts_engine=tts_engine,
         tts_voice=tts_voice,
