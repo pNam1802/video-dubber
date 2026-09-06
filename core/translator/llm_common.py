@@ -14,24 +14,50 @@ from core.transcriber import Segment
 T = TypeVar("T")
 
 
-SYSTEM_PROMPT = """Bạn là chuyên gia dịch thuật tiếng Anh sang tiếng Việt, 
+#: Tên hiển thị tiếng Việt cho từng mã ngôn ngữ — dùng để dựng câu lệnh cho
+#: LLM ("dịch từ X sang Y"), không phải để hiện lên giao diện.
+LANGUAGE_NAMES: Dict[str, str] = {
+    "en": "tiếng Anh",
+    "vi": "tiếng Việt",
+    "ja": "tiếng Nhật",
+    "zh": "tiếng Trung",
+    "ko": "tiếng Hàn",
+}
+
+
+def language_name(code: str) -> str:
+    """Không nhận diện được thì coi như tiếng Anh — đúng với phần lớn video
+    nguồn của sản phẩm, và không làm crash cả job vì một mã lạ."""
+    return LANGUAGE_NAMES.get((code or "").strip().lower(), "tiếng Anh")
+
+
+def build_system_prompt(source_language: str = "en", target_language: str = "vi") -> str:
+    """Trước đây là hằng số cứng "tiếng Anh sang tiếng Việt" — giờ dựng theo
+    đúng cặp ngôn ngữ thật của job (Whisper tự nhận dạng nguồn, người dùng
+    tự chọn đích), để hỗ trợ thêm Nhật/Trung/Hàn."""
+    source_name = language_name(source_language)
+    target_name = language_name(target_language)
+    preserve_terms = ", ".join(AI_PRESERVE_TERMS[:20])
+    return f"""Bạn là chuyên gia dịch thuật {source_name} sang {target_name},
 chuyên lĩnh vực Trí tuệ nhân tạo (AI) và Học máy (ML).
 
 Quy tắc dịch:
-1. Dịch tự nhiên, chuẩn ngữ pháp tiếng Việt.
-2. Giữ nguyên các thuật ngữ kỹ thuật AI/ML bằng tiếng Anh (không dịch): 
+1. Dịch tự nhiên, chuẩn ngữ pháp {target_name}.
+2. Giữ nguyên các thuật ngữ kỹ thuật AI/ML bằng tiếng Anh (không dịch):
    {preserve_terms}
 3. Không thêm giải thích hay chú thích, chỉ trả về văn bản đã dịch.
 4. Giữ nguyên dấu câu và cấu trúc câu gốc.
 5. Dịch ngắn gọn, phù hợp để đọc thành lời nói.
-""".format(preserve_terms=", ".join(AI_PRESERVE_TERMS[:20]))
+"""
 
 
-def build_batch_prompt(texts: List[str]) -> str:
+def build_batch_prompt(texts: List[str], source_language: str = "en", target_language: str = "vi") -> str:
     """Ghép nhiều câu thành 1 prompt đánh số để dịch trong một request."""
+    source_name = language_name(source_language)
+    target_name = language_name(target_language)
     numbered = "\n".join(f"{idx+1}. {t}" for idx, t in enumerate(texts))
     return (
-        f"Dịch {len(texts)} câu sau từ tiếng Anh sang tiếng Việt.\n"
+        f"Dịch {len(texts)} câu sau từ {source_name} sang {target_name}.\n"
         f"Trả về đúng {len(texts)} dòng, mỗi dòng bắt đầu bằng số thứ tự tương ứng "
         f"(ví dụ: '1. ...', '2. ...'). Không thêm hoặc bỏ dòng nào.\n\n"
         f"{numbered}"

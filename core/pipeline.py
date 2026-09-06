@@ -35,6 +35,10 @@ class DubbingConfig:
     # "auto" = Whisper tu nhan dang tu am thanh; hoac ma ISO cu the ("en",
     # "vi", "ja", "zh", "ko"...) khi nguoi dung tu chon vi tu nhan dang doan.
     source_language: str = "auto"
+    # Ngon ngu DICH. "vi" duoc MarianMT (fine-tune rieng EN->VI) ho tro; cac
+    # ngon ngu khac bat buoc dung Gemini/OpenAI — xem _translate() ve viec
+    # khoa MarianMT khi target != "vi".
+    target_language: str = "vi"
     compute_device: str = "auto"           # "auto" | "cuda" | "cpu"
     sentence_resegment: bool = True
     silence_threshold: float = 0.45         # split by pauses >= threshold (seconds)
@@ -90,25 +94,40 @@ class DubbingPipeline:
         Whisper hiểu "tự nhận dạng" là language=None, không phải chuỗi "auto"."""
         return None if source_language == "auto" else source_language
 
-    def _translate(self, segments, cfg: "DubbingConfig", progress) -> tuple[list, str, str]:
+    def _translate(
+        self, segments, cfg: "DubbingConfig", progress, source_language: str = "en"
+    ) -> tuple[list, str, str]:
         """Dịch, và lùi về MarianMT nếu API bên ngoài hỏng.
 
         Một lần Gemini đổi model hay dính rate limit không nên làm hỏng cả job:
         Whisper đã chạy xong, TTS vẫn chạy được, chỉ thiếu bản dịch. MarianMT
-        chạy offline nên luôn sẵn sàng làm phương án dự phòng.
+        chạy offline nên luôn sẵn sàng làm phương án dự phòng — NHƯNG chỉ khi
+        đích là tiếng Việt: model đó tự fine-tune riêng cho EN→VI, dùng cho
+        Nhật/Trung/Hàn sẽ ra tiếng Việt trong khi job báo là ngôn ngữ khác —
+        sai còn khó nhận ra hơn cả việc dịch thất bại hẳn.
         """
+        target = cfg.target_language
+
         def build(engine: str):
             if engine == "openai":
-                return get_translator(engine, api_key=cfg.openai_api_key, model=cfg.openai_model)
+                return get_translator(
+                    engine, api_key=cfg.openai_api_key, model=cfg.openai_model,
+                    source_language=source_language, target_language=target,
+                )
             if engine == "gemini":
-                return get_translator(engine, api_key=cfg.gemini_api_key, model=cfg.gemini_model)
+                return get_translator(
+                    engine, api_key=cfg.gemini_api_key, model=cfg.gemini_model,
+                    source_language=source_language, target_language=target,
+                )
             return get_translator("marian", device=cfg.compute_device)
 
         engine = cfg.translator_engine
         try:
             return build(engine).translate_segments(segments), engine, ""
         except Exception as exc:
-            if engine == "marian" or not cfg.translator_fallback:
+            # target != "vi" thì marian không phải phương án dự phòng hợp lệ —
+            # không có gì để lùi về, để lỗi thật hiện ra còn hơn âm thầm sai ngôn ngữ.
+            if engine == "marian" or not cfg.translator_fallback or target != "vi":
                 raise
             print(f"[Pipeline] {engine} lỗi ({exc}). Chuyển sang MarianMT.")
             progress(50, f"{engine} gặp lỗi, đang chuyển sang MarianMT...")
@@ -171,7 +190,7 @@ class DubbingPipeline:
             _progress(45, "Đang dịch...")
             step_started = time.time()
             segments, result.translator_used, result.fallback_from = self._translate(
-                segments, cfg, _progress
+                segments, cfg, _progress, source_language=result.source_language_detected
             )
             result.timings["translate"] = round(time.time() - step_started, 2)
             _progress(65, "Dịch hoàn tất.")

@@ -54,6 +54,24 @@ def test_api_failure_falls_back_to_marian(fake_translators):
     assert out[0].translated.startswith("Học tăng cường")
 
 
+def test_non_vietnamese_target_never_falls_back_to_marian(fake_translators):
+    """MarianMT là model fine-tune riêng EN→VI — dùng cho Nhật/Trung/Hàn sẽ
+    âm thầm ra tiếng Việt trong khi job báo ngôn ngữ khác. Không có gì để
+    lùi về thì phải để lỗi thật hiện ra, không được lùi sai ngôn ngữ."""
+    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", target_language="ja")
+    with pytest.raises(Boom):
+        DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    assert fake_translators == ["gemini"]  # chưa từng thử marian
+
+
+def test_vietnamese_target_still_falls_back_to_marian(fake_translators):
+    """target_language mặc định "vi" — hành vi cũ (giai đoạn trước khi có đa
+    ngôn ngữ) phải giữ nguyên."""
+    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", target_language="vi")
+    out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    assert (used, fell_from) == ("marian", "gemini")
+
+
 def test_marian_runs_without_fallback(fake_translators):
     config = DubbingConfig(translator_engine="marian")
     _, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)

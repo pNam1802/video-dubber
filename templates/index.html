@@ -81,6 +81,24 @@
         Chất lượng
       </h3>
 
+      {# Dời lên đây từ khối "nâng cao" phía dưới — dropdown Ngôn ngữ đích ở
+         ngay trên cần dùng field_class trước khi khối đó được render. #}
+      {% set field_class = "w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary" %}
+      {% set label_class = "font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" %}
+
+      <div class="max-w-xs">
+        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="target_language">Ngôn ngữ đích</label>
+        <select name="target_language" id="target_language" class="{{ field_class }}">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="ja">日本語</option>
+          <option value="zh">中文</option>
+          <option value="ko">한국어</option>
+        </select>
+        <p id="targetLangHint" class="hidden font-label-sm text-label-sm text-tertiary mt-1">
+          MarianMT chỉ dịch được sang tiếng Việt — đã chuyển công cụ dịch sang Gemini.
+        </p>
+      </div>
+
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {% set presets = [
           ('fast', 'speed', 'Nhanh', 'Xong nhanh nhất', 'base', 'marian', ''),
@@ -108,9 +126,6 @@
 
       {# ── Tuỳ chọn thô: đúng tên trường backend đang đọc ── #}
       <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/40">
-        {% set field_class = "w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary" %}
-        {% set label_class = "font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" %}
-
         <div>
           <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="source_language">Ngôn ngữ nguồn</label>
@@ -468,6 +483,37 @@
       });
     }
 
+    const targetLangSelect = document.getElementById("target_language");
+    const marianOption = engineSelect.querySelector('option[value="marian"]');
+    const marianPresets = document.querySelectorAll('.preset[data-engine="marian"]');
+
+    /** MarianMT là model tự fine-tune riêng cho EN→VI — không dùng được cho
+     * Nhật/Trung/Hàn. Khoá lựa chọn đó lại thay vì để người dùng chọn xong
+     * rồi mới bị server từ chối lúc bấm nộp. */
+    function syncTargetLanguageGate() {
+      const nonVi = targetLangSelect.value !== "vi";
+
+      marianOption.disabled = nonVi;
+      marianPresets.forEach(function (btn) {
+        btn.disabled = nonVi;
+        btn.classList.toggle("opacity-40", nonVi);
+        btn.classList.toggle("cursor-not-allowed", nonVi);
+        btn.title = nonVi ? "MarianMT chỉ dịch được sang tiếng Việt" : "";
+      });
+
+      if (nonVi && engineField.value === "marian") {
+        engineField.value = "gemini";
+        engineSelect.value = "gemini";
+        paintPresets(null);
+        document.getElementById("targetLangHint").classList.remove("hidden");
+      } else {
+        document.getElementById("targetLangHint").classList.add("hidden");
+      }
+      syncEngineHint();
+    }
+
+    targetLangSelect.addEventListener("change", syncTargetLanguageGate);
+
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
       const gemini = engineField.value === "gemini";
@@ -569,7 +615,7 @@
     document.getElementById("retryBtn").addEventListener("click", function () { window.location.reload(); });
 
     paintPresets("balanced");
-    syncEngineHint();
+    syncTargetLanguageGate();
   })();
 </script>
 {% endblock %}

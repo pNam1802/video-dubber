@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from core.transcriber import Segment
 from core.translator.gemini_translator import GeminiTranslator
-from core.translator.llm_common import fill_batch_gaps
+from core.translator.llm_common import build_batch_prompt, build_system_prompt, fill_batch_gaps, language_name
 from core.translator.openai_translator import OpenAITranslator
 
 
@@ -135,3 +135,56 @@ def test_openai_retries_gap_with_single_sentence_call(monkeypatch):
 
     assert result[0].translated == "Xin chào."
     assert result[2].translated == "Đây là câu ba."
+
+
+# ── Prompt theo đúng cặp ngôn ngữ, không còn cứng EN→VI ───────
+def test_language_name_maps_known_codes():
+    assert language_name("vi") == "tiếng Việt"
+    assert language_name("ja") == "tiếng Nhật"
+    assert language_name("zh") == "tiếng Trung"
+    assert language_name("ko") == "tiếng Hàn"
+    assert language_name("en") == "tiếng Anh"
+
+
+def test_language_name_falls_back_to_english_for_unknown_code():
+    """Không nhận diện được thì coi như tiếng Anh — đúng với phần lớn video
+    nguồn, và không được làm crash cả job vì một mã lạ."""
+    assert language_name("xx") == "tiếng Anh"
+    assert language_name("") == "tiếng Anh"
+
+
+def test_system_prompt_reflects_target_language():
+    prompt_vi = build_system_prompt("en", "vi")
+    prompt_ja = build_system_prompt("en", "ja")
+    assert "tiếng Anh sang tiếng Việt" in prompt_vi
+    assert "tiếng Anh sang tiếng Nhật" in prompt_ja
+    assert "chuẩn ngữ pháp tiếng Nhật" in prompt_ja
+
+
+def test_batch_prompt_reflects_both_languages():
+    prompt = build_batch_prompt(["Hello."], source_language="ja", target_language="ko")
+    assert "từ tiếng Nhật sang tiếng Hàn" in prompt
+
+
+def test_gemini_builds_prompt_for_chosen_target_language(monkeypatch):
+    """Trước đây SYSTEM_PROMPT là hằng số cứng — giờ phải đúng theo
+    target_language của từng translator, không phải luôn luôn tiếng Việt."""
+    translator = GeminiTranslator(api_key="test-key", source_language="en", target_language="ja")
+    seen_prompts: list[str] = []
+
+    def fake_generate(prompt, max_output_tokens, what="Gemini"):
+        seen_prompts.append(prompt)
+        config = translator._config(max_output_tokens, False)
+        seen_prompts.append(config.system_instruction)
+        return "1. こんにちは。"
+
+    monkeypatch.setattr(translator, "_generate", fake_generate)
+    segments = [Segment(start=0, end=1, text="Hello.")]
+    translator.translate_segments_batch(segments)
+
+    assert any("tiếng Anh sang tiếng Nhật" in p for p in seen_prompts)
+
+
+def test_openai_builds_prompt_for_chosen_target_language():
+    translator = OpenAITranslator(api_key="test-key", source_language="en", target_language="zh")
+    assert "tiếng Anh sang tiếng Trung" in translator._system_prompt()

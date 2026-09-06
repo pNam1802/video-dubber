@@ -35,6 +35,8 @@ ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 # "auto" = Whisper tu nhan dang; con lai la khi nguoi dung tu chon vi tu nhan
 # dang doan sai (video co nhac nen dai, giong khong ro o dau video...).
 ALLOWED_SOURCE_LANGUAGES = {"auto", "en", "vi", "ja", "zh", "ko"}
+# MarianMT la model fine-tune RIENG cho EN->VI — chi "vi" dung duoc voi no.
+ALLOWED_TARGET_LANGUAGES = {"vi", "ja", "zh", "ko"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
 ALLOWED_TTS_ENGINES = {"edge-tts", "gtts"}
 ALLOWED_VOICES = {"female", "male"}
@@ -59,6 +61,16 @@ def upload_video():
         return jsonify({"error": "Định dạng video không được hỗ trợ."}), 400
 
     translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "marian")
+    target_language = _pick("target_language", ALLOWED_TARGET_LANGUAGES, "vi")
+
+    # MarianMT khong the dich sang Nhat/Trung/Han — no la model rieng cho
+    # EN->VI, khong phai dich vu da ngon ngu. Chan o day thay vi am tham
+    # doi engine, vi nguoi dung co the dang co ly do chon dung MarianMT
+    # (mien phi) va can biet ro tai sao khong dung duoc.
+    if target_language != "vi" and translator_engine == "marian":
+        return jsonify({
+            "error": "MarianMT chỉ dịch được sang tiếng Việt. Chọn Gemini hoặc OpenAI để dịch sang ngôn ngữ khác.",
+        }), 400
 
     openai_api_key = request.form.get("openai_api_key", "").strip() or OPENAI_API_KEY
     if translator_engine == "openai" and not openai_api_key:
@@ -104,6 +116,7 @@ def upload_video():
         translator_engine=translator_engine,
         tts_engine=tts_engine,
         whisper_model=whisper_model,
+        target_language=target_language,
     )
     db.session.add(job)
     db.session.commit()
@@ -116,6 +129,7 @@ def upload_video():
         gemini_model=request.form.get("gemini_model", GEMINI_MODEL) or GEMINI_MODEL,
         whisper_model=whisper_model,
         source_language=source_language,
+        target_language=target_language,
         compute_device=compute_device,
         tts_engine=tts_engine,
         tts_voice=tts_voice,

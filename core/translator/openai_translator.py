@@ -1,6 +1,6 @@
 """
 core/translator/openai_translator.py
-Dịch EN → VI bằng OpenAI GPT, tối ưu cho thuật ngữ AI/ML.
+Dịch bằng OpenAI GPT, tối ưu cho thuật ngữ AI/ML.
 """
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from openai import OpenAI
 from config.settings import OPENAI_API_KEY, OPENAI_MODEL
 from core.translator.base import BaseTranslator
 from core.translator.llm_common import (
-    SYSTEM_PROMPT,
     build_batch_prompt,
+    build_system_prompt,
     call_with_retry,
     fill_batch_gaps,
     parse_numbered_lines,
@@ -23,16 +23,27 @@ from core.transcriber import Segment
 class OpenAITranslator(BaseTranslator):
     """Dịch bằng OpenAI GPT-4o."""
 
-    def __init__(self, api_key: str = OPENAI_API_KEY, model: str = OPENAI_MODEL):
+    def __init__(
+        self,
+        api_key: str = OPENAI_API_KEY,
+        model: str = OPENAI_MODEL,
+        source_language: str = "en",
+        target_language: str = "vi",
+    ):
         if not api_key:
             raise ValueError("OPENAI_API_KEY chưa được thiết lập!")
         self.client = OpenAI(api_key=api_key)
         self.model = model
+        self.source_language = source_language
+        self.target_language = target_language
         self._cache: dict[str, str] = {}
 
     @property
     def name(self) -> str:
         return f"OpenAI {self.model}"
+
+    def _system_prompt(self) -> str:
+        return build_system_prompt(self.source_language, self.target_language)
 
     def translate_text(self, text: str) -> str:
         """Dịch một đoạn văn ngắn."""
@@ -43,7 +54,7 @@ class OpenAITranslator(BaseTranslator):
             lambda: self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": text},
                 ],
                 temperature=0.3,
@@ -72,12 +83,12 @@ class OpenAITranslator(BaseTranslator):
             batch = segments[i : i + batch_size]
             texts = [seg.text for seg in batch]
 
-            prompt = build_batch_prompt(texts)
+            prompt = build_batch_prompt(texts, self.source_language, self.target_language)
             response = call_with_retry(
                 lambda: self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": self._system_prompt()},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.3,

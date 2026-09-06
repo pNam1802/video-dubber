@@ -1,6 +1,6 @@
 """
 core/translator/gemini_translator.py
-Dịch EN → VI bằng Google Gemini API, tối ưu cho thuật ngữ AI/ML.
+Dịch bằng Google Gemini API, tối ưu cho thuật ngữ AI/ML.
 """
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from google.genai import types
 from config.settings import GEMINI_API_KEY, GEMINI_MODEL
 from core.translator.base import BaseTranslator
 from core.translator.llm_common import (
-    SYSTEM_PROMPT,
     build_batch_prompt,
+    build_system_prompt,
     call_with_retry,
     fill_batch_gaps,
     parse_numbered_lines,
@@ -24,11 +24,19 @@ from core.transcriber import Segment
 class GeminiTranslator(BaseTranslator):
     """Dịch bằng Google Gemini (google-genai SDK)."""
 
-    def __init__(self, api_key: str = GEMINI_API_KEY, model: str = GEMINI_MODEL):
+    def __init__(
+        self,
+        api_key: str = GEMINI_API_KEY,
+        model: str = GEMINI_MODEL,
+        source_language: str = "en",
+        target_language: str = "vi",
+    ):
         if not api_key:
             raise ValueError("GEMINI_API_KEY chưa được thiết lập!")
         self.client = genai.Client(api_key=api_key)
         self.model = model
+        self.source_language = source_language
+        self.target_language = target_language
         self._cache: dict[str, str] = {}
         # Model 2.5 hỗ trợ tắt "thinking" cho nhanh; model cũ thì không.
         # Lần đầu gặp lỗi vì cấu hình này thì nhớ lại để khỏi thử nữa.
@@ -40,7 +48,7 @@ class GeminiTranslator(BaseTranslator):
 
     def _config(self, max_output_tokens: int, use_thinking: bool):
         kwargs = dict(
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=build_system_prompt(self.source_language, self.target_language),
             temperature=0.3,
             max_output_tokens=max_output_tokens,
         )
@@ -93,7 +101,7 @@ class GeminiTranslator(BaseTranslator):
             texts = [seg.text for seg in batch]
 
             raw = self._generate(
-                build_batch_prompt(texts),
+                build_batch_prompt(texts, self.source_language, self.target_language),
                 max_output_tokens=2000,
                 what=f"Gemini batch {i // batch_size + 1}",
             )

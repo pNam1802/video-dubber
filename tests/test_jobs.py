@@ -57,6 +57,72 @@ def test_upload_invalid_source_language_falls_back_to_auto(app, as_user, monkeyp
     assert config.source_language == "auto"
 
 
+# ── Ngôn ngữ đích ──────────────────────────────────────────────
+def test_upload_passes_chosen_target_language_to_config(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="ja", translator_engine="gemini",
+        gemini_api_key="test-key",
+    )
+    assert response.status_code == 202
+    assert config.target_language == "ja"
+
+
+def test_upload_defaults_target_language_to_vietnamese(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(as_user, monkeypatch)
+    assert response.status_code == 202
+    assert config.target_language == "vi"
+
+
+def test_upload_rejects_marian_with_non_vietnamese_target(app, as_user, monkeypatch):
+    """MarianMT là model fine-tune riêng EN→VI — chặn ở đây trước khi tốn
+    một lượt xử lý cho job chắc chắn sai ngôn ngữ."""
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="ja", translator_engine="marian",
+    )
+    assert response.status_code == 400
+    assert "MarianMT" in response.get_json()["error"]
+    assert config is None  # start_job() không được gọi tới
+
+
+def test_upload_marian_with_vietnamese_target_still_allowed(app, as_user, monkeypatch):
+    """Không được chặn nhầm trường hợp hợp lệ — mặc định vẫn là marian + vi."""
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="vi", translator_engine="marian",
+    )
+    assert response.status_code == 202
+    assert config.translator_engine == "marian"
+    assert config.target_language == "vi"
+
+
+def test_job_records_chosen_target_language_immediately(app, as_user, user, monkeypatch):
+    """Khác source_language (chỉ biết sau khi Whisper chạy xong),
+    target_language là lựa chọn CỦA NGƯỜI DÙNG — biết ngay lúc tạo job,
+    không cần đợi job chạy xong."""
+    monkeypatch.setattr("app.api.start_job", lambda *a, **k: None)
+    as_user.post(
+        "/api/upload",
+        data={
+            "video": (io.BytesIO(b"fake"), "video.mp4"),
+            "target_language": "ko", "translator_engine": "gemini", "gemini_api_key": "test-key",
+        },
+        content_type="multipart/form-data",
+    )
+    with app.app_context():
+        job = Job.query.filter_by(user_id=user).order_by(Job.id.desc()).first()
+        assert job.target_language == "ko"
+
+
+# Hành vi khoá MarianMT khi đổi ngôn ngữ đích chạy trên trình duyệt — canh
+# cấu trúc mã gửi cho trình duyệt, cùng cách với các tính năng JS khác trong
+# bộ test này (pytest không giả lập được thao tác đổi <select> thật).
+def test_create_page_ships_marian_gating_for_non_vi_targets(as_user):
+    body = as_user.get("/").get_data(as_text=True)
+    assert 'id="target_language"' in body
+    assert 'option value="ja"' in body
+    assert "marianOption.disabled = nonVi" in body
+    assert 'engineField.value = "gemini"' in body
+
+
 def test_upload_wrong_format_rejected(as_user):
     response = as_user.post(
         "/api/upload",
@@ -83,8 +149,8 @@ def test_index_page_ships_client_side_upload_validation(as_user):
 def test_create_page_keeps_every_field_the_api_reads(as_user):
     """Đổi tên một trường trong template là upload gãy im lặng."""
     body = as_user.get("/").get_data(as_text=True)
-    for field in ["video", "translator_engine", "whisper_model", "source_language", "compute_device",
-                  "tts_engine", "tts_voice", "subtitle_mode", "original_volume",
+    for field in ["video", "translator_engine", "whisper_model", "source_language", "target_language",
+                  "compute_device", "tts_engine", "tts_voice", "subtitle_mode", "original_volume",
                   "gemini_api_key", "gemini_model", "openai_api_key", "openai_model",
                   "csrf_token"]:
         assert f'name="{field}"' in body, field
