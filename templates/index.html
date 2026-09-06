@@ -12,7 +12,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   {# Preset ghi vào hai trường thật này; "Tuỳ chỉnh nâng cao" sửa trực tiếp #}
-  <input type="hidden" name="translator_engine" id="translator_engine" value="marian">
+  <input type="hidden" name="translator_engine" id="translator_engine" value="gemini">
   <input type="hidden" name="whisper_model" id="whisper_model" value="small">
 
   <div class="lg:col-span-8 flex flex-col gap-lg">
@@ -94,16 +94,16 @@
           <option value="zh">中文</option>
           <option value="ko">한국어</option>
         </select>
-        <p id="targetLangHint" class="hidden font-label-sm text-label-sm text-tertiary mt-1">
-          MarianMT chỉ dịch được sang tiếng Việt — đã chuyển công cụ dịch sang Gemini.
-        </p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {# Cả ba đều dịch bằng Gemini — khác nhau ở mô hình Whisper (đánh đổi
+           tốc độ/độ chính xác nhận dạng), không còn khác nhau ở công cụ
+           dịch như trước (MarianMT đã bị khoá khỏi lựa chọn). #}
         {% set presets = [
-          ('fast', 'speed', 'Nhanh', 'Xong nhanh nhất', 'base', 'marian', ''),
-          ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng', 'small', 'marian', 'MẶC ĐỊNH'),
-          ('best', 'diamond', 'Tốt nhất', 'Dịch bằng AI, chậm hơn', 'medium', 'gemini', '')
+          ('fast', 'speed', 'Nhanh', 'Nhận dạng nhanh, hợp video giọng rõ', 'base', 'gemini', ''),
+          ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng cho hầu hết video', 'small', 'gemini', 'MẶC ĐỊNH'),
+          ('best', 'diamond', 'Tốt nhất', 'Nhận dạng chính xác hơn, chậm hơn', 'medium', 'gemini', '')
         ] %}
         {% for key, icon, name, desc, whisper, engine, badge in presets %}
         <button type="button" class="preset relative overflow-hidden rounded-2xl p-4 flex flex-col items-start gap-2 transition-all text-left group
@@ -178,12 +178,11 @@
             </button>
           </div>
           <p id="engineTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
-            MarianMT chạy ngay trên GPU của hệ thống — nhanh nhất, miễn phí, và là phương án dự phòng khi
-            Gemini/OpenAI gặp lỗi. Gemini và OpenAI dịch tự nhiên hơn với câu phức tạp, nhưng cần bạn tự
-            có API key, tính phí theo lượng chữ, và chậm hơn MarianMT nhiều lần.
+            Gemini và OpenAI đều dịch tự nhiên với câu phức tạp và hỗ trợ đủ các ngôn ngữ đích.
+            Cần bạn tự có API key, tính phí theo lượng chữ. Nếu một bên gặp lỗi, hệ thống tự
+            chuyển sang bên còn lại để job không bị hỏng giữa chừng.
           </p>
           <select id="translator_engine_select" class="{{ field_class }}">
-            <option value="marian">MarianMT — chạy offline, miễn phí</option>
             <option value="gemini">Gemini{% if not gemini_key_exists %} — cần API key{% endif %}</option>
             <option value="openai">OpenAI{% if not openai_key_exists %} — cần API key{% endif %}</option>
           </select>
@@ -435,12 +434,10 @@
       probe.src = URL.createObjectURL(file);
     }
 
-    // Đo thật trên T4: video 86 giây mất ~20 giây với MarianMT.
+    // Đo thật trên T4: video 86 giây mất ~78 giây khi dịch bằng Gemini/OpenAI.
     function estimate(durationSec) {
       if (!durationSec) return;
-      const engine = engineField.value;
-      const factor = engine === "marian" ? 0.24 : 0.9;
-      const seconds = Math.max(10, Math.round(durationSec * factor));
+      const seconds = Math.max(10, Math.round(durationSec * 0.9));
       document.getElementById("estTime").textContent = "~" + seconds + " giây";
       document.getElementById("estCost").textContent = "~$" + (seconds * 0.000164).toFixed(3).replace(".", ",");
     }
@@ -483,37 +480,6 @@
       });
     }
 
-    const targetLangSelect = document.getElementById("target_language");
-    const marianOption = engineSelect.querySelector('option[value="marian"]');
-    const marianPresets = document.querySelectorAll('.preset[data-engine="marian"]');
-
-    /** MarianMT là model tự fine-tune riêng cho EN→VI — không dùng được cho
-     * Nhật/Trung/Hàn. Khoá lựa chọn đó lại thay vì để người dùng chọn xong
-     * rồi mới bị server từ chối lúc bấm nộp. */
-    function syncTargetLanguageGate() {
-      const nonVi = targetLangSelect.value !== "vi";
-
-      marianOption.disabled = nonVi;
-      marianPresets.forEach(function (btn) {
-        btn.disabled = nonVi;
-        btn.classList.toggle("opacity-40", nonVi);
-        btn.classList.toggle("cursor-not-allowed", nonVi);
-        btn.title = nonVi ? "MarianMT chỉ dịch được sang tiếng Việt" : "";
-      });
-
-      if (nonVi && engineField.value === "marian") {
-        engineField.value = "gemini";
-        engineSelect.value = "gemini";
-        paintPresets(null);
-        document.getElementById("targetLangHint").classList.remove("hidden");
-      } else {
-        document.getElementById("targetLangHint").classList.add("hidden");
-      }
-      syncEngineHint();
-    }
-
-    targetLangSelect.addEventListener("change", syncTargetLanguageGate);
-
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
       const gemini = engineField.value === "gemini";
@@ -521,7 +487,8 @@
       document.getElementById("geminiKeyGroup").classList.toggle("hidden", !gemini);
       document.getElementById("openaiKeyGroup").classList.toggle("hidden", !openai);
       if (gemini || openai) {
-        hint.textContent = "Dịch bằng API bên ngoài nên chậm hơn MarianMT nhiều lần. Nếu API lỗi, hệ thống tự chuyển về MarianMT.";
+        const other = gemini ? "OpenAI" : "Gemini";
+        hint.textContent = "Nếu " + (gemini ? "Gemini" : "OpenAI") + " gặp lỗi, hệ thống tự chuyển sang " + other + " để job không bị hỏng.";
         hint.classList.remove("hidden");
       } else {
         hint.classList.add("hidden");
@@ -615,7 +582,7 @@
     document.getElementById("retryBtn").addEventListener("click", function () { window.location.reload(); });
 
     paintPresets("balanced");
-    syncTargetLanguageGate();
+    syncEngineHint();
   })();
 </script>
 {% endblock %}

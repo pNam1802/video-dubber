@@ -32,6 +32,10 @@ def _upload_and_capture_config(client, monkeypatch, **form_extra):
     monkeypatch.setattr(api_mod, "start_job", fake_start_job)
 
     form = {"video": (io.BytesIO(b"fake"), "video.mp4")}
+    # Mặc định translator_engine giờ là "gemini" (MarianMT đã bị khoá, không
+    # cần key), nên các test không quan tâm tới công cụ dịch vẫn cần một key
+    # giả để không bị chặn ở bước kiểm tra API key — trừ khi test tự truyền.
+    form["gemini_api_key"] = "test-key"
     form.update(form_extra)
     response = client.post("/api/upload", data=form, content_type="multipart/form-data")
     return response, captured.get("config")
@@ -73,24 +77,29 @@ def test_upload_defaults_target_language_to_vietnamese(app, as_user, monkeypatch
     assert config.target_language == "vi"
 
 
-def test_upload_rejects_marian_with_non_vietnamese_target(app, as_user, monkeypatch):
-    """MarianMT là model fine-tune riêng EN→VI — chặn ở đây trước khi tốn
-    một lượt xử lý cho job chắc chắn sai ngôn ngữ."""
+def test_upload_marian_engine_choice_is_locked_out(app, as_user, monkeypatch):
+    """MarianMT đã bị khoá khỏi lựa chọn của người dùng (chỉ dịch được
+    EN→VI, và dịch sai trong im lặng khi nguồn khác tiếng Anh). Gửi lên
+    "marian" — form cũ, hay client bị chỉnh sửa tay — phải âm thầm rơi về
+    mặc định "gemini", không được thực sự dùng marian."""
     response, config = _upload_and_capture_config(
         as_user, monkeypatch, target_language="ja", translator_engine="marian",
-    )
-    assert response.status_code == 400
-    assert "MarianMT" in response.get_json()["error"]
-    assert config is None  # start_job() không được gọi tới
-
-
-def test_upload_marian_with_vietnamese_target_still_allowed(app, as_user, monkeypatch):
-    """Không được chặn nhầm trường hợp hợp lệ — mặc định vẫn là marian + vi."""
-    response, config = _upload_and_capture_config(
-        as_user, monkeypatch, target_language="vi", translator_engine="marian",
+        gemini_api_key="test-key",
     )
     assert response.status_code == 202
-    assert config.translator_engine == "marian"
+    assert config.translator_engine == "gemini"
+    assert config.target_language == "ja"
+
+
+def test_upload_marian_engine_choice_locked_out_for_vietnamese_target_too(app, as_user, monkeypatch):
+    """Không phải chỉ chặn khi đích khác tiếng Việt — marian bị khoá hoàn
+    toàn, kể cả với tổ hợp từng "hợp lệ" trước đây (marian + vi)."""
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="vi", translator_engine="marian",
+        gemini_api_key="test-key",
+    )
+    assert response.status_code == 202
+    assert config.translator_engine == "gemini"
     assert config.target_language == "vi"
 
 
@@ -112,15 +121,14 @@ def test_job_records_chosen_target_language_immediately(app, as_user, user, monk
         assert job.target_language == "ko"
 
 
-# Hành vi khoá MarianMT khi đổi ngôn ngữ đích chạy trên trình duyệt — canh
-# cấu trúc mã gửi cho trình duyệt, cùng cách với các tính năng JS khác trong
-# bộ test này (pytest không giả lập được thao tác đổi <select> thật).
-def test_create_page_ships_marian_gating_for_non_vi_targets(as_user):
+# MarianMT đã bị khoá khỏi lựa chọn của người dùng — trang tạo job không
+# được phép chào nó ra như một lựa chọn công cụ dịch nữa.
+def test_create_page_does_not_offer_marian_engine(as_user):
     body = as_user.get("/").get_data(as_text=True)
     assert 'id="target_language"' in body
     assert 'option value="ja"' in body
-    assert "marianOption.disabled = nonVi" in body
-    assert 'engineField.value = "gemini"' in body
+    assert 'value="marian"' not in body
+    assert 'id="translator_engine_select"' in body
 
 
 def test_upload_wrong_format_rejected(as_user):
@@ -173,7 +181,7 @@ def test_advanced_fields_have_explanatory_tooltips(as_user):
 # ── Theo dõi tiến trình ──────────────────────────────────────
 def test_progress_payload_shape(app, user):
     with app.app_context():
-        job = make_job(user, translator_engine="gemini", translator_actual="marian",
+        job = make_job(user, translator_engine="gemini", translator_actual="openai",
                        video_name="a.mp4", video_url="/media/output/a.mp4",
                        elapsed_sec=22.6, transcribe_sec=6.4, tts_sec=3.2)
         payload = job.to_progress_dict()
@@ -226,7 +234,7 @@ def test_job_page_shows_result_and_timings(app, as_user, user):
     with app.app_context():
         job_id = make_job(
             user, source_filename="bai-giang.mp4", translator_engine="gemini",
-            translator_actual="marian", segment_count=12, elapsed_sec=22.6,
+            translator_actual="openai", segment_count=12, elapsed_sec=22.6,
             estimated_cost_usd=0.0037, video_name="a.mp4", video_url="/media/output/a.mp4",
             srt_name="a.srt", srt_url="/media/output/a.srt",
             extract_sec=0.5, transcribe_sec=6.4, translate_sec=8.9, tts_sec=3.5, compose_sec=4.4,
@@ -234,7 +242,7 @@ def test_job_page_shows_result_and_timings(app, as_user, user):
     body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
     assert "bai-giang.mp4" in body
     assert "/media/output/a.mp4" in body
-    assert "chuyển sang MarianMT" in body     # cảnh báo fallback
+    assert "chuyển sang openai" in body     # cảnh báo fallback
     assert "Thời gian từng bước" in body
     assert "$0.0037" in body
 

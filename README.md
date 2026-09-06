@@ -7,7 +7,7 @@ End-to-end pipeline to dub English videos into Vietnamese, with subtitle export 
 This project automates the full dubbing process:
 1. Extract audio from video with ffmpeg
 2. Transcribe speech to text with Whisper
-3. Translate EN to VI with OpenAI or MarianMT
+3. Translate to Vietnamese (or Japanese/Chinese/Korean) with Gemini or OpenAI
 4. Synthesize Vietnamese speech with edge-tts, gTTS, or VietTTS
 5. Compose dubbed audio back into the original video
 6. Export video and SRT subtitles
@@ -81,9 +81,9 @@ Generate one with:
 Health check: `GET /healthz` returns 200 when the database, ffmpeg and ffprobe are all
 reachable, 503 otherwise — point your load balancer at it.
 
-Run from CLI:
+Run from CLI (defaults to Gemini):
 
-	python cli.py path/to/video.mp4 --translator marian
+	python cli.py path/to/video.mp4 --gemini-api-key AIza...
 
 OpenAI translation example:
 
@@ -127,8 +127,10 @@ https://github.com/user-attachments/assets/3c90c685-9d6f-4107-a983-cd66ad8e9376
 
 ## Notes
 
-- First run may be slower because Whisper/Transformers models are downloaded.
-- MarianMT can run offline; OpenAI usually gives better translation quality.
+- First run may be slower because Whisper models are downloaded.
+- Translation requires a Gemini or OpenAI API key; MarianMT (an in-house EN→VI fine-tune) has since
+  been locked out of user-facing selection — it mistranslated silently for non-English sources and
+  couldn't reach Japanese/Chinese/Korean at all. The code is kept for reference but no job can pick it.
 - VietTTS setup may vary by package variant and environment.
 
 ---
@@ -148,7 +150,7 @@ https://github.com/user-attachments/assets/3c90c685-9d6f-4107-a983-cd66ad8e9376
 │  Web · CPU           │────────────▶│  Pipeline · GPU          │
 │  @modal.wsgi_app()   │             │  @app.cls(gpu="T4")      │
 │  bọc Flask hiện có   │◀────────────│  @modal.enter() load     │
-│  min_containers=1    │  call_id    │  Whisper + Marian 1 lần  │
+│  min_containers=1    │  call_id    │  Whisper nạp 1 lần       │
 └──────────┬───────────┘             └────────────┬─────────────┘
            │                                      │ ghi tiến trình
            ▼                                      ▼
@@ -240,7 +242,9 @@ của tiến trình web, không đụng gì tới Modal.
 - [x] **Độ trễ:** `faster-whisper` làm backend mặc định, openai-whisper giữ làm dự phòng — nhanh hơn 1,6–1,95×
 - [x] `timeout=` cho mọi lệnh ffmpeg/ffprobe qua `utils/proc.py` (`FFMPEG_TIMEOUT`, `FFPROBE_TIMEOUT`)
 - [x] Retry có backoff cho batch dịch OpenAI/Gemini (`LLM_MAX_RETRIES`), chỉ thử lại lỗi tạm thời
-- [x] **Tự lùi về MarianMT** khi API dịch hỏng — một lần Gemini đổi model không còn làm hỏng cả job
+- [x] **Tự lùi sang engine dịch còn lại** (Gemini ⇄ OpenAI) khi một bên hỏng — một lần Gemini đổi model
+      không còn làm hỏng cả job. (MarianMT từng là điểm lùi trước khi hỗ trợ đa ngôn ngữ; nay đã bị khoá
+      khỏi lựa chọn của người dùng vì chỉ dịch được EN→VI.)
 - [x] **Đo thời gian từng bước** (`extract/transcribe/translate/tts/compose_sec`) — thay việc bấm giờ thủ công
 - [x] **Vị trí hàng đợi** trong `/api/progress` khi job đang chờ container GPU
 - [ ] Đẩy output lên R2 + presigned URL (hiện đang dùng chung Volume, đủ dùng nhưng mọi lượt xem đều qua container web)

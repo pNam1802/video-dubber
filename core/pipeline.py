@@ -26,7 +26,7 @@ class DubbingConfig:
     """Toàn bộ cấu hình cho một lần chạy pipeline.
     tts_engine: "edge-tts" | "gtts"
     """
-    translator_engine: str = "openai"       # "openai" | "gemini" | "marian"
+    translator_engine: str = "gemini"       # "openai" | "gemini"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     gemini_api_key: str = ""
@@ -35,9 +35,8 @@ class DubbingConfig:
     # "auto" = Whisper tu nhan dang tu am thanh; hoac ma ISO cu the ("en",
     # "vi", "ja", "zh", "ko"...) khi nguoi dung tu chon vi tu nhan dang doan.
     source_language: str = "auto"
-    # Ngon ngu DICH. "vi" duoc MarianMT (fine-tune rieng EN->VI) ho tro; cac
-    # ngon ngu khac bat buoc dung Gemini/OpenAI — xem _translate() ve viec
-    # khoa MarianMT khi target != "vi".
+    # Ngon ngu DICH — Gemini/OpenAI deu dich duoc ca 4 (vi/ja/zh/ko), khong
+    # con rang buoc nhu MarianMT (fine-tune rieng EN->VI) truoc day.
     target_language: str = "vi"
     compute_device: str = "auto"           # "auto" | "cuda" | "cpu"
     sentence_resegment: bool = True
@@ -97,41 +96,44 @@ class DubbingPipeline:
     def _translate(
         self, segments, cfg: "DubbingConfig", progress, source_language: str = "en"
     ) -> tuple[list, str, str]:
-        """Dịch, và lùi về MarianMT nếu API bên ngoài hỏng.
+        """Dịch, và lùi sang nhà cung cấp còn lại nếu API chính hỏng.
 
-        Một lần Gemini đổi model hay dính rate limit không nên làm hỏng cả job:
-        Whisper đã chạy xong, TTS vẫn chạy được, chỉ thiếu bản dịch. MarianMT
-        chạy offline nên luôn sẵn sàng làm phương án dự phòng — NHƯNG chỉ khi
-        đích là tiếng Việt: model đó tự fine-tune riêng cho EN→VI, dùng cho
-        Nhật/Trung/Hàn sẽ ra tiếng Việt trong khi job báo là ngôn ngữ khác —
-        sai còn khó nhận ra hơn cả việc dịch thất bại hẳn.
+        Trước đây lùi về MarianMT (chạy offline) khi Gemini/OpenAI hỏng —
+        model đó đã bị khoá khỏi lựa chọn của người dùng (fine-tune riêng
+        EN→VI, dịch sai trong im lặng khi nguồn không phải tiếng Anh hoặc
+        đích không phải tiếng Việt). Giờ dự án dùng đầy đủ API key nên
+        phương án dự phòng là nhà cung cấp CÒN LẠI: Gemini lỗi thì thử
+        OpenAI, và ngược lại — vẫn giữ đúng tinh thần ban đầu (một lần
+        rate limit hay đổi model không nên làm hỏng cả job), chỉ đổi nơi
+        lùi về.
         """
         target = cfg.target_language
 
         def build(engine: str):
             if engine == "openai":
                 return get_translator(
-                    engine, api_key=cfg.openai_api_key, model=cfg.openai_model,
+                    "openai", api_key=cfg.openai_api_key, model=cfg.openai_model,
                     source_language=source_language, target_language=target,
                 )
-            if engine == "gemini":
-                return get_translator(
-                    engine, api_key=cfg.gemini_api_key, model=cfg.gemini_model,
-                    source_language=source_language, target_language=target,
-                )
-            return get_translator("marian", device=cfg.compute_device)
+            return get_translator(
+                "gemini", api_key=cfg.gemini_api_key, model=cfg.gemini_model,
+                source_language=source_language, target_language=target,
+            )
 
         engine = cfg.translator_engine
+        other = "openai" if engine == "gemini" else "gemini"
+        other_key = cfg.openai_api_key if other == "openai" else cfg.gemini_api_key
+
         try:
             return build(engine).translate_segments(segments), engine, ""
         except Exception as exc:
-            # target != "vi" thì marian không phải phương án dự phòng hợp lệ —
-            # không có gì để lùi về, để lỗi thật hiện ra còn hơn âm thầm sai ngôn ngữ.
-            if engine == "marian" or not cfg.translator_fallback or target != "vi":
+            # Không có key cho nhà cung cấp còn lại thì không có gì để lùi
+            # về — để lỗi thật hiện ra còn hơn thử một engine chắc chắn hỏng.
+            if not cfg.translator_fallback or not other_key:
                 raise
-            print(f"[Pipeline] {engine} lỗi ({exc}). Chuyển sang MarianMT.")
-            progress(50, f"{engine} gặp lỗi, đang chuyển sang MarianMT...")
-            return build("marian").translate_segments(segments), "marian", engine
+            print(f"[Pipeline] {engine} lỗi ({exc}). Chuyển sang {other}.")
+            progress(50, f"{engine} gặp lỗi, đang chuyển sang {other}...")
+            return build(other).translate_segments(segments), other, engine
 
     def run(
         self,

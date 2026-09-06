@@ -74,7 +74,7 @@
 
   <div id="fallbackNotice"
     class="{% if not (job.translator_actual and job.translator_actual != job.translator_engine) %}hidden {% endif %}rounded-xl border border-tertiary/40 bg-tertiary/10 px-4 py-3 font-body-md text-body-md text-tertiary">
-    {{ job.translator_engine }} gặp lỗi nên hệ thống đã tự chuyển sang MarianMT.
+    {{ job.translator_engine }} gặp lỗi nên hệ thống đã tự chuyển sang {{ job.translator_actual }}.
     Chất lượng dịch có thể khác với lựa chọn ban đầu.
   </div>
 

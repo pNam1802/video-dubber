@@ -105,10 +105,13 @@ def config_status():
     """Cau hinh dang chay: engine nao san sang, model nao, han muc bao nhieu."""
     return jsonify(
         {
+            # MarianMT (fine-tune rieng EN->VI) da bi khoa khoi lua chon cua
+            # nguoi dung — chi con Gemini/OpenAI cho job moi. Job cu van
+            # hien du lieu binh thuong o /admin/stats (data-driven, khong
+            # phu thuoc danh sach nay).
             "engines": {
                 "gemini": {**_key_status(GEMINI_API_KEY), "model": GEMINI_MODEL},
                 "openai": {**_key_status(OPENAI_API_KEY), "model": OPENAI_MODEL},
-                "marian": {"configured": True, "model": "local", "length": 0},
             },
             "runtime": {"job_runner": JOB_RUNNER, "whisper_backend": WHISPER_BACKEND},
             "quotas": {

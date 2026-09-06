@@ -24,7 +24,7 @@ import modal
 APP_NAME = "video-dubber"
 
 # Volume "data" giữ file upload + kết quả; volume "models" giữ trọng số model
-# để container mới không phải tải lại (Whisper, MarianMT).
+# để container mới không phải tải lại (Whisper).
 data_volume = modal.Volume.from_name("dubber-data", create_if_missing=True)
 model_volume = modal.Volume.from_name("dubber-models", create_if_missing=True)
 
@@ -97,7 +97,7 @@ secrets = [
 
 VOLUMES = {"/data": data_volume, "/models": model_volume}
 # web chi phuc vu file da co san qua OUTPUT_DIR (duoi /data) — chua bao gio
-# doc/ghi /models, do chi la noi Dubber cache trong so Whisper/MarianMT.
+# doc/ghi /models, do chi la noi Dubber cache trong so Whisper.
 WEB_VOLUMES = {"/data": data_volume}
 
 

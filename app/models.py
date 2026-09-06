@@ -100,8 +100,9 @@ class Job(db.Model):
     duration_sec = db.Column(db.Float, nullable=True)
     elapsed_sec = db.Column(db.Float, nullable=True)
     segment_count = db.Column(db.Integer, nullable=True)
-    # Engine da dung THAT SU. Khac translator_engine khi API hong va phai
-    # lui ve MarianMT — giao dien can noi ro cho nguoi dung biet.
+    # Engine da dung THAT SU. Khac translator_engine khi API chinh hong va
+    # phai lui sang nha cung cap con lai (Gemini <-> OpenAI) — giao dien
+    # can noi ro cho nguoi dung biet.
     translator_actual = db.Column(db.String(30), nullable=True)
     # Thoi gian tung buoc, giay. Khong co may cot nay thi khong biet
     # nut that nam o Whisper, o buoc dich hay o TTS.

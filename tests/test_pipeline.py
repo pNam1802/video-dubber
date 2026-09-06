@@ -24,7 +24,7 @@ class FakeTranslator:
 
     def translate_segments(self, segments):
         self.calls.append(self.engine)
-        if self.engine != "marian":
+        if self.engine != "openai":
             raise Boom("404 model không còn khả dụng")
         for segment in segments:
             segment.translated = "Học tăng cường rất hữu ích."
@@ -45,38 +45,41 @@ def segments():
     return [Segment(start=0, end=2, text="Reinforcement learning is useful.")]
 
 
-def test_api_failure_falls_back_to_marian(fake_translators):
-    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x")
+def test_api_failure_falls_back_to_other_engine(fake_translators):
+    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", openai_api_key="y")
     out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
 
-    assert (used, fell_from) == ("marian", "gemini")
-    assert fake_translators == ["gemini", "marian"]
+    assert (used, fell_from) == ("openai", "gemini")
+    assert fake_translators == ["gemini", "openai"]
     assert out[0].translated.startswith("Học tăng cường")
 
 
-def test_non_vietnamese_target_never_falls_back_to_marian(fake_translators):
-    """MarianMT là model fine-tune riêng EN→VI — dùng cho Nhật/Trung/Hàn sẽ
-    âm thầm ra tiếng Việt trong khi job báo ngôn ngữ khác. Không có gì để
-    lùi về thì phải để lỗi thật hiện ra, không được lùi sai ngôn ngữ."""
-    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", target_language="ja")
+def test_fallback_works_for_non_vietnamese_target_too(fake_translators):
+    """MarianMT (fine-tune riêng EN→VI) từng không dùng được cho Nhật/Trung/
+    Hàn, nên trước đây phải chặn fallback cho các đích đó. Giờ dự phòng là
+    nhà cung cấp còn lại (Gemini ⇄ OpenAI), vốn dịch được mọi ngôn ngữ đích,
+    nên không còn lý do gì để đối xử khác với target_language != "vi"."""
+    config = DubbingConfig(
+        translator_engine="gemini", gemini_api_key="x", openai_api_key="y", target_language="ja"
+    )
+    out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    assert (used, fell_from) == ("openai", "gemini")
+
+
+def test_no_fallback_key_lets_error_surface(fake_translators):
+    """Không có key cho nhà cung cấp còn lại thì không có gì để lùi về —
+    lỗi thật phải hiện ra thay vì thử một engine chắc chắn cũng hỏng."""
+    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x")
     with pytest.raises(Boom):
         DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
-    assert fake_translators == ["gemini"]  # chưa từng thử marian
+    assert fake_translators == ["gemini"]
 
 
-def test_vietnamese_target_still_falls_back_to_marian(fake_translators):
-    """target_language mặc định "vi" — hành vi cũ (giai đoạn trước khi có đa
-    ngôn ngữ) phải giữ nguyên."""
-    config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", target_language="vi")
-    out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
-    assert (used, fell_from) == ("marian", "gemini")
-
-
-def test_marian_runs_without_fallback(fake_translators):
-    config = DubbingConfig(translator_engine="marian")
+def test_openai_runs_without_fallback(fake_translators):
+    config = DubbingConfig(translator_engine="openai", openai_api_key="y")
     _, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
-    assert (used, fell_from) == ("marian", "")
-    assert fake_translators == ["marian"]
+    assert (used, fell_from) == ("openai", "")
+    assert fake_translators == ["openai"]
 
 
 def test_fallback_can_be_disabled(fake_translators):

@@ -74,12 +74,15 @@
 {% block scripts %}
 <script>
   (function () {
+    // MarianMT (fine-tune riêng EN→VI) đã bị khoá khỏi lựa chọn của người
+    // dùng — dịch sai trong im lặng khi nguồn khác tiếng Anh hoặc đích khác
+    // tiếng Việt, và không dịch được sang Nhật/Trung/Hàn. config_status()
+    // không còn trả về nó nữa nên vòng lặp bên dưới tự bỏ qua, không cần xử lý riêng.
     const ENGINE_NOTES = {
-      marian: "Chạy offline trên GPU, không tốn phí API. Cũng là phương án dự phòng khi API ngoài hỏng.",
-      gemini: "Dịch bằng API của Google. Chậm hơn MarianMT nhiều lần và tính phí theo token.",
-      openai: "Dịch bằng API của OpenAI."
+      gemini: "Dịch bằng API của Google, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng khi OpenAI hỏng.",
+      openai: "Dịch bằng API của OpenAI, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng khi Gemini hỏng."
     };
-    const ENGINE_NAMES = { marian: "MarianMT", gemini: "Gemini", openai: "OpenAI" };
+    const ENGINE_NAMES = { gemini: "Gemini", openai: "OpenAI" };
 
     function escapeHtml(value) {
       const div = document.createElement("div");
@@ -101,10 +104,8 @@
           ? '<span class="px-2 py-0.5 rounded-full border border-primary/50 bg-primary/10 text-primary font-label-sm text-label-sm">Sẵn sàng</span>'
           : '<span class="px-2 py-0.5 rounded-full border border-outline-variant text-on-surface-variant font-label-sm text-label-sm">Chưa cấu hình</span>';
         // Chỉ báo key CÓ hay KHÔNG và độ dài — không bao giờ hiện giá trị.
-        const keyLine = key === "marian"
-          ? ""
-          : '<p class="font-label-sm text-label-sm text-on-surface-variant">API key: ' +
-            (ready ? "đã cấu hình (" + engine.length + " ký tự)" : "chưa có") + "</p>";
+        const keyLine = '<p class="font-label-sm text-label-sm text-on-surface-variant">API key: ' +
+          (ready ? "đã cấu hình (" + engine.length + " ký tự)" : "chưa có") + "</p>";
         return '<div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-2">' +
           '<div class="flex items-center justify-between gap-2">' +
           '<span class="font-body-lg text-body-lg text-on-surface">' + (ENGINE_NAMES[key] || key) + "</span>" + badge + "</div>" +

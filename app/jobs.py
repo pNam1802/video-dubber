@@ -157,7 +157,7 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
             if result.fallback_from:
                 job.message = (
                     f"Hoàn tất, nhưng {result.fallback_from} gặp lỗi nên đã "
-                    "chuyển sang MarianMT."
+                    f"chuyển sang {result.translator_used}."
                 )
             else:
                 job.message = "Hoàn tất xử lý video."

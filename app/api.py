@@ -30,12 +30,15 @@ from core.pipeline import DubbingConfig
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
-ALLOWED_TRANSLATORS = {"openai", "gemini", "marian"}
+# MarianMT (fine-tune rieng EN->VI) bi khoa khoi lua chon cua nguoi dung: no
+# dich sai trong im lang khi nguon khong phai tieng Anh (van "thanh cong"),
+# va khong dich duoc sang Nhat/Trung/Han. Du an gio dung day du Gemini/OpenAI
+# nen khong can phuong an mien phi/offline nay nua.
+ALLOWED_TRANSLATORS = {"openai", "gemini"}
 ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 # "auto" = Whisper tu nhan dang; con lai la khi nguoi dung tu chon vi tu nhan
 # dang doan sai (video co nhac nen dai, giong khong ro o dau video...).
 ALLOWED_SOURCE_LANGUAGES = {"auto", "en", "vi", "ja", "zh", "ko"}
-# MarianMT la model fine-tune RIENG cho EN->VI — chi "vi" dung duoc voi no.
 ALLOWED_TARGET_LANGUAGES = {"vi", "ja", "zh", "ko"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
 ALLOWED_TTS_ENGINES = {"edge-tts", "gtts"}
@@ -60,17 +63,8 @@ def upload_video():
     if ext not in ALLOWED_VIDEO_EXTENSIONS:
         return jsonify({"error": "Định dạng video không được hỗ trợ."}), 400
 
-    translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "marian")
+    translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "gemini")
     target_language = _pick("target_language", ALLOWED_TARGET_LANGUAGES, "vi")
-
-    # MarianMT khong the dich sang Nhat/Trung/Han — no la model rieng cho
-    # EN->VI, khong phai dich vu da ngon ngu. Chan o day thay vi am tham
-    # doi engine, vi nguoi dung co the dang co ly do chon dung MarianMT
-    # (mien phi) va can biet ro tai sao khong dung duoc.
-    if target_language != "vi" and translator_engine == "marian":
-        return jsonify({
-            "error": "MarianMT chỉ dịch được sang tiếng Việt. Chọn Gemini hoặc OpenAI để dịch sang ngôn ngữ khác.",
-        }), 400
 
     openai_api_key = request.form.get("openai_api_key", "").strip() or OPENAI_API_KEY
     if translator_engine == "openai" and not openai_api_key:

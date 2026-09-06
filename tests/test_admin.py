@@ -104,7 +104,7 @@ def test_upload_over_quota_returns_429(app, as_user, user, small_quota):
         make_job(user, file_size=900 * 1024)
     response = as_user.post(
         "/api/upload",
-        data={"video": (io.BytesIO(b"x" * 200_000), "test.mp4")},
+        data={"video": (io.BytesIO(b"x" * 200_000), "test.mp4"), "gemini_api_key": "test-key"},
         content_type="multipart/form-data",
     )
     assert response.status_code == 429

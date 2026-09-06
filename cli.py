@@ -11,7 +11,7 @@ from core.pipeline import DubbingConfig, DubbingPipeline
 def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="AI Video Dubbing CLI (EN -> VI)")
 	parser.add_argument("video", help="Path to input video file")
-	parser.add_argument("--translator", choices=["openai", "gemini", "marian"], default="marian")
+	parser.add_argument("--translator", choices=["openai", "gemini"], default="gemini")
 	parser.add_argument("--openai-api-key", default="")
 	parser.add_argument("--openai-model", default="gpt-4o-mini")
 	parser.add_argument("--gemini-api-key", default="")
