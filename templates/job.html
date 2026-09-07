@@ -643,7 +643,13 @@
           document.getElementById("progressText").textContent = data.message;
         }
 
-        if (["done", "failed", "cancelled", "interrupted"].indexOf(data.status) !== -1) {
+        // Đảo logic thay vì liệt kê từng trạng thái "đã xong": liệt kê kiểu
+        // cũ (done/failed/cancelled/interrupted) quên mất awaiting_review khi
+        // trạng thái đó ra đời — người đang đứng nhìn thanh tiến trình dịch
+        // xong sẽ không thấy khối duyệt transcript hiện lên, phải tự F5 mới
+        // thấy. Còn queued/processing thì còn phải tiếp tục hỏi lại; MỌI
+        // trạng thái khác đều cần tải lại để đổi sang đúng khối giao diện.
+        if (["queued", "processing"].indexOf(data.status) === -1) {
           stopPolling();
           // Tải lại để render bằng dữ liệu thật từ server, khỏi dựng lại toàn bộ giao diện bằng JS.
           window.location.reload();

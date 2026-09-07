@@ -293,6 +293,20 @@ def test_job_page_polling_recovers_instead_of_dying_on_first_error(app, as_user,
     assert "clearInterval(poller)" not in body
 
 
+# Bug thật: liệt kê "trạng thái đã xong" theo danh sách cứng
+# (done/failed/cancelled/interrupted) quên mất awaiting_review khi trạng
+# thái đó ra đời sau — người đang đứng nhìn thanh tiến trình lúc dịch xong
+# sẽ không thấy khối duyệt transcript tự hiện lên, phải tự F5. Canh bằng
+# logic ĐẢO (chỉ liệt kê trạng thái CÒN CẦN hỏi lại) để không tái diễn lỗi
+# này mỗi khi có trạng thái mới.
+def test_job_page_reloads_on_any_status_other_than_active(app, as_user, user):
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.PROCESSING, progress=45).id
+    body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
+    assert '["queued", "processing"].indexOf(data.status) === -1' in body
+    assert '["done", "failed", "cancelled", "interrupted"].indexOf' not in body
+
+
 # ── Lời thoại tương tác ────────────────────────────────────────
 # Cũng như polling: hành vi thật (bấm dòng thì video nhảy, dòng đang phát tự
 # sáng) chạy trên trình duyệt nên pytest không giả lập được. Test canh cấu
