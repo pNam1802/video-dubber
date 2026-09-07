@@ -21,7 +21,7 @@
   </div>
 
   <div class="flex flex-wrap gap-2" id="statusChips">
-    {% for value, label in [('all','Tất cả'), ('done','Hoàn tất'), ('processing','Đang xử lý'), ('queued','Đang chờ'), ('failed','Thất bại'), ('cancelled','Đã huỷ')] %}
+    {% for value, label in [('all','Tất cả'), ('done','Hoàn tất'), ('processing','Đang xử lý'), ('awaiting_review','Chờ bạn duyệt'), ('queued','Đang chờ'), ('failed','Thất bại'), ('cancelled','Đã huỷ')] %}
     <button type="button" data-status="{{ value }}"
       class="chip px-3 py-1.5 rounded-full border font-label-sm text-label-sm transition-colors
              {% if value == 'all' %}bg-primary text-on-primary border-primary{% else %}border-outline-variant text-on-surface-variant hover:text-on-surface{% endif %}">
@@ -100,6 +100,7 @@
     const STATUS = {
       queued: ["Đang chờ", "text-on-surface-variant border-outline-variant"],
       processing: ["Đang xử lý", "text-primary border-primary/50 bg-primary/10"],
+      awaiting_review: ["Chờ bạn duyệt", "text-tertiary border-tertiary/50 bg-tertiary/10"],
       done: ["Hoàn tất", "text-primary border-primary/50 bg-primary/10"],
       failed: ["Thất bại", "text-error border-error/50 bg-error/10"],
       cancelled: ["Đã huỷ", "text-on-surface-variant border-outline-variant"],
@@ -119,7 +120,12 @@
     let consecutiveRefreshFailures = 0;
 
     function hasActiveJob(items) {
-      return items.some(function (job) { return job.status === "queued" || job.status === "processing"; });
+      // awaiting_review tự nó không đổi (không có gì đang chạy chờ nó), nhưng
+      // vẫn cần tiếp tục hỏi lại: người dùng có thể đang duyệt job đó ở tab
+      // khác ngay lúc này, và trang này nên tự cập nhật khi họ xác nhận xong.
+      return items.some(function (job) {
+        return job.status === "queued" || job.status === "processing" || job.status === "awaiting_review";
+      });
     }
 
     function scheduleRefresh(items) {

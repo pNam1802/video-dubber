@@ -3,12 +3,13 @@
 
 {% block content %}
 {% set STATUS = {
-  'queued':      ('Đang chờ',    'text-on-surface-variant', 'schedule'),
-  'processing':  ('Đang xử lý',  'text-primary',            'sync'),
-  'done':        ('Hoàn tất',    'text-primary',            'check_circle'),
-  'failed':      ('Thất bại',    'text-error',              'error'),
-  'cancelled':   ('Đã huỷ',      'text-on-surface-variant', 'cancel'),
-  'interrupted': ('Gián đoạn',   'text-error',              'warning')
+  'queued':           ('Đang chờ',       'text-on-surface-variant', 'schedule'),
+  'processing':       ('Đang xử lý',     'text-primary',            'sync'),
+  'awaiting_review':  ('Chờ bạn duyệt',  'text-tertiary',           'fact_check'),
+  'done':             ('Hoàn tất',       'text-primary',            'check_circle'),
+  'failed':           ('Thất bại',       'text-error',              'error'),
+  'cancelled':        ('Đã huỷ',         'text-on-surface-variant', 'cancel'),
+  'interrupted':      ('Gián đoạn',      'text-error',              'warning')
 } %}
 
 <div class="flex flex-wrap items-start justify-between gap-md mb-xl">
@@ -34,7 +35,7 @@
 
 {# ── Đang chờ hoặc đang chạy ───────────────────────────── #}
 <section id="liveCard"
-  class="{% if job.is_finished %}hidden {% endif %}bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md mb-lg">
+  class="{% if job.is_finished or job.status == 'awaiting_review' %}hidden {% endif %}bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md mb-lg">
   {# Ẩn mặc định — chỉ hiện khi vài lần lấy tiến trình liên tiếp đều lỗi.
      Không phải lỗi thật: job vẫn chạy trên server, chỉ là trình duyệt tạm
      thời không lấy được tiến trình. #}
@@ -60,11 +61,47 @@
   </div>
 
   <div class="flex items-center gap-4">
-    <button type="button" id="cancelBtn"
-      class="text-error hover:bg-error/10 px-4 py-2 rounded-full border border-error/40 font-label-sm text-label-sm uppercase tracking-wider">
+    <button type="button" id="cancelBtn" class="cancel-job-btn
+      text-error hover:bg-error/10 px-4 py-2 rounded-full border border-error/40 font-label-sm text-label-sm uppercase tracking-wider">
       Huỷ job
     </button>
     <span id="elapsed" class="tabular font-label-sm text-label-sm text-on-surface-variant"></span>
+  </div>
+</section>
+
+{# ── Chờ duyệt transcript ───────────────────────────────── #}
+<section id="reviewCard"
+  class="{% if job.status != 'awaiting_review' %}hidden {% endif %}bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md mb-lg">
+  <div>
+    <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-tertiary">fact_check</span>Duyệt transcript trước khi tạo giọng đọc
+    </h3>
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+      Đã nhận dạng và dịch xong. Sửa lại câu nghe/dịch sai bên dưới nếu cần — giọng đọc và video sẽ
+      được tạo từ đúng nội dung này. Sửa xong tự lưu khi bạn rời khỏi ô nhập, không cần bấm gì thêm.
+    </p>
+  </div>
+
+  <div id="reviewApiKeyBox" class="hidden items-center gap-2 bg-surface-container-high rounded-xl px-4 py-3">
+    <span class="material-symbols-outlined text-[18px] text-on-surface-variant">key</span>
+    <input id="reviewApiKey" type="password" autocomplete="off"
+      class="flex-1 bg-transparent font-body-md text-body-md text-on-surface focus:outline-none placeholder-outline">
+    <span class="font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">Chỉ cần khi bấm "Dịch lại"</span>
+  </div>
+
+  <p id="reviewLoading" class="font-body-md text-body-md text-on-surface-variant">Đang tải transcript...</p>
+  <div id="reviewList" class="flex flex-col gap-3 max-h-[520px] overflow-y-auto -mx-1 px-1"></div>
+  <p id="reviewStatus" class="hidden font-label-sm text-label-sm"></p>
+
+  <div class="flex items-center gap-3 pt-3 border-t border-outline-variant/30">
+    <button type="button" id="continueBtn"
+      class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold flex items-center gap-2">
+      <span class="material-symbols-outlined text-[18px]">graphic_eq</span>Xác nhận, tạo giọng đọc
+    </button>
+    <button type="button" id="cancelBtnReview" class="cancel-job-btn
+      text-error hover:bg-error/10 px-4 py-2 rounded-full border border-error/40 font-label-sm text-label-sm uppercase tracking-wider">
+      Huỷ job
+    </button>
   </div>
 </section>
 
@@ -202,7 +239,19 @@
     const JOB_ID = {{ job.id }};
     const FINISHED = {{ 'true' if job.is_finished else 'false' }};
     const IS_DONE = {{ 'true' if job.status == 'done' else 'false' }};
+    const AWAITING_REVIEW = {{ 'true' if job.status == 'awaiting_review' else 'false' }};
     const CSRF = "{{ csrf_token() }}";
+
+    function escapeHtml(value) {
+      const div = document.createElement("div");
+      div.textContent = value == null ? "" : value;
+      return div.innerHTML;
+    }
+
+    function formatTime(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+    }
 
     // ── Lời thoại tương tác ────────────────────────────────
     // Job chạy trước khi có bảng transcript_segment thì API trả
@@ -219,17 +268,6 @@
 
       let segments = [];
       let activeIdx = -1;
-
-      function escapeHtml(value) {
-        const div = document.createElement("div");
-        div.textContent = value == null ? "" : value;
-        return div.innerHTML;
-      }
-
-      function formatTime(sec) {
-        const s = Math.max(0, Math.floor(sec));
-        return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-      }
 
       function renderRows() {
         list.innerHTML = segments.map(function (seg, i) {
@@ -322,6 +360,156 @@
       })();
     })();
 
+    // ── Duyệt/sửa transcript trước khi tạo giọng đọc ───────
+    (function reviewPanel() {
+      if (!AWAITING_REVIEW) return;
+
+      const loading = document.getElementById("reviewLoading");
+      const list = document.getElementById("reviewList");
+      const statusMsg = document.getElementById("reviewStatus");
+      const apiKeyBox = document.getElementById("reviewApiKeyBox");
+      const apiKeyInput = document.getElementById("reviewApiKey");
+      const continueBtn = document.getElementById("continueBtn");
+      const ENGINE = "{{ job.translator_engine or 'gemini' }}";
+
+      apiKeyBox.classList.remove("hidden");
+      apiKeyBox.classList.add("flex");
+      apiKeyInput.placeholder = (ENGINE === "openai" ? "OpenAI" : "Gemini") + " API key";
+
+      let hideStatusTimer = null;
+      function showStatus(text, isError) {
+        statusMsg.textContent = text;
+        statusMsg.classList.remove("hidden");
+        statusMsg.classList.toggle("text-error", !!isError);
+        statusMsg.classList.toggle("text-tertiary", !isError);
+        clearTimeout(hideStatusTimer);
+        if (!isError) hideStatusTimer = setTimeout(function () { statusMsg.classList.add("hidden"); }, 2500);
+      }
+
+      function rowEl(seg) {
+        const row = document.createElement("div");
+        row.className = "review-row bg-surface-container-high rounded-xl p-3 flex flex-col gap-2";
+        row.dataset.segId = seg.id;
+        row.innerHTML =
+          '<div class="flex items-center justify-between gap-2">' +
+            '<span class="tabular font-label-sm text-label-sm text-on-surface-variant">' +
+              formatTime(seg.start) + '–' + formatTime(seg.end) +
+            '</span>' +
+            '<button type="button" class="retranslate-btn font-label-sm text-label-sm text-primary ' +
+              'flex items-center gap-1 disabled:opacity-40 disabled:pointer-events-none">' +
+              '<span class="material-symbols-outlined text-[16px]">translate</span>Dịch lại' +
+            '</button>' +
+          '</div>' +
+          '<textarea class="src-input w-full bg-background border border-outline-variant/50 rounded-lg px-3 py-2 ' +
+            'font-body-md text-body-md text-on-surface-variant focus:outline-none focus:border-primary" rows="2"></textarea>' +
+          '<textarea class="tgt-input w-full bg-background border border-outline-variant rounded-lg px-3 py-2 ' +
+            'font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary" rows="2"></textarea>';
+        row.querySelector(".src-input").value = seg.source;
+        row.querySelector(".tgt-input").value = seg.target;
+        return row;
+      }
+
+      async function saveField(segId, field, value) {
+        try {
+          const res = await fetch("/api/jobs/" + JOB_ID + "/segments/" + segId, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+            body: JSON.stringify({ [field]: value })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Không lưu được.");
+          showStatus("Đã lưu.");
+        } catch (err) {
+          showStatus(err.message, true);
+        }
+      }
+
+      // Lưu khi rời khỏi ô nhập (blur) thay vì mỗi lần gõ — đỡ spam PATCH,
+      // và tránh lưu một chuỗi đang gõ dở giữa chừng.
+      let lastValues = new WeakMap();
+      list.addEventListener("focusin", function (e) {
+        if (e.target.tagName === "TEXTAREA") lastValues.set(e.target, e.target.value);
+      });
+      list.addEventListener("focusout", function (e) {
+        if (e.target.tagName !== "TEXTAREA") return;
+        const row = e.target.closest(".review-row");
+        if (!row || e.target.value === lastValues.get(e.target)) return;
+        const field = e.target.classList.contains("src-input") ? "source" : "target";
+        saveField(row.dataset.segId, field, e.target.value);
+      });
+
+      list.addEventListener("click", async function (e) {
+        const btn = e.target.closest(".retranslate-btn");
+        if (!btn) return;
+        const row = btn.closest(".review-row");
+        const tgtInput = row.querySelector(".tgt-input");
+        const srcInput = row.querySelector(".src-input");
+
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">sync</span>Đang dịch...';
+        try {
+          const body = {};
+          const key = apiKeyInput.value.trim();
+          if (key) body[ENGINE === "openai" ? "openai_api_key" : "gemini_api_key"] = key;
+          const res = await fetch("/api/jobs/" + JOB_ID + "/segments/" + row.dataset.segId + "/retranslate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+            body: JSON.stringify(body)
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Dịch lại thất bại.");
+          tgtInput.value = data.target;
+          lastValues.set(srcInput, srcInput.value);
+          lastValues.set(tgtInput, tgtInput.value);
+          showStatus("Đã dịch lại.");
+        } catch (err) {
+          showStatus(err.message, true);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = original;
+        }
+      });
+
+      continueBtn.addEventListener("click", async function () {
+        continueBtn.disabled = true;
+        continueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">sync</span>Đang gửi...';
+        try {
+          const res = await fetch("/api/jobs/" + JOB_ID + "/continue", {
+            method: "POST",
+            headers: { "X-CSRFToken": CSRF }
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Không xác nhận được.");
+          window.location.reload();
+        } catch (err) {
+          continueBtn.disabled = false;
+          continueBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">graphic_eq</span>Xác nhận, tạo giọng đọc';
+          showStatus(err.message, true);
+        }
+      });
+
+      (async function fetchSegments() {
+        try {
+          const res = await fetch("/api/jobs/" + JOB_ID + "/segments");
+          const data = await res.json();
+          loading.classList.add("hidden");
+          if (!res.ok || !data.segments.length) {
+            // Không nên xảy ra: giai đoạn 1 tự đánh FAILED nếu không lưu
+            // được transcript, không bao giờ để job dừng ở đây mà rỗng.
+            // Vẫn xử lý cho chắc, và nói thật thay vì hứa nút "Xác nhận" chạy được.
+            list.innerHTML = '<p class="font-body-md text-body-md text-error">' +
+              'Không tải được transcript để duyệt. Hãy huỷ job này và thử lại.</p>';
+            continueBtn.disabled = true;
+            return;
+          }
+          data.segments.forEach(function (seg) { list.appendChild(rowEl(seg)); });
+        } catch (err) {
+          loading.textContent = "Không tải được transcript. Tải lại trang để thử lại.";
+        }
+      })();
+    })();
+
     const STAGE_BY_PERCENT = [[10, "extract"], [25, "transcribe"], [45, "translate"], [70, "tts"], [88, "compose"]];
 
     function paintStages(percent) {
@@ -347,27 +535,39 @@
       setTimeout(function () { btn.querySelector("span:last-child").textContent = "Chép liên kết"; }, 2000);
     });
 
-    const cancelBtn = document.getElementById("cancelBtn");
-    cancelBtn.addEventListener("click", async function () {
-      cancelBtn.disabled = true;
-      cancelBtn.textContent = "Đang huỷ...";
-      try {
-        const res = await fetch("/api/jobs/" + JOB_ID + "/cancel", {
-          method: "POST",
-          headers: { "X-CSRFToken": CSRF }
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Không huỷ được.");
-        document.getElementById("progressText").textContent = data.message;
-        setTimeout(function () { window.location.reload(); }, 1200);
-      } catch (err) {
-        cancelBtn.disabled = false;
-        cancelBtn.textContent = "Huỷ job";
-        document.getElementById("progressText").textContent = err.message;
-      }
+    // Hai nút huỷ (liveCard và reviewCard) chỉ một cái hiện tại một lúc,
+    // tuỳ trạng thái job — gắn chung một hành vi cho cả hai.
+    const cancelBtns = document.querySelectorAll(".cancel-job-btn");
+    cancelBtns.forEach(function (cancelBtn) {
+      cancelBtn.addEventListener("click", async function () {
+        cancelBtns.forEach(function (b) { b.disabled = true; b.textContent = "Đang huỷ..."; });
+        try {
+          const res = await fetch("/api/jobs/" + JOB_ID + "/cancel", {
+            method: "POST",
+            headers: { "X-CSRFToken": CSRF }
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Không huỷ được.");
+          const progressText = document.getElementById("progressText");
+          if (progressText) progressText.textContent = data.message;
+          setTimeout(function () { window.location.reload(); }, 1200);
+        } catch (err) {
+          cancelBtns.forEach(function (b) { b.disabled = false; b.textContent = "Huỷ job"; });
+          const progressText = document.getElementById("progressText");
+          if (progressText) progressText.textContent = err.message;
+          // liveCard (chứa progressText) đang ẩn lúc chờ duyệt — báo lỗi ở
+          // đúng chỗ người dùng đang nhìn thấy.
+          const reviewStatus = document.getElementById("reviewStatus");
+          if (AWAITING_REVIEW && reviewStatus) {
+            reviewStatus.textContent = err.message;
+            reviewStatus.classList.remove("hidden");
+            reviewStatus.classList.add("text-error");
+          }
+        }
+      });
     });
 
-    if (FINISHED) return;
+    if (FINISHED || AWAITING_REVIEW) return;
 
     paintStages({{ job.progress }});
     const startedAt = Date.now();

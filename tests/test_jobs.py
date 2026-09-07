@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import re
 
 import pytest
 
@@ -321,13 +322,51 @@ def test_non_done_job_page_skips_transcript_fetch(app, as_user, user, status):
     assert "const IS_DONE = false;" in body
 
 
+def _section_classes(body: str, section_id: str) -> str:
+    match = re.search(r'<section id="' + section_id + r'"\s+class="([^"]*)"', body)
+    return match.group(1) if match else ""
+
+
+# ── Trang duyệt transcript (AWAITING_REVIEW) ──────────────────
+def test_awaiting_review_job_page_shows_review_panel(app, as_user, user):
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.AWAITING_REVIEW, translator_engine="openai").id
+    body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
+
+    assert "const AWAITING_REVIEW = true;" in body
+    assert 'id="continueBtn"' in body
+    assert 'id="cancelBtnReview"' in body
+    assert "hidden" not in _section_classes(body, "reviewCard")
+    assert "hidden" in _section_classes(body, "liveCard")
+    # Placeholder API key phải theo đúng engine của job, không hardcode Gemini.
+    assert '(ENGINE === "openai" ? "OpenAI" : "Gemini")' in body
+    # Đang chờ duyệt thì không được tự bắn polling — chỉ chờ người dùng thao tác.
+    assert "if (FINISHED || AWAITING_REVIEW) return;" in body
+
+
+@pytest.mark.parametrize("status", [JobStatus.PROCESSING, JobStatus.DONE, JobStatus.FAILED])
+def test_non_awaiting_review_job_page_review_panel_inert(app, as_user, user, status):
+    with app.app_context():
+        job_id = make_job(user, status=status, progress=45).id
+    body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
+    assert "const AWAITING_REVIEW = false;" in body
+    assert "hidden" in _section_classes(body, "reviewCard")
+
+
+def test_awaiting_review_status_pill_shows_review_label(app, as_user, user):
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.AWAITING_REVIEW).id
+    body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
+    assert "Chờ bạn duyệt" in body
+
+
 def test_finished_job_page_has_no_polling_script(app, as_user, user):
     """Job đã xong thì không cần lấy tiến trình nữa — đỡ tốn request vô ích."""
     with app.app_context():
         job_id = make_job(user, status=JobStatus.DONE, progress=100).id
     body = as_user.get(f"/job/{job_id}").get_data(as_text=True)
     assert 'id="reconnectBanner"' in body  # markup vẫn render, chỉ là JS không chạy tới
-    assert "if (FINISHED) return;" in body
+    assert "if (FINISHED || AWAITING_REVIEW) return;" in body
 
 
 # ── Huỷ ──────────────────────────────────────────────────────

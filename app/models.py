@@ -253,6 +253,11 @@ class TranscriptSegment(db.Model):
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            # id (khoa chinh that su) can de sua/dich lai TUNG dong qua
+            # PATCH/retranslate — idx chi la thu tu hien thi, khong dung de
+            # dinh danh vi khong on dinh qua cac lan luu lai (save_segments()
+            # xoa het roi chen lai, id moi nhung idx giu nguyen thu tu).
+            "id": self.id,
             "idx": self.idx,
             "start": round(self.start_sec, 3),
             "end": round(self.end_sec, 3),
