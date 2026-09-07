@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import shutil
 
-from flask import Blueprint, abort, current_app, jsonify, render_template, send_from_directory
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import text
 
@@ -69,6 +69,30 @@ def index():
 @login_required
 def history():
     return render_template("history.html")
+
+
+@bp.route("/cai-dat", methods=["GET", "POST"])
+@login_required
+def account_settings():
+    """Email nhận thông báo job — tài khoản đăng ký thường không có email
+    cho tới khi tự thêm vào đây (khác Google, đã có sẵn email đã xác thực
+    lúc đăng nhập, xem app/oauth.py)."""
+    if request.method == "POST":
+        if current_user.uses_google:
+            # Email lay tu Google, khong cho sua tay o day — chi doi duoc
+            # co nhan thong bao hay khong.
+            current_user.notify_email = "notify_email" in request.form
+        else:
+            email = request.form.get("email", "").strip()
+            if email and "@" not in email:
+                flash("Email không hợp lệ.", "danger")
+                return render_template("account_settings.html")
+            current_user.email = email or None
+            current_user.notify_email = "notify_email" in request.form
+        db.session.commit()
+        flash("Đã lưu cài đặt.", "success")
+        return redirect(url_for("main.account_settings"))
+    return render_template("account_settings.html")
 
 
 @bp.get("/quan-tri/thong-ke")

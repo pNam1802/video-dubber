@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+{% block title %}Cài đặt tài khoản · Nora{% endblock %}
+
+{% block content %}
+<div class="mb-lg">
+  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+    <span class="material-symbols-outlined text-[32px] text-primary">manage_accounts</span>Cài đặt tài khoản
+  </h2>
+</div>
+
+<section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md max-w-xl">
+  <div>
+    <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary">mail</span>Thông báo qua email
+    </h3>
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+      Nhận email khi job dịch xong (cần bạn duyệt transcript), khi hoàn tất, hoặc khi thất bại —
+      không cần ngồi canh trang.
+    </p>
+  </div>
+
+  <form method="post" class="flex flex-col gap-md">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div>
+      <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="email">
+        Email nhận thông báo
+      </label>
+      {% if current_user.uses_google %}
+      <input id="email" type="email" value="{{ current_user.email or '' }}" disabled
+        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface-variant font-body-md text-body-md rounded-xl px-3 py-2 cursor-not-allowed">
+      <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
+        Lấy từ tài khoản Google lúc đăng nhập, không sửa được ở đây.
+      </p>
+      {% else %}
+      <input id="email" name="email" type="email" value="{{ current_user.email or '' }}"
+        placeholder="ban@example.com"
+        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary">
+      <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
+        Để trống nếu không muốn nhận thông báo qua email.
+      </p>
+      {% endif %}
+    </div>
+
+    <label class="flex items-center gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
+      <input type="checkbox" name="notify_email" {% if current_user.notify_email %}checked{% endif %}
+        class="w-4 h-4 accent-primary">
+      Nhận email khi job cần duyệt / xong / lỗi
+    </label>
+
+    <button type="submit"
+      class="self-start bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+      Lưu
+    </button>
+  </form>
+</section>
+{% endblock %}

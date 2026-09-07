@@ -53,6 +53,13 @@ def register():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
+        # Email chi de nhan thong bao job — khong dung de dang nhap, khong
+        # bat buoc, nen validate nhe: co nhap thi phai giong email that.
+        email = request.form.get("email", "").strip()
+        if email and "@" not in email:
+            flash("Email không hợp lệ.", "danger")
+            return render_template("register.html", google_enabled=google_enabled())
+
         if not username or not password:
             flash("Vui lòng điền đủ!", "danger")
             return render_template("register.html", google_enabled=google_enabled())
@@ -60,7 +67,9 @@ def register():
         if User.query.filter_by(username=username).first():
             flash("Tên đăng nhập đã tồn tại!", "danger")
         else:
-            new_user = User(username=username, password_hash=generate_password_hash(password))
+            new_user = User(
+                username=username, password_hash=generate_password_hash(password), email=email or None,
+            )
             db.session.add(new_user)
             db.session.commit()
 

@@ -113,7 +113,7 @@ def all_icons_actually_rendered(app, client, as_user, as_admin, user) -> set[str
     for path in ["/login", "/register", "/privacy", "/terms"]:
         found |= rendered_icon_names(client.get(path).get_data(as_text=True))
 
-    for path in ["/", "/lich-su"]:
+    for path in ["/", "/lich-su", "/cai-dat"]:
         found |= rendered_icon_names(as_user.get(path).get_data(as_text=True))
 
     with app.app_context():

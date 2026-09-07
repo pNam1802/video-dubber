@@ -51,6 +51,10 @@ class User(UserMixin, db.Model):
     # Nguoi dang nhap bang Google khong co mat khau.
     password_hash = db.Column(db.String(255), nullable=True)
     email = db.Column(db.String(255), nullable=True, index=True)
+    # Tai khoan dang nhap thuong khong co email cho toi khi tu them o trang
+    # cai dat (khac Google, da co san email da xac thuc). Bat mac dinh —
+    # ai co email thi mac dinh nhan thong bao, tu tat duoc neu khong muon.
+    notify_email = db.Column(db.Boolean, nullable=False, default=True, server_default=db.true())
     # Dinh danh bat bien cua Google. Khong dung email lam khoa vi email doi duoc.
     google_sub = db.Column(db.String(64), unique=True, nullable=True, index=True)
     avatar_url = db.Column(db.String(500), nullable=True)

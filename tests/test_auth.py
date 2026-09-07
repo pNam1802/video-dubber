@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.extensions import db
 from app.models import Role, User
 from tests.conftest import PASSWORD, make_user
 
@@ -35,6 +36,32 @@ def test_healthz(client):
 def test_register_then_reach_home(app, client):
     assert client.post("/register", data={"username": "moi", "password": PASSWORD}).status_code == 302
     assert client.get("/").status_code == 200
+
+
+def test_register_saves_optional_email(app, client):
+    client.post("/register", data={"username": "moi", "password": PASSWORD, "email": "moi@example.com"})
+    with app.app_context():
+        user = User.query.filter_by(username="moi").first()
+        assert user.email == "moi@example.com"
+        assert user.notify_email is True  # bật mặc định
+
+
+def test_register_without_email_still_works(app, client):
+    """Email không bắt buộc — đăng ký vẫn qua, chỉ là không nhận được thông báo."""
+    response = client.post("/register", data={"username": "moi", "password": PASSWORD})
+    assert response.status_code == 302
+    with app.app_context():
+        assert User.query.filter_by(username="moi").first().email is None
+
+
+def test_register_rejects_invalid_email(app, client):
+    response = client.post(
+        "/register", data={"username": "moi", "password": PASSWORD, "email": "khong-phai-email"},
+        follow_redirects=True,
+    )
+    assert "Email không hợp lệ" in response.get_data(as_text=True)
+    with app.app_context():
+        assert User.query.filter_by(username="moi").first() is None
 
 
 def test_duplicate_username_rejected(app, client, user):
@@ -88,6 +115,51 @@ def test_csrf_blocks_upload_when_enabled(app, user):
     response = c.post("/api/upload", data={})
     assert response.status_code == 400
     assert response.is_json
+
+
+# ── Cài đặt tài khoản (email nhận thông báo) ──────────────────
+def test_account_settings_page_renders(as_user):
+    response = as_user.get("/cai-dat")
+    assert response.status_code == 200
+    assert b'name="email"' in response.data
+
+
+def test_account_settings_updates_email_and_notify(app, as_user, user):
+    response = as_user.post("/cai-dat", data={"email": "moi@example.com", "notify_email": "on"})
+    assert response.status_code == 302
+    with app.app_context():
+        u = db.session.get(User, user)
+        assert u.email == "moi@example.com"
+        assert u.notify_email is True
+
+
+def test_account_settings_unchecked_box_turns_notify_off(app, as_user, user):
+    # Checkbox không tick thì trình duyệt không gửi field đó lên — thiếu
+    # "notify_email" trong form nghĩa là người dùng đã bỏ tick, phải tắt.
+    as_user.post("/cai-dat", data={"email": "moi@example.com"})
+    with app.app_context():
+        assert db.session.get(User, user).notify_email is False
+
+
+def test_account_settings_rejects_invalid_email(app, as_user, user):
+    response = as_user.post("/cai-dat", data={"email": "khong-phai-email"}, follow_redirects=True)
+    assert "Email không hợp lệ" in response.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(User, user).email is None  # không bị đổi
+
+
+def test_account_settings_google_user_cannot_edit_email(app, as_user, user):
+    """Email của tài khoản Google lấy từ lúc đăng nhập — sửa tay ở đây
+    không hợp lý (lần đăng nhập Google kế tiếp sẽ ghi đè lại), nên khoá."""
+    with app.app_context():
+        u = db.session.get(User, user)
+        u.google_sub = "sub-123"
+        u.email = "google@example.com"
+        db.session.commit()
+
+    as_user.post("/cai-dat", data={"email": "hacked@example.com", "notify_email": "on"})
+    with app.app_context():
+        assert db.session.get(User, user).email == "google@example.com"
 
 
 # ── Trang pháp lý công khai ──────────────────────────────────

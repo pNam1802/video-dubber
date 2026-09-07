@@ -66,6 +66,20 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
+# ── Email (thong bao khi job can duyet / xong / loi) ────────
+# Mac dinh Gmail SMTP + app password — khong can dang ky dich vu ngoai.
+# Thieu SMTP_USER/SMTP_PASSWORD thi MAIL_ENABLED=False, app.mailer.send_email()
+# tu bo qua trong im lang, khong lam hong job.
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = _env_int("SMTP_PORT", 587)
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", "").strip() or SMTP_USER
+MAIL_ENABLED = bool(SMTP_USER and SMTP_PASSWORD)
+# Dung de dung link that trong email (vd https://pnam1802--video-dubber-web.modal.run).
+# Rong thi email van gui duoc, chi thieu link bam thang toi job.
+APP_BASE_URL = os.getenv("APP_BASE_URL", "").strip().rstrip("/")
+
 # Database: mac dinh SQLite cho dev, production cam DATABASE_URL (Postgres).
 _raw_db_url = os.getenv("DATABASE_URL", "").strip()
 if _raw_db_url.startswith("postgres://"):

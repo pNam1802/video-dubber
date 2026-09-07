@@ -16,6 +16,7 @@ from urllib.parse import quote
 from flask import Flask
 
 from app.extensions import db
+from app.mailer import notify_job_status
 from app.models import Job, JobStatus, TranscriptSegment, utcnow
 from app.quota import estimate_cost
 from config.settings import JOB_RUNNER, MODAL_APP_NAME
@@ -213,6 +214,7 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
             job.message = f"Xử lý thất bại: {reason}"[:500]
             job.finished_at = utcnow()
             db.session.commit()
+            notify_job_status(job, "failed")
             _cleanup_upload(flask_app, Path(video_path))
             return
 
@@ -238,7 +240,13 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
                 job.message = "Xử lý thất bại: không lưu được transcript để duyệt."
                 job.finished_at = utcnow()
                 db.session.commit()
+                notify_job_status(job, "failed")
             _cleanup_upload(flask_app, Path(video_path))
+        else:
+            # Mốc quan trọng nhất để báo: không có gì tự chạy tiếp từ đây,
+            # job đứng yên vô thời hạn cho tới khi người dùng tự quay lại
+            # xác nhận — không báo thì họ không biết mà quay lại.
+            notify_job_status(job, "awaiting_review")
 
         # KHÔNG xoá video_path ở đây — giai đoạn 2 (run_job_phase2) còn cần
         # nó để ghép video, có thể diễn ra rất lâu sau khi người dùng duyệt.
@@ -284,6 +292,7 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
                 job.message = "Xử lý thất bại: không còn transcript để tạo giọng đọc."
                 job.finished_at = utcnow()
                 db.session.commit()
+                notify_job_status(job, "failed")
             _cleanup_upload(flask_app, Path(video_path))
             return
 
@@ -320,6 +329,7 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
             job.message = f"Xử lý thất bại: {reason}"[:500]
 
         db.session.commit()
+        notify_job_status(job, "done" if job.status == JobStatus.DONE else "failed")
 
         # KHÔNG ghi lại transcript ở đây: segments không đổi qua TTS, và dữ
         # liệu trong DB đã là bản mới nhất người dùng duyệt — ghi đè bằng

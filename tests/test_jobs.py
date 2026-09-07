@@ -479,6 +479,8 @@ def test_run_job_stops_at_awaiting_review_after_translate(app, user, monkeypatch
             return DubbingResult(success=True, source_language_detected="en", segments=[_fake_segment()])
 
     monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+    notified = []
+    monkeypatch.setattr(jobs_mod, "notify_job_status", lambda job, event: notified.append((job.id, event)))
 
     video_path = tmp_path / "video.mp4"
     video_path.write_bytes(b"fake")
@@ -491,6 +493,9 @@ def test_run_job_stops_at_awaiting_review_after_translate(app, user, monkeypatch
         assert job.segments.count() == 1
 
     assert video_path.exists()  # chưa bị xoá — giai đoạn 2 còn cần
+    # Mốc quan trọng nhất: job đứng yên vô thời hạn tới khi người dùng tự
+    # quay lại — không báo email thì họ không biết mà quay lại.
+    assert notified == [(job_id, "awaiting_review")]
 
 
 def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypatch, tmp_path):
@@ -511,6 +516,8 @@ def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypa
             return DubbingResult(success=True, output_video=tmp_path / "out.mp4")
 
     monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+    notified = []
+    monkeypatch.setattr(jobs_mod, "notify_job_status", lambda job, event: notified.append((job.id, event)))
 
     video_path = tmp_path / "video.mp4"
     video_path.write_bytes(b"fake")
@@ -534,6 +541,37 @@ def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypa
         assert job.elapsed_sec >= 10.0
 
     assert not video_path.exists()  # giai đoạn 2 là lần cuối cần tới file gốc
+    assert notified == [(job_id, "done")]
+
+
+def test_run_job_phase2_failure_sends_failed_notification(app, user, monkeypatch, tmp_path):
+    import app.jobs as jobs_mod
+    from app.models import TranscriptSegment
+    from core.pipeline import DubbingConfig, DubbingResult
+
+    class FakePipeline:
+        def __init__(self, config):
+            pass
+
+        def synthesize_and_compose(self, video_path, segments, progress_cb=None):
+            return DubbingResult(success=False, error="ffmpeg lỗi thật")
+
+    monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+    notified = []
+    monkeypatch.setattr(jobs_mod, "notify_job_status", lambda job, event: notified.append((job.id, event)))
+
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path)).id
+        db.session.add(TranscriptSegment(job_id=job_id, idx=0, start_sec=0.0, end_sec=1.0, text_source="Hello."))
+        db.session.commit()
+
+        jobs_mod.run_job_phase2(app, job_id, video_path, DubbingConfig())
+        assert db.session.get(Job, job_id).status == JobStatus.FAILED
+
+    assert notified == [(job_id, "failed")]
 
 
 def test_cancel_awaiting_review_job_deletes_kept_upload(app, user, tmp_path):
