@@ -139,6 +139,14 @@ class Job(db.Model):
     compose_sec = db.Column(db.Float, nullable=True)
     # Uoc tinh tu elapsed_sec, KHONG phai hoa don Modal (xem app/quota.py).
     estimated_cost_usd = db.Column(db.Float, nullable=True)
+    # Chi phi DICH THAT SU — tinh tu so token that API tra ve x gia cong bo
+    # (xem core/translator/llm_common.estimate_llm_cost()), khac han
+    # estimated_cost_usd o tren (chi la GPU-giay, khong lien quan API key).
+    # NULL o ca 3 cot nghia la CHUA BIET (model la, hoac job cu truoc khi co
+    # tinh nang nay) — khac 0.0 (that su mien phi), khong duoc danh dong.
+    translate_prompt_tokens = db.Column(db.Integer, nullable=True)
+    translate_completion_tokens = db.Column(db.Integer, nullable=True)
+    translate_cost_usd = db.Column(db.Float, nullable=True)
 
     # ── Modal (dùng từ Phase 2) ───────────────────────────────
     modal_call_id = db.Column(db.String(100), nullable=True, index=True)

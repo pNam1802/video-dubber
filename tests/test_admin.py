@@ -140,6 +140,25 @@ def test_stats_totals_and_breakdowns(as_admin, stats_data):
     assert "Modal" in data["note"]      # nhắc rằng đây là ước tính, không phải hoá đơn
 
 
+def test_stats_includes_real_translate_cost(app, as_admin, user):
+    """translate_cost_usd (tiền Gemini/OpenAI THẬT) phải tách riêng khỏi
+    estimated_cost_usd (GPU) — cả ở tổng và ở từng ngày, không được cộng
+    gộp hay bỏ sót vì đây đúng là chỗ đo lường bị thiếu dẫn tới sự cố
+    RESOURCE_EXHAUSTED không ai biết trước."""
+    with app.app_context():
+        make_job(
+            user, translator_engine="gemini", estimated_cost_usd=0.001,
+            translate_cost_usd=0.0123, translate_prompt_tokens=1000, translate_completion_tokens=400,
+        )
+        make_job(user, translator_engine="gemini", estimated_cost_usd=0.002, translate_cost_usd=0.0050)
+
+    data = as_admin.get("/api/admin/stats").get_json()
+    assert data["totals"]["translate_cost_usd"] == 0.0173
+    assert sum(d["translate_cost_usd"] for d in data["daily"]) == pytest.approx(0.0173)
+    # estimated_cost_usd (GPU) không bị lẫn với translate_cost_usd (API).
+    assert data["totals"]["estimated_cost_usd"] == pytest.approx(0.003)
+
+
 def test_config_never_leaks_key_values(as_admin):
     engines = as_admin.get("/api/admin/config").get_json()["engines"]
     assert engines["gemini"]["configured"] in (True, False)

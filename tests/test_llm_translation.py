@@ -15,7 +15,13 @@ from __future__ import annotations
 
 from core.transcriber import Segment
 from core.translator.gemini_translator import GeminiTranslator
-from core.translator.llm_common import build_batch_prompt, build_system_prompt, fill_batch_gaps, language_name
+from core.translator.llm_common import (
+    build_batch_prompt,
+    build_system_prompt,
+    estimate_llm_cost,
+    fill_batch_gaps,
+    language_name,
+)
 from core.translator.openai_translator import OpenAITranslator
 
 
@@ -188,3 +194,109 @@ def test_gemini_builds_prompt_for_chosen_target_language(monkeypatch):
 def test_openai_builds_prompt_for_chosen_target_language():
     translator = OpenAITranslator(api_key="test-key", source_language="en", target_language="zh")
     assert "tiếng Anh sang tiếng Trung" in translator._system_prompt()
+
+
+# ── Chi phí dịch thật: ghi lại đúng token đã dùng qua API ─────
+# (khác estimated_cost_usd trong DB, vốn chỉ ước lượng theo giây GPU —
+# xem core/translator/llm_common.estimate_llm_cost() và app/jobs.py)
+class _FakeGeminiUsage:
+    def __init__(self, prompt=10, candidates=5, thoughts=0):
+        self.prompt_token_count = prompt
+        self.candidates_token_count = candidates
+        self.thoughts_token_count = thoughts
+
+
+class _FakeGeminiResponse:
+    def __init__(self, text, usage=None):
+        self.text = text
+        self.usage_metadata = usage
+
+
+class _FakeGeminiModels:
+    def __init__(self, response):
+        self._response = response
+
+    def generate_content(self, **kwargs):
+        return self._response
+
+
+class _FakeGeminiClient:
+    def __init__(self, response):
+        self.models = _FakeGeminiModels(response)
+
+
+def test_gemini_records_real_token_usage():
+    translator = GeminiTranslator(api_key="test-key")
+    translator.client = _FakeGeminiClient(
+        _FakeGeminiResponse("Xin chào.", _FakeGeminiUsage(prompt=20, candidates=8, thoughts=3))
+    )
+    translator.translate_text("Hello.")
+    assert translator.usage_prompt_tokens == 20
+    # thoughts_token_count (bật "thinking") TÍNH TIỀN như output — bỏ sót
+    # thì chi phí tính ra thấp hơn hoá đơn thật.
+    assert translator.usage_completion_tokens == 8 + 3
+
+
+def test_gemini_missing_usage_metadata_does_not_crash():
+    """Response thiếu usage_metadata (edge case của SDK) không được làm
+    crash cả lượt dịch — chỉ đơn giản là không ghi được usage lần đó."""
+    translator = GeminiTranslator(api_key="test-key")
+    translator.client = _FakeGeminiClient(_FakeGeminiResponse("Xin chào.", usage=None))
+    result = translator.translate_text("Hello.")
+    assert result == "Xin chào."
+    assert translator.usage_prompt_tokens == 0
+
+
+class _FakeUsage:
+    def __init__(self, prompt_tokens, completion_tokens):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class _FakeOpenAICompletionsSingle:
+    def __init__(self, response):
+        self._response = response
+
+    def create(self, **kwargs):
+        return self._response
+
+
+class _FakeOpenAIClientSingle:
+    def __init__(self, response):
+        self.chat = type("Chat", (), {"completions": _FakeOpenAICompletionsSingle(response)})()
+
+
+def test_openai_records_real_token_usage():
+    translator = OpenAITranslator(api_key="test-key")
+    response = _FakeResponse("Xin chào.")
+    response.usage = _FakeUsage(prompt_tokens=15, completion_tokens=6)
+    translator.client = _FakeOpenAIClientSingle(response)
+    translator.translate_text("Hello.")
+    assert translator.usage_prompt_tokens == 15
+    assert translator.usage_completion_tokens == 6
+
+
+def test_openai_missing_usage_does_not_crash():
+    translator = OpenAITranslator(api_key="test-key")
+    translator.client = _FakeOpenAIClientSingle(_FakeResponse("Xin chào."))  # không set .usage
+    result = translator.translate_text("Hello.")
+    assert result == "Xin chào."
+    assert translator.usage_prompt_tokens == 0
+
+
+# ── estimate_llm_cost(): giá thật, không đoán mò model lạ ─────
+def test_estimate_llm_cost_known_model():
+    # gemini-3.6-flash: $0.75/1M input, $3.75/1M output (config/settings.py)
+    cost = estimate_llm_cost("gemini-3.6-flash", prompt_tokens=1_000_000, completion_tokens=1_000_000)
+    assert cost == 4.5
+
+
+def test_estimate_llm_cost_unknown_model_returns_none_not_zero():
+    """None (chưa biết giá) và 0.0 (thật sự miễn phí) là hai ý nghĩa khác
+    nhau — model lạ, không có trong bảng giá, phải là None. Trả 0.0 sẽ bị
+    hiểu nhầm thành "miễn phí", sai sự thật."""
+    assert estimate_llm_cost("some-model-not-in-pricing-table", 1000, 1000) is None
+
+
+def test_estimate_llm_cost_zero_tokens_is_zero_not_none():
+    assert estimate_llm_cost("gpt-4o-mini", 0, 0) == 0.0

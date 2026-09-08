@@ -146,6 +146,21 @@ QUOTA_STORAGE_MB = _env_int("QUOTA_STORAGE_MB", 2048)
 # Don gia GPU de uoc tinh chi phi moi job. Mac dinh theo T4 tren Modal.
 GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))
 
+# Gia LLM THAT (USD / 1 trieu token) — dung de tinh chi phi DICH thuc su,
+# khac han GPU_COST_PER_SECOND (tien Modal, khong lien quan gi den API
+# Gemini/OpenAI). Chot tu trang gia chinh thuc luc 08/09/2026, bac Standard:
+#   Gemini: https://ai.google.dev/gemini-api/docs/pricing
+#   OpenAI: https://developers.openai.com/api/docs/pricing
+# Gia doi theo thoi gian va theo tung model — sua o day khi nha cung cap
+# cong bo gia moi (vd gemini-3.6-flash tang gap doi tu 01/01/2027 theo
+# trang gia hien tai). Model khong co trong bang nay thi KHONG tinh duoc
+# chi phi that (ham tra ve None) — thay vi doan bay mot con so co the sai
+# va lam nguoi dung tin nham.
+LLM_PRICING_PER_MILLION_TOKENS: dict[str, dict[str, float]] = {
+	"gemini-3.6-flash": {"input": 0.75, "output": 3.75},
+	"gpt-4o-mini": {"input": 0.15, "output": 0.60},
+}
+
 # Rate limit. Bo nho trong tien trinh: moi container web dem rieng, nen day la
 # lop chan tho. Muon dem chung toan he thong thi can Redis (Phase 6).
 RATELIMIT_LOGIN = os.getenv("RATELIMIT_LOGIN", "10 per minute")

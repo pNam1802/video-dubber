@@ -31,6 +31,7 @@ class GeminiTranslator(BaseTranslator):
         source_language: str = "en",
         target_language: str = "vi",
     ):
+        super().__init__()
         if not api_key:
             raise ValueError("GEMINI_API_KEY chưa được thiết lập!")
         self.client = genai.Client(api_key=api_key)
@@ -67,6 +68,12 @@ class GeminiTranslator(BaseTranslator):
                     ),
                     what=what,
                 )
+                usage = getattr(response, "usage_metadata", None)
+                if usage is not None:
+                    # thoughts_token_count (khi bật "thinking") vẫn TÍNH TIỀN
+                    # như output — bỏ sót thì chi phí tính ra thấp hơn hoá đơn thật.
+                    output_tokens = (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+                    self._record_usage(usage.prompt_token_count, output_tokens)
                 return (response.text or "").strip()
             except Exception as exc:
                 if use_thinking:

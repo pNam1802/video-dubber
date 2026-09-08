@@ -649,6 +649,8 @@ def test_retranslate_segment_uses_edited_source(app, as_user, user, monkeypatch,
     class FakeTranslator:
         def __init__(self, **kwargs):
             self.kwargs = kwargs
+            self.usage_prompt_tokens = 12
+            self.usage_completion_tokens = 8
 
         def translate_text(self, text):
             return f"[dịch lại] {text}"
@@ -665,6 +667,13 @@ def test_retranslate_segment_uses_edited_source(app, as_user, user, monkeypatch,
     data = response.get_json()
     assert data["target"] == "[dịch lại] Corrected source."
     assert data["edited"] is True
+
+    # Lượt "dịch lại" là một cuộc gọi API THÊM — token dùng phải được cộng
+    # vào job, không phải bị bỏ qua (đây là đúng chi phí thật đã tốn).
+    with app.app_context():
+        job = db.session.get(Job, job_id)
+        assert job.translate_prompt_tokens == 12
+        assert job.translate_completion_tokens == 8
 
 
 def test_retranslate_segment_without_key_fails_clearly(app, as_user, user, tmp_path):

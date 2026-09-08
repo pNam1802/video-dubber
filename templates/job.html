@@ -219,7 +219,8 @@
       ('Số câu', job.segment_count or '—'),
       ('Thời gian xử lý', ('%.1f giây' % job.elapsed_sec) if job.elapsed_sec else '—'),
       ('Dung lượng gốc', ('%.1f MB' % (job.file_size / 1048576)) if job.file_size else '—'),
-      ('Chi phí ước tính', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
+      ('Chi phí GPU (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
+      ('Chi phí dịch (API)', ('$%.4f' % job.translate_cost_usd) if job.translate_cost_usd else '—'),
       ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
       ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
     ] %}

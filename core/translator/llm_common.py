@@ -8,10 +8,27 @@ import random
 import time
 from typing import Callable, Dict, List, TypeVar
 
-from config.settings import AI_PRESERVE_TERMS, LLM_MAX_RETRIES
+from config.settings import AI_PRESERVE_TERMS, LLM_MAX_RETRIES, LLM_PRICING_PER_MILLION_TOKENS
 from core.transcriber import Segment
 
 T = TypeVar("T")
+
+
+def estimate_llm_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+    """Chi phí THẬT của một lượt dịch, theo đúng giá công bố của nhà cung
+    cấp (config.settings.LLM_PRICING_PER_MILLION_TOKENS) — khác hẳn
+    app/quota.estimate_cost() vốn chỉ ước lượng theo thời gian GPU, không
+    liên quan gì tới tiền API Gemini/OpenAI thật sự tốn.
+
+    Trả về None (KHÔNG phải 0.0) khi model không có trong bảng giá: 0.0 dễ
+    bị hiểu nhầm là "miễn phí", trong khi sự thật là "chưa biết giá" — hai
+    ý nghĩa khác nhau, không được đánh đồng.
+    """
+    pricing = LLM_PRICING_PER_MILLION_TOKENS.get(model)
+    if pricing is None:
+        return None
+    cost = (prompt_tokens or 0) / 1_000_000 * pricing["input"] + (completion_tokens or 0) / 1_000_000 * pricing["output"]
+    return round(cost, 6)
 
 
 #: Tên hiển thị tiếng Việt cho từng mã ngôn ngữ — dùng để dựng câu lệnh cho

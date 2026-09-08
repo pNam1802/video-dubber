@@ -156,6 +156,10 @@ def stats():
         func.coalesce(func.sum(Job.elapsed_sec), 0.0),
         func.coalesce(func.sum(Job.estimated_cost_usd), 0.0),
         func.coalesce(func.avg(Job.elapsed_sec), 0.0),
+        # Chi phi dich THAT (khac dong tren, von chi la GPU-giay) — job cu
+        # hoac dung model la (khong co trong bang gia) co translate_cost_usd
+        # = NULL, SQL sum() tu bo qua NULL nen khong lech ket qua.
+        func.coalesce(func.sum(Job.translate_cost_usd), 0.0),
     ).one()
 
     by_status = dict(
@@ -173,6 +177,7 @@ def stats():
             func.date(Job.created_at).label("day"),
             func.count(Job.id),
             func.coalesce(func.sum(Job.estimated_cost_usd), 0.0),
+            func.coalesce(func.sum(Job.translate_cost_usd), 0.0),
         )
         .filter(Job.created_at >= since)
         .group_by("day")
@@ -260,6 +265,7 @@ def stats():
                 "gpu_seconds": round(float(totals[1]), 1),
                 "estimated_cost_usd": round(float(totals[2]), 4),
                 "avg_seconds_per_job": round(float(totals[3]), 1),
+                "translate_cost_usd": round(float(totals[4]), 4),
                 "success_rate": round(done / totals[0] * 100, 1) if totals[0] else 0.0,
                 "users": User.query.count(),
             },
@@ -280,16 +286,23 @@ def stats():
                 else None
             ),
             "daily": [
-                {"day": str(day), "jobs": count, "estimated_cost_usd": round(float(cost), 4)}
-                for day, count, cost in daily
+                {
+                    "day": str(day), "jobs": count,
+                    "estimated_cost_usd": round(float(cost), 4),
+                    "translate_cost_usd": round(float(translate_cost), 4),
+                }
+                for day, count, cost, translate_cost in daily
             ],
             "top_users": [
                 {"username": name, "jobs": count, "estimated_cost_usd": round(float(cost), 4)}
                 for name, count, cost in top_users
             ],
             "note": (
-                "estimated_cost_usd chỉ tính thời gian pipeline chạy. Hoá đơn Modal thực tế "
-                "cao hơn vì còn tính container nằm không, cold start, CPU, RAM và container web."
+                "estimated_cost_usd chỉ tính thời gian pipeline chạy (tiền GPU Modal). Hoá đơn Modal "
+                "thực tế cao hơn vì còn tính container nằm không, cold start, CPU, RAM và container web. "
+                "translate_cost_usd là chi phí Gemini/OpenAI THẬT (tính từ số token API trả về × giá "
+                "công bố) — model nào chưa có trong bảng giá thì không cộng vào được, số hiện ra sẽ "
+                "thấp hơn hoá đơn thật của nhà cung cấp."
             ),
         }
     )

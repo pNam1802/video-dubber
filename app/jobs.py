@@ -22,6 +22,7 @@ from app.quota import estimate_cost
 from config.settings import JOB_RUNNER, MODAL_APP_NAME
 from core.pipeline import DubbingConfig, DubbingPipeline
 from core.transcriber import Segment
+from core.translator.llm_common import estimate_llm_cost
 
 
 # ── Điều phối ────────────────────────────────────────────────────
@@ -203,6 +204,14 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
         job.translator_actual = result.translator_used or None
         job.elapsed_sec = result.elapsed_seconds
         job.estimated_cost_usd = estimate_cost(result.elapsed_seconds)
+        # Chi phi dich THAT (khac estimated_cost_usd o tren, von chi la GPU-
+        # giay) — None khi model khong co trong bang gia (xem config.settings.
+        # LLM_PRICING_PER_MILLION_TOKENS), khong doan bay mot con so co the sai.
+        job.translate_prompt_tokens = result.translate_prompt_tokens or None
+        job.translate_completion_tokens = result.translate_completion_tokens or None
+        job.translate_cost_usd = estimate_llm_cost(
+            result.translate_model, result.translate_prompt_tokens, result.translate_completion_tokens
+        )
 
         if not result.success:
             job.status = JobStatus.FAILED

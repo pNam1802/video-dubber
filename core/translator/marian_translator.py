@@ -37,6 +37,7 @@ class MarianTranslator(BaseTranslator):
         device: str = "auto",
         batch_size: int = 8,
     ):
+        super().__init__()
         requested_device = (device or "auto").strip().lower()
         if requested_device not in {"auto", "cuda", "cpu"}:
             raise ValueError(f"Unsupported device: {device}. Use one of: auto, cuda, cpu")

@@ -22,6 +22,12 @@ class FakeTranslator:
     def __init__(self, engine, calls):
         self.engine = engine
         self.calls = calls
+        self.model = f"fake-{engine}-model"
+        # So token gia lap — dung de test propagate dung sang DubbingResult/
+        # Job, khong phai so that (fake-*-model khong co trong bang gia nen
+        # estimate_llm_cost() se tra ve None, dung y).
+        self.usage_prompt_tokens = 100
+        self.usage_completion_tokens = 50
 
     def translate_segments(self, segments):
         self.calls.append(self.engine)
@@ -48,11 +54,14 @@ def segments():
 
 def test_api_failure_falls_back_to_other_engine(fake_translators):
     config = DubbingConfig(translator_engine="gemini", gemini_api_key="x", openai_api_key="y")
-    out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    out, used, fell_from, translator = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
 
     assert (used, fell_from) == ("openai", "gemini")
     assert fake_translators == ["gemini", "openai"]
     assert out[0].translated.startswith("Học tăng cường")
+    # translator trả về phải là engine THẬT SỰ đã dịch (openai), không phải
+    # lần thử gemini đã hỏng — nơi gọi dùng nó để tính chi phí thật.
+    assert translator.engine == "openai"
 
 
 def test_fallback_works_for_non_vietnamese_target_too(fake_translators):
@@ -63,7 +72,7 @@ def test_fallback_works_for_non_vietnamese_target_too(fake_translators):
     config = DubbingConfig(
         translator_engine="gemini", gemini_api_key="x", openai_api_key="y", target_language="ja"
     )
-    out, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    out, used, fell_from, _ = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
     assert (used, fell_from) == ("openai", "gemini")
 
 
@@ -78,7 +87,7 @@ def test_no_fallback_key_lets_error_surface(fake_translators):
 
 def test_openai_runs_without_fallback(fake_translators):
     config = DubbingConfig(translator_engine="openai", openai_api_key="y")
-    _, used, fell_from = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    _, used, fell_from, _ = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
     assert (used, fell_from) == ("openai", "")
     assert fake_translators == ["openai"]
 
@@ -163,6 +172,12 @@ def test_transcribe_and_translate_never_touches_tts_or_compose(fake_collaborator
     assert result.output_video is None
     assert result.segments[0].translated.startswith("Học tăng cường")
     assert set(result.timings) == {"extract", "transcribe", "translate"}
+    # Chi phí dịch thật phải theo tới DubbingResult — đây là dữ liệu duy nhất
+    # để tính translate_cost_usd sau này (xem app/jobs.py, core/translator/
+    # llm_common.estimate_llm_cost()).
+    assert result.translate_model == "fake-openai-model"
+    assert result.translate_prompt_tokens == 100
+    assert result.translate_completion_tokens == 50
 
 
 def test_synthesize_and_compose_does_not_retranslate(fake_collaborators, tmp_path):

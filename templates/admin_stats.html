@@ -13,9 +13,10 @@
 <div id="errorBox" class="hidden bg-error-container/20 border border-error/50 rounded-2xl p-md mb-lg font-body-md text-body-md text-error"></div>
 
 {# ── Ô số liệu ─────────────────────────────────────────── #}
-<div id="tiles" class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-lg">
+<div id="tiles" class="grid grid-cols-2 lg:grid-cols-7 gap-3 mb-lg">
   {% for key, label in [('jobs','Tổng job'), ('success_rate','Tỉ lệ thành công'), ('gpu_seconds','Giây GPU'),
-                        ('estimated_cost_usd','Chi phí ước tính'), ('avg_seconds_per_job','TB mỗi job'), ('users','Người dùng')] %}
+                        ('estimated_cost_usd','Chi phí GPU'), ('translate_cost_usd','Chi phí dịch (API)'),
+                        ('avg_seconds_per_job','TB mỗi job'), ('users','Người dùng')] %}
   <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-4 flex flex-col gap-1">
     <span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">{{ label }}</span>
     <span data-tile="{{ key }}" class="tabular text-headline-lg font-headline-lg text-on-surface">—</span>
@@ -182,6 +183,7 @@
         success_rate: totals.success_rate + "%",
         gpu_seconds: totals.gpu_seconds + "s",
         estimated_cost_usd: money(totals.estimated_cost_usd),
+        translate_cost_usd: money(totals.translate_cost_usd),
         avg_seconds_per_job: totals.avg_seconds_per_job + "s",
         users: totals.users
       };
@@ -213,10 +215,23 @@
             },
             {
               type: "line",
-              label: "Chi phí ước tính",
+              label: "Chi phí GPU",
               data: daily.map(function (d) { return d.estimated_cost_usd; }),
               borderColor: "#ffbfac",
               backgroundColor: "#ffbfac",
+              borderWidth: 2,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              tension: 0.3,
+              yAxisID: "y1",
+              order: 1
+            },
+            {
+              type: "line",
+              label: "Chi phí dịch (API)",
+              data: daily.map(function (d) { return d.translate_cost_usd; }),
+              borderColor: "#3987e5",
+              backgroundColor: "#3987e5",
               borderWidth: 2,
               pointRadius: 3,
               pointHoverRadius: 5,
@@ -235,6 +250,8 @@
             tooltip: {
               displayColors: true,
               callbacks: {
+                // Cột "Số job" (dataset 0) hiện đơn vị job; hai đường chi
+                // phí (GPU, API) đều ở dạng tiền $.
                 label: function (ctx) {
                   return ctx.datasetIndex === 0 ? ctx.parsed.y + " job" : money(ctx.parsed.y);
                 }

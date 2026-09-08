@@ -27,6 +27,7 @@ from config.settings import (
 )
 from core.pipeline import DubbingConfig
 from core.translator import get_translator
+from core.translator.llm_common import estimate_llm_cost
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -374,6 +375,16 @@ def retranslate_segment(job_id: int, seg_id: int):
         return jsonify({"error": f"Dịch lại thất bại: {exc}", "code": 502}), 502
 
     segment.edited = True
+
+    # Cộng dồn vào chi phí dịch đã ghi từ giai đoạn 1 — đây là lượt gọi API
+    # THÊM, không phải thay thế. added_cost=None (model lạ) thì bỏ qua,
+    # KHÔNG được ghi đè job.translate_cost_usd đã biết trước đó thành None.
+    added_cost = estimate_llm_cost(model, translator.usage_prompt_tokens, translator.usage_completion_tokens)
+    job.translate_prompt_tokens = (job.translate_prompt_tokens or 0) + translator.usage_prompt_tokens
+    job.translate_completion_tokens = (job.translate_completion_tokens or 0) + translator.usage_completion_tokens
+    if added_cost is not None:
+        job.translate_cost_usd = (job.translate_cost_usd or 0.0) + added_cost
+
     db.session.commit()
     return jsonify(segment.to_dict())
 

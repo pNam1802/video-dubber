@@ -68,6 +68,13 @@ class DubbingResult:
     translator_used: str = ""
     #: Engine ban dau, chi set khi da fallback.
     fallback_from: str = ""
+    #: Ten model THAT SU da dich (vd "gemini-3.6-flash") — dung de tra gia
+    #: dung dong trong LLM_PRICING_PER_MILLION_TOKENS. Rong = khong dich
+    #: qua API nao (vd job that bai truoc buoc dich).
+    translate_model: str = ""
+    #: So token that da dung qua API dich — xem core/translator/base.py.
+    translate_prompt_tokens: int = 0
+    translate_completion_tokens: int = 0
 
 
 ProgressCallback = Callable[[int, str], None]  # (percent, message)
@@ -95,8 +102,13 @@ class DubbingPipeline:
 
     def _translate(
         self, segments, cfg: "DubbingConfig", progress, source_language: str = "en"
-    ) -> tuple[list, str, str]:
+    ) -> tuple[list, str, str, object]:
         """Dịch, và lùi sang nhà cung cấp còn lại nếu API chính hỏng.
+
+        Trả thêm translator (phần tử thứ 4) để nơi gọi đọc được
+        usage_prompt_tokens/usage_completion_tokens/model — tính chi phí
+        dịch THẬT (xem core/translator/llm_common.estimate_llm_cost()),
+        khác hẳn ước lượng theo giây GPU vốn có sẵn từ trước.
 
         Trước đây lùi về MarianMT (chạy offline) khi Gemini/OpenAI hỏng —
         model đó đã bị khoá khỏi lựa chọn của người dùng (fine-tune riêng
@@ -125,7 +137,8 @@ class DubbingPipeline:
         other_key = cfg.openai_api_key if other == "openai" else cfg.gemini_api_key
 
         try:
-            return build(engine).translate_segments(segments), engine, ""
+            translator = build(engine)
+            return translator.translate_segments(segments), engine, "", translator
         except Exception as exc:
             # Không có key cho nhà cung cấp còn lại thì không có gì để lùi
             # về — để lỗi thật hiện ra còn hơn thử một engine chắc chắn hỏng.
@@ -133,7 +146,8 @@ class DubbingPipeline:
                 raise
             print(f"[Pipeline] {engine} lỗi ({exc}). Chuyển sang {other}.")
             progress(50, f"{engine} gặp lỗi, đang chuyển sang {other}...")
-            return build(other).translate_segments(segments), other, engine
+            translator = build(other)
+            return translator.translate_segments(segments), other, engine, translator
 
     @staticmethod
     def _progress_fn(progress_cb: Optional[ProgressCallback]) -> Callable[[int, str], None]:
@@ -194,10 +208,19 @@ class DubbingPipeline:
             # ── Bước 3: Dịch ───────────────────────────────────────────
             _progress(45, "Đang dịch...")
             step_started = time.time()
-            segments, result.translator_used, result.fallback_from = self._translate(
+            segments, result.translator_used, result.fallback_from, translator = self._translate(
                 segments, cfg, _progress, source_language=result.source_language_detected
             )
             result.timings["translate"] = round(time.time() - step_started, 2)
+            result.translate_model = getattr(translator, "model", "") or ""
+            # MarianTranslator.model KHÔNG phải chuỗi tên model (là object
+            # PyTorch đã nạp) — chỉ Gemini/OpenAI mới có .model dạng chuỗi,
+            # đường dẫn duy nhất _translate() thực sự đi qua từ khi MarianMT
+            # bị khoá khỏi lựa chọn của người dùng.
+            if not isinstance(result.translate_model, str):
+                result.translate_model = ""
+            result.translate_prompt_tokens = getattr(translator, "usage_prompt_tokens", 0)
+            result.translate_completion_tokens = getattr(translator, "usage_completion_tokens", 0)
             _progress(65, "Dịch hoàn tất, đang chờ duyệt.")
 
             result.segments = segments

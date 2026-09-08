@@ -30,6 +30,7 @@ class OpenAITranslator(BaseTranslator):
         source_language: str = "en",
         target_language: str = "vi",
     ):
+        super().__init__()
         if not api_key:
             raise ValueError("OPENAI_API_KEY chưa được thiết lập!")
         self.client = OpenAI(api_key=api_key)
@@ -44,6 +45,11 @@ class OpenAITranslator(BaseTranslator):
 
     def _system_prompt(self) -> str:
         return build_system_prompt(self.source_language, self.target_language)
+
+    def _record_response_usage(self, response) -> None:
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self._record_usage(usage.prompt_tokens, usage.completion_tokens)
 
     def translate_text(self, text: str) -> str:
         """Dịch một đoạn văn ngắn."""
@@ -62,6 +68,7 @@ class OpenAITranslator(BaseTranslator):
             ),
             what="OpenAI",
         )
+        self._record_response_usage(response)
         translated = response.choices[0].message.content.strip()
         self._cache[text] = translated
         return translated
@@ -96,6 +103,7 @@ class OpenAITranslator(BaseTranslator):
                 ),
                 what=f"OpenAI batch {i // batch_size + 1}",
             )
+            self._record_response_usage(response)
 
             raw = response.choices[0].message.content.strip()
             parts = parse_numbered_lines(raw)

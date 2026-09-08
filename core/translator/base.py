@@ -7,6 +7,18 @@ from core.transcriber import Segment
 
 
 class BaseTranslator(ABC):
+	def __init__(self) -> None:
+		# So token THAT SU da dung qua API — engine khong goi API (MarianMT
+		# chay local) thi giu nguyen 0. Cac subclass tu ghi lai bang
+		# _record_usage() sau moi lan goi. Dung de tinh chi phi dich that,
+		# xem core/translator/llm_common.estimate_llm_cost().
+		self.usage_prompt_tokens: int = 0
+		self.usage_completion_tokens: int = 0
+
+	def _record_usage(self, prompt_tokens: int | None, completion_tokens: int | None) -> None:
+		self.usage_prompt_tokens += prompt_tokens or 0
+		self.usage_completion_tokens += completion_tokens or 0
+
 	@property
 	@abstractmethod
 	def name(self) -> str:
