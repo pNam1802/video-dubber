@@ -925,3 +925,33 @@ def test_upload_gemini_voice_without_server_key_is_rejected(app, as_user, monkey
     monkeypatch.setattr(api_mod, "GEMINI_API_KEY", "")
     response, _ = _upload_and_capture_config(as_user, monkeypatch, tts_engine="gemini")
     assert response.status_code == 400
+
+
+# ── Tên hiển thị / tên file tải về: tên video gốc, không phải uuid ──
+def test_recent_outputs_show_original_name_not_uuid(app, as_user, user):
+    """Bug thật: khối "Gần đây" ở trang chủ hiện tên file trên đĩa
+    ("77022eca…_What_is_a_GIS-_dubbed.mp4") — người dùng không nhận ra video."""
+    with app.app_context():
+        make_job(user, status=JobStatus.DONE, source_filename="What is a GIS?.mp4",
+                 video_name="77022eca903849b4b085aaca504ccc00_What_is_a_GIS-_dubbed.mp4",
+                 video_url="/media/output/77022eca903849b4b085aaca504ccc00_What_is_a_GIS-_dubbed.mp4")
+    body = as_user.get("/").get_data(as_text=True)
+    recent = body[body.index("Gần đây"):]
+    assert "What is a GIS?.mp4" in recent
+    assert ">77022eca" not in recent
+    assert 'download="What is a GIS? (lồng tiếng).mp4"' in recent
+
+
+def test_download_names_use_source_filename(app, user):
+    with app.app_context():
+        job = db.session.get(Job, make_job(user, source_filename="Chap 6 -- Zombie.mp4").id)
+        assert job.download_video_name == "Chap 6 -- Zombie (lồng tiếng).mp4"
+        assert job.download_srt_name == "Chap 6 -- Zombie (phụ đề).srt"
+        assert job.to_list_dict()["download_video_name"] == "Chap 6 -- Zombie (lồng tiếng).mp4"
+
+
+def test_download_names_fall_back_to_job_id(app, user):
+    with app.app_context():
+        job = db.session.get(Job, make_job(user, source_filename=None).id)
+        assert job.display_name == f"Job #{job.id}"
+        assert job.download_video_name == f"job-{job.id} (lồng tiếng).mp4"

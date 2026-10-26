@@ -204,8 +204,8 @@
             (job.estimated_cost_usd ? "$" + job.estimated_cost_usd.toFixed(4) : "—") + "</td>" +
           '<td class="px-4 py-3 tabular text-on-surface-variant">' + formatDate(job.created_at) + "</td>" +
           '<td class="px-4 py-3 text-right whitespace-nowrap">' +
-            (job.video_url ? '<a href="' + job.video_url + '" download class="inline-flex text-on-surface-variant hover:text-primary p-1" title="Tải video"><span class="material-symbols-outlined text-[18px]">download</span></a>' : "") +
-            (job.srt_url ? '<a href="' + job.srt_url + '" download class="inline-flex text-on-surface-variant hover:text-primary p-1" title="Tải phụ đề"><span class="material-symbols-outlined text-[18px]">subtitles</span></a>' : "") +
+            (job.video_url ? '<a href="' + job.video_url + '" download="' + escapeHtml(job.download_video_name) + '" class="inline-flex text-on-surface-variant hover:text-primary p-1" title="Tải video"><span class="material-symbols-outlined text-[18px]">download</span></a>' : "") +
+            (job.srt_url ? '<a href="' + job.srt_url + '" download="' + escapeHtml(job.download_srt_name) + '" class="inline-flex text-on-surface-variant hover:text-primary p-1" title="Tải phụ đề"><span class="material-symbols-outlined text-[18px]">subtitles</span></a>' : "") +
             '<button type="button" data-delete="' + job.id + '" class="inline-flex text-on-surface-variant hover:text-error p-1" title="Xoá"><span class="material-symbols-outlined text-[18px]">delete</span></button>' +
           "</td></tr>";
       }).join("");

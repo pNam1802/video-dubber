@@ -342,9 +342,16 @@
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for item in outputs %}
     <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-4 flex flex-col gap-2">
-      <span class="font-body-md text-body-md text-on-surface truncate" title="{{ item.video_name }}">{{ item.video_name }}</span>
-      <a href="{{ url_for('main.job_detail', job_id=item.id) }}"
-        class="text-primary font-label-sm text-label-sm uppercase tracking-wider">Xem chi tiết</a>
+      <span class="font-body-md text-body-md text-on-surface truncate" title="{{ item.display_name }}">{{ item.display_name }}</span>
+      <span class="font-label-sm text-label-sm text-on-surface-variant tabular" data-local-time="{{ item.created_at or '' }}"></span>
+      <div class="flex items-center gap-4">
+        <a href="{{ url_for('main.job_detail', job_id=item.id) }}"
+          class="text-primary font-label-sm text-label-sm uppercase tracking-wider">Xem chi tiết</a>
+        {% if item.video_url %}
+        <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
+          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider">Tải video</a>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>
@@ -613,6 +620,15 @@
       });
     }
     ttsEngineSelect.addEventListener("change", syncVoices);
+
+    // Thời điểm tạo job: máy chủ gửi ISO UTC, hiển thị theo giờ của người xem.
+    document.querySelectorAll("[data-local-time]").forEach(function (el) {
+      if (!el.dataset.localTime) return;
+      const d = new Date(el.dataset.localTime);
+      const pad = function (n) { return String(n).padStart(2, "0"); };
+      el.textContent = pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear() +
+        " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    });
 
     paintPresets("balanced");
     syncEngineHint();

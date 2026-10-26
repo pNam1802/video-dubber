@@ -5,6 +5,7 @@ Trang chính, phục vụ file kết quả và healthcheck.
 from __future__ import annotations
 
 import shutil
+from datetime import timezone
 
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
@@ -33,6 +34,16 @@ from config.settings import (
 bp = Blueprint("main", __name__)
 
 
+def _utc_iso(value) -> str | None:
+    """SQLite trả datetime không múi giờ (dù lưu UTC); thiếu múi giờ thì
+    trình duyệt hiểu nhầm là giờ địa phương."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
 def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
     jobs = (
         Job.query.filter_by(user_id=current_user.id, status=JobStatus.DONE)
@@ -43,11 +54,12 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
     return [
         {
             "id": job.id,
-            "video_name": job.video_name,
+            "display_name": job.display_name,
             "video_url": job.video_url,
-            "srt_name": job.srt_name,
-            "srt_url": job.srt_url,
-            "source_filename": job.source_filename,
+            "download_video_name": job.download_video_name,
+            # ISO có múi giờ (UTC) — trình duyệt tự đổi sang giờ của người xem.
+            "created_at": _utc_iso(job.created_at),
+            "target_language": job.target_language,
         }
         for job in jobs
     ]

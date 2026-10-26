@@ -6,6 +6,7 @@ không còn dict trong RAM, nên restart server không làm mất job.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import PurePath
 from typing import Any
 
 from flask_login import UserMixin
@@ -160,6 +161,26 @@ class Job(db.Model):
     def is_finished(self) -> bool:
         return self.status not in JobStatus.OPEN
 
+    # File trên đĩa mang tiền tố uuid (vd "77022eca…_What_is_a_GIS_dubbed.mp4")
+    # để hai người upload trùng tên không ghi đè nhau — tên đó KHÔNG dành cho
+    # người xem. Hiển thị và tải về luôn dùng tên video gốc của người dùng.
+    @property
+    def display_name(self) -> str:
+        return self.source_filename or f"Job #{self.id}"
+
+    @property
+    def _download_stem(self) -> str:
+        stem = PurePath(self.source_filename or "").stem.strip()
+        return stem or f"job-{self.id}"
+
+    @property
+    def download_video_name(self) -> str:
+        return f"{self._download_stem} (lồng tiếng).mp4"
+
+    @property
+    def download_srt_name(self) -> str:
+        return f"{self._download_stem} (phụ đề).srt"
+
     def to_list_dict(self) -> dict[str, Any]:
         """Payload gọn cho bảng lịch sử — không kèm thời gian từng bước."""
         return {
@@ -176,6 +197,8 @@ class Job(db.Model):
             "file_size": self.file_size,
             "video_url": self.video_url,
             "srt_url": self.srt_url,
+            "download_video_name": self.download_video_name,
+            "download_srt_name": self.download_srt_name,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
