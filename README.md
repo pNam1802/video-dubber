@@ -27,14 +27,20 @@ mạch kiểu video review trên TikTok, có thể chọn giọng miễn phí ho
 ### So sánh giọng đọc
 
 Cùng một đoạn 2,5 phút, dịch bằng DeepSeek, xếp giọng liền mạch — chỉ khác giọng đọc
-(mỗi job dịch riêng nên câu chữ có thể lệch nhau đôi chút):
+(mỗi job dịch riêng nên câu chữ có thể lệch nhau đôi chút). Xem bản gốc tiếng Anh trước để
+so sánh:
 
 | Video | Giọng | Khoảng lặng ≥ 0,8 giây | Chi phí giọng đọc |
 |---|---|---|---|
+| [0_Goc_tieng_Anh.mp4](demo/voices/0_Goc_tieng_Anh.mp4) | **Bản gốc tiếng Anh** | — | — |
 | [1_Gemini_Leda_nu.mp4](demo/voices/1_Gemini_Leda_nu.mp4) | Gemini Leda (nữ) | 0 | ≈ $0,035 |
 | [2_Gemini_Charon_nam.mp4](demo/voices/2_Gemini_Charon_nam.mp4) | Gemini Charon (nam) | 4 | ≈ $0,033 |
 | [3_Edge_HoaiMy_nu.mp4](demo/voices/3_Edge_HoaiMy_nu.mp4) | edge-tts HoaiMy (nữ) | 2 | Miễn phí |
 | [4_Edge_Florian_nam.mp4](demo/voices/4_Edge_Florian_nam.mp4) | edge-tts Florian (nam) | 4 | Miễn phí |
+
+#### Bản gốc (tiếng Anh)
+
+[▶ Xem video gốc](demo/voices/0_Goc_tieng_Anh.mp4)
 
 #### Gemini Leda (nữ)
 
@@ -121,11 +127,17 @@ Hai thứ quyết định bản lồng tiếng nghe có "TikTok" hay không: đ�
 
 | Công cụ | Giọng | Chi phí | Ghi chú |
 |---|---|---|---|
-| edge-tts (mặc định) | HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam) | Miễn phí | Vivienne/Seraphina/Florian là giọng *Multilingual* đọc được tiếng Việt |
+| **VieNeu-TTS** (mặc định, [mã nguồn mở Apache 2.0](https://github.com/pnnbao97/VieNeu-TTS)) | **Nora** (nữ, mặc định), Ngọc Huyền, Quỳnh Anh, Mỹ Duyên, Kim Thanh (nữ), Thiện Minh, Đức Trí (nam), **Giọng của bạn** (clone) | Miễn phí (chỉ tốn GPU ≈ $0,01 / video) | Chạy trên GPU T4 riêng (`VoiceCloner`), đọc cả video trong một lượt: ≈ 25 giây cho 10 phút giọng đọc. Âm thanh có watermark AI |
+| edge-tts | HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam) | Miễn phí | Vivienne/Seraphina/Florian là giọng *Multilingual* đọc được tiếng Việt |
 | Gemini TTS (`gemini-3.8-flash-lite-tts`) | Leda (nữ), Charon (nam) | ≈ $0,09 / 10 phút giọng đọc (giá tới hết 2026) | Có cảm xúc theo chỉ dẫn `GEMINI_TTS_STYLE`; giới hạn 10 request/phút ở Tier 1 |
 | gTTS | — | Miễn phí | Dự phòng cuối cùng |
 
-Gemini lỗi thì câu đó rơi về edge-tts HoaiMy, rồi gTTS.
+Gemini hoặc VieNeu lỗi thì câu đó rơi về edge-tts HoaiMy, rồi gTTS.
+
+**Clone giọng:** vào **Cài đặt → Giọng của bạn**, tải lên 3–15 giây ghi âm (đọc rõ, không nhạc
+nền) và xác nhận đó là giọng của bạn hoặc đã được chủ giọng đồng ý. Sau đó chọn VieNeu → "Giọng
+của bạn" khi tạo bản lồng tiếng. Giọng mặc định **Nora** cũng là giọng clone, từ một đoạn giọng do
+chính VieNeu tạo ra ([`core/voices/nora.wav`](core/voices/nora.wav)), không phải giọng người thật.
 
 ## Công nghệ
 
@@ -150,7 +162,8 @@ Gemini lỗi thì câu đó rơi về edge-tts HoaiMy, rồi gTTS.
 	core/               pipeline lồng tiếng (không phụ thuộc Flask)
 	  transcriber.py    Whisper + tách câu theo mốc thời gian từng từ
 	  translator/       DeepSeek, Gemini, OpenAI (dùng chung llm_common.py)
-	  tts_engine.py     edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
+	  tts_engine.py     VieNeu, edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
+	  vieneu_client.py  gọi VieNeu-TTS (container GPU VoiceCloner trên Modal)
 	  voice_timeline.py xếp giọng đọc liền mạch lên dòng thời gian
 	  video_composer.py trộn giọng vào video bằng ffmpeg
 	demo/               video demo (xem mục Demo)

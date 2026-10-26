@@ -91,6 +91,8 @@ def upload_video():
     tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
     if tts_engine == "gemini" and not GEMINI_API_KEY:
         return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
+    if tts_voice == "mine" and not current_user.has_voice_sample:
+        return jsonify({"error": "Bạn chưa tải giọng mẫu — vào Cài đặt để thêm giọng của bạn."}), 400
     subtitle_mode = _pick("subtitle_mode", ALLOWED_SUBTITLE_MODES, "bilingual")
 
     try:
@@ -417,6 +419,16 @@ def continue_after_review(job_id: int):
         return jsonify({"error": "Job không ở trạng thái chờ duyệt.", "code": 409}), 409
     if not job.segments.count():
         return jsonify({"error": "Không còn transcript để tạo giọng đọc.", "code": 409}), 409
+    # Giọng clone đọc file mẫu ở THỜI ĐIỂM tạo giọng — người dùng đã xoá nó
+    # sau khi tạo job thì báo ngay, đừng để giai đoạn 2 lặng lẽ đọc giọng khác.
+    ref_audio = None
+    if job.tts_engine == "vieneu" and job.tts_voice == "mine":
+        if not current_user.has_voice_sample:
+            return jsonify({
+                "error": "Giọng mẫu của bạn đã bị xoá — tải lại ở Cài đặt rồi xác nhận lại.",
+                "code": 409,
+            }), 409
+        ref_audio = str(current_user.voice_sample_path)
 
     # Chuyển trạng thái NGAY trong request này — tránh bấm "xác nhận" nhiều
     # lần liên tiếp spawn trùng giai đoạn 2 trước khi trạng thái kịp đổi
@@ -431,6 +443,7 @@ def continue_after_review(job_id: int):
         translator_engine=job.translator_engine or "gemini",
         tts_engine=job.tts_engine or "edge-tts",
         tts_voice=job.tts_voice or "female",
+        tts_ref_audio=ref_audio,
         original_volume=job.original_volume if job.original_volume is not None else 0.1,
         subtitle_mode=job.subtitle_mode or "bilingual",
         target_language=job.target_language,

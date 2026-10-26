@@ -95,7 +95,31 @@ TTS_VOICES: dict[str, dict[str, str]] = {
 	"gtts": {
 		"female": "vi",
 	},
+	# VieNeu-TTS (ma nguon mo, Apache 2.0 — github.com/pnnbao97/VieNeu-TTS):
+	# chay tren GPU rieng (modal_app.py::VoiceCloner), ~25 giay cho 10 phut
+	# giong doc (do that 26/10/2026 tren T4). Ten bat dau bang "@" la giong
+	# CLONE tu file mau, con lai la giong co san cua VieNeu.
+	"vieneu": {
+		"female": "@nora",          # giong mac dinh cua Nora, xem NORA_VOICE_REF
+		"ngochuyen": "Ngọc Huyền",
+		"quynhanh": "Quỳnh Anh",
+		"myduyen": "Mỹ Duyên",
+		"kimthanh": "Kim Thanh",
+		"male": "Thiện Minh",
+		"ductri": "Đức Trí",
+		"mine": "@user",            # giong nguoi dung tu tai len (VOICE_SAMPLE_DIR)
+	},
 }
+
+# File mau cua giong mac dinh "Nora": VieNeu clone tu mot doan giong do chinh
+# VieNeu tao ra (khong phai giong nguoi that).
+NORA_VOICE_REF = ROOT_DIR / "core" / "voices" / "nora.wav"
+# Giong mau nguoi dung tai len de clone: moi nguoi mot file
+# voices/user_<id>.wav tren volume du lieu.
+VOICE_SAMPLE_DIR = DATA_DIR / "voices"
+VOICE_SAMPLE_MIN_SEC = 3.0
+VOICE_SAMPLE_MAX_SEC = 15.0   # VieNeu chi can 3-8 giay; dai hon thi cat bot
+VOICE_SAMPLE_MAX_MB = 10
 
 # DeepSeek dung API tuong thich OpenAI — xem core/translator/deepseek_translator.py.
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()

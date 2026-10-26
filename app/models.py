@@ -6,12 +6,13 @@ không còn dict trong RAM, nên restart server không làm mất job.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from typing import Any
 
 from flask_login import UserMixin
 
 from app.extensions import db
+from config.settings import VOICE_SAMPLE_DIR
 
 
 def utcnow() -> datetime:
@@ -65,6 +66,10 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     # None = dung han muc mac dinh trong settings; admin co the dat rieng.
     quota_jobs_per_day = db.Column(db.Integer, nullable=True)
+    # Luc nguoi dung tai giong mau len VA xac nhan do la giong cua ho (hoac
+    # da duoc chu giong dong y). None = chua co giong clone. File nam o
+    # voice_sample_path.
+    voice_sample_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     jobs = db.relationship("Job", backref="user", lazy=True, cascade="all, delete-orphan")
 
@@ -75,6 +80,14 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self) -> bool:
         return self.role == Role.ADMIN
+
+    @property
+    def voice_sample_path(self) -> Path:
+        return VOICE_SAMPLE_DIR / f"user_{self.id}.wav"
+
+    @property
+    def has_voice_sample(self) -> bool:
+        return self.voice_sample_at is not None
 
     def __repr__(self) -> str:
         return f"<User {self.username} ({self.role})>"

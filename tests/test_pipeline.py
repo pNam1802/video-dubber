@@ -118,7 +118,7 @@ class FakeTranscriber:
 
 
 class FakeTTS:
-    def __init__(self, engine="edge-tts", voice="female", tts_dir=None):
+    def __init__(self, engine="edge-tts", voice="female", tts_dir=None, ref_audio=None):
         self.tts_dir = Path(tts_dir)
 
     def synthesize_all(self, segs):

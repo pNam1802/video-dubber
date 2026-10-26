@@ -18,6 +18,7 @@ from app.models import Job, JobStatus
 from app.permissions import require_admin_page
 from app.quota import get_usage
 from app.storage import refresh_outputs
+from app.voices import VoiceSampleError, delete_voice_sample, save_voice_sample
 from config.settings import (
     FFMPEG_BIN,
     MAX_UPLOAD_MB,
@@ -30,6 +31,9 @@ from config.settings import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     OUTPUT_DIR,
+    VOICE_SAMPLE_MAX_MB,
+    VOICE_SAMPLE_MAX_SEC,
+    VOICE_SAMPLE_MIN_SEC,
 )
 
 bp = Blueprint("main", __name__)
@@ -66,6 +70,15 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
     ]
 
 
+def _tts_voice_keys() -> dict[str, list[str]]:
+    """Giọng chọn được theo từng engine. "Giọng của bạn" chỉ hiện khi người
+    dùng đã tải giọng mẫu lên ở trang cài đặt."""
+    keys = {engine: list(voices) for engine, voices in TTS_VOICES.items()}
+    if not current_user.has_voice_sample:
+        keys["vieneu"] = [k for k in keys["vieneu"] if k != "mine"]
+    return keys
+
+
 # Video mẫu cho landing page — cũng là video nhúng trong README.
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "voices"
 
@@ -84,7 +97,7 @@ def index():
         deepseek_key_exists=bool(DEEPSEEK_API_KEY),
         default_deepseek_model=DEEPSEEK_MODEL,
         gemini_key_exists=bool(GEMINI_API_KEY),
-        tts_voice_keys={engine: list(voices) for engine, voices in TTS_VOICES.items()},
+        tts_voice_keys=_tts_voice_keys(),
         default_gemini_model=GEMINI_MODEL,
         usage=get_usage(current_user).as_dict(),
         max_upload_mb=MAX_UPLOAD_MB,
@@ -124,13 +137,68 @@ def account_settings():
             email = request.form.get("email", "").strip()
             if email and "@" not in email:
                 flash("Email không hợp lệ.", "danger")
-                return render_template("account_settings.html")
+                return _render_settings()
             current_user.email = email or None
             current_user.notify_email = "notify_email" in request.form
         db.session.commit()
         flash("Đã lưu cài đặt.", "success")
         return redirect(url_for("main.account_settings"))
-    return render_template("account_settings.html")
+    return _render_settings()
+
+
+def _render_settings():
+    return render_template(
+        "account_settings.html",
+        voice_min_sec=VOICE_SAMPLE_MIN_SEC,
+        voice_max_sec=VOICE_SAMPLE_MAX_SEC,
+        voice_max_mb=VOICE_SAMPLE_MAX_MB,
+    )
+
+
+@bp.post("/cai-dat/giong")
+@login_required
+def upload_voice_sample():
+    """Tải giọng mẫu để clone. Bắt buộc xác nhận quyền dùng giọng: VieNeu
+    (Apache 2.0) để trách nhiệm clone cho người dùng, và không được clone
+    giọng người khác khi chưa có sự đồng ý."""
+    if (request.content_length or 0) > VOICE_SAMPLE_MAX_MB * 1024 * 1024:
+        flash(f"File quá lớn — tối đa {VOICE_SAMPLE_MAX_MB} MB.", "danger")
+        return redirect(url_for("main.account_settings"))
+    if "voice_consent" not in request.form:
+        flash("Bạn cần xác nhận đây là giọng của bạn hoặc đã được chủ giọng đồng ý.", "danger")
+        return redirect(url_for("main.account_settings"))
+    upload = request.files.get("voice_sample")
+    if not upload or not upload.filename:
+        flash("Vui lòng chọn file giọng mẫu.", "danger")
+        return redirect(url_for("main.account_settings"))
+    try:
+        seconds = save_voice_sample(current_user, upload)
+    except VoiceSampleError as exc:
+        flash(str(exc), "danger")
+        return redirect(url_for("main.account_settings"))
+    flash(f"Đã lưu giọng mẫu ({seconds:.1f} giây). Chọn \"Giọng của bạn\" khi tạo bản lồng tiếng.", "success")
+    return redirect(url_for("main.account_settings"))
+
+
+@bp.get("/cai-dat/giong.wav")
+@login_required
+def voice_sample_audio():
+    path = current_user.voice_sample_path
+    if not current_user.has_voice_sample:
+        abort(404)
+    if not path.exists():
+        refresh_outputs()
+    if not path.exists():
+        abort(404)
+    return send_from_directory(path.parent, path.name, max_age=0)
+
+
+@bp.post("/cai-dat/giong/xoa")
+@login_required
+def remove_voice_sample():
+    delete_voice_sample(current_user)
+    flash("Đã xoá giọng mẫu.", "success")
+    return redirect(url_for("main.account_settings"))
 
 
 @bp.get("/quan-tri/thong-ke")

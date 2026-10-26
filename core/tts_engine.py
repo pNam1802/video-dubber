@@ -27,6 +27,7 @@ from config.settings import (
 	GEMINI_API_KEY,
 	GEMINI_TTS_MODEL,
 	GEMINI_TTS_STYLE,
+	NORA_VOICE_REF,
 	TEMP_DIR,
 	TTS_CONCURRENCY,
 	TTS_VOICES,
@@ -43,7 +44,7 @@ _EDGE_BACKOFF = 1.0
 
 
 class TTSEngine:
-	"""Vietnamese text-to-speech wrapper for edge-tts, Gemini TTS and gTTS."""
+	"""Vietnamese text-to-speech wrapper for edge-tts, Gemini TTS, VieNeu-TTS and gTTS."""
 
 	def __init__(
 		self,
@@ -51,6 +52,7 @@ class TTSEngine:
 		voice: str = "female",
 		tts_dir: str | Path | None = None,
 		concurrency: int | None = None,
+		ref_audio: str | Path | None = None,
 	):
 		self.engine = (engine or "edge-tts").strip().lower()
 		self.voice = voice
@@ -68,6 +70,12 @@ class TTSEngine:
 		self._gemini_lock = threading.Lock()
 		#: Token âm thanh Gemini đã dùng — để ghi log chi phí thật.
 		self.gemini_audio_tokens = 0
+		#: Giọng mẫu người dùng tải lên (giọng "mine" của VieNeu).
+		self.ref_audio = Path(ref_audio) if ref_audio else None
+		# VieNeu đọc cả lô một lần (xem _prefetch_vieneu); mỗi câu lấy kết quả
+		# ra khỏi đây đúng một lần, lần thử lại thì gọi riêng câu đó.
+		self._vieneu_cache: dict[str, list[bytes]] = {}
+		self._vieneu_down = False
 
 	def synthesize_all(self, segments: List[Segment]) -> List[tuple]:
 		"""Return list of (segment, path) pairs — only for successfully synthesized segments.
@@ -85,6 +93,8 @@ class TTSEngine:
 		valid_segments = len(tasks)
 		results: List[tuple] = []
 		error_samples: list[str] = []
+		if self.engine == "vieneu" and tasks:
+			self._prefetch_vieneu([text for _, _, text in tasks])
 
 		if tasks:
 			workers = min(self.concurrency, len(tasks))
@@ -123,8 +133,8 @@ class TTSEngine:
 		except Exception as exc:
 			# Fallback to gTTS for non-gTTS engines
 			if self.engine != "gtts":
-				# Gemini lỗi thì thử edge-tts trước (giọng tốt hơn gTTS nhiều).
-				fallbacks = (["edge-tts"] if self.engine == "gemini" else []) + ["gtts"]
+				# Gemini/VieNeu lỗi thì thử edge-tts trước (giọng tốt hơn gTTS nhiều).
+				fallbacks = (["edge-tts"] if self.engine in ("gemini", "vieneu") else []) + ["gtts"]
 				err_msg = f"segment {idx}: {exc}"
 				for fallback in fallbacks:
 					try:
@@ -222,7 +232,7 @@ class TTSEngine:
 			if self.engine == "edge-tts":
 				self._synthesize_checked(text, tmp, speed=speed)
 			else:
-				# Gemini/gTTS không có tham số tốc độ chính xác: chỉnh bằng atempo
+				# Gemini/VieNeu/gTTS không có tham số tốc độ chính xác: chỉnh bằng atempo
 				# trên bản đã có, KHÔNG gọi API lần nữa — đỡ tốn tiền, và giữ
 				# nguyên ngữ điệu (gọi lại thì Gemini đọc mỗi lần một kiểu).
 				shutil.copy(path, tmp)
@@ -280,9 +290,11 @@ class TTSEngine:
 		if self.engine == "edge-tts":
 			self._synthesize_edge(text, output_path, speed=speed)
 			return output_path
-		if self.engine in ("gtts", "gemini"):
+		if self.engine in ("gtts", "gemini", "vieneu"):
 			if self.engine == "gtts":
 				self._synthesize_gtts(text, output_path)
+			elif self.engine == "vieneu":
+				self._synthesize_vieneu(text, output_path)
 			else:
 				self._synthesize_gemini(text, output_path)
 			if abs(speed - 1.0) > 1e-3:
@@ -331,6 +343,49 @@ class TTSEngine:
 			if str(getattr(item, "modality", "")).lower().endswith("audio"):
 				with self._gemini_lock:
 					self.gemini_audio_tokens += int(getattr(item, "tokens", 0) or 0)
+
+	def _vieneu_args(self) -> tuple[str | None, bytes | None]:
+		"""(giọng có sẵn, None) hoặc (None, file mẫu để clone)."""
+		name = self.voice_name or "@nora"
+		if not name.startswith("@"):
+			return name, None
+		ref = NORA_VOICE_REF if name == "@nora" else self.ref_audio
+		if ref is None or not Path(ref).is_file():
+			raise RuntimeError("Không tìm thấy file giọng mẫu để clone.")
+		return None, Path(ref).read_bytes()
+
+	def _prefetch_vieneu(self, texts: List[str]) -> None:
+		"""Đọc mọi câu trong MỘT lần gọi: GPU chỉ nhanh khi xử lý theo lô
+		(~25 giây cho 10 phút giọng đọc). Lỗi thì đánh dấu VieNeu hỏng để các
+		câu rơi thẳng về edge-tts, không chờ gọi lại từng câu."""
+		from core import vieneu_client
+
+		started = time.time()
+		try:
+			voice, ref = self._vieneu_args()
+			audios = vieneu_client.synthesize(texts, voice=voice, ref_wav=ref)
+		except Exception as exc:
+			print(f"[TTS] VieNeu lỗi, chuyển sang giọng dự phòng: {exc}")
+			self._vieneu_down = True
+			return
+		for text, audio in zip(texts, audios):
+			self._vieneu_cache.setdefault(text, []).append(audio)
+		print(f"[TTS] VieNeu: {len(texts)} câu trong {time.time() - started:.1f}s")
+
+	def _synthesize_vieneu(self, text: str, output_path: Path) -> None:
+		if self._vieneu_down:
+			raise RuntimeError("VieNeu không khả dụng")
+		cached = self._vieneu_cache.get(text)
+		if cached:
+			audio = cached.pop()
+		else:
+			from core import vieneu_client
+
+			voice, ref = self._vieneu_args()
+			audio = vieneu_client.synthesize([text], voice=voice, ref_wav=ref)[0]
+		output_path.write_bytes(audio)
+		if not audio:
+			raise RuntimeError("VieNeu trả về âm thanh rỗng")
 
 	def _synthesize_gtts(self, text: str, output_path: Path) -> None:
 		"""Synthesize speech using Google TTS (gTTS)."""

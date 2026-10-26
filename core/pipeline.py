@@ -28,7 +28,7 @@ FALLBACK_ORDER = ("deepseek", "gemini", "openai")
 @dataclass
 class DubbingConfig:
     """Toàn bộ cấu hình cho một lần chạy pipeline.
-    tts_engine: "edge-tts" | "gtts"
+    tts_engine: "vieneu" | "edge-tts" | "gemini" | "gtts"
     """
     translator_engine: str = "deepseek"     # "deepseek" | "gemini" | "openai"
     openai_api_key: str = ""
@@ -47,8 +47,10 @@ class DubbingConfig:
     compute_device: str = "auto"           # "auto" | "cuda" | "cpu"
     sentence_resegment: bool = True
     silence_threshold: float = 0.45         # split by pauses >= threshold (seconds)
-    tts_engine: str = "edge-tts"            # "edge-tts" | "gtts"
-    tts_voice: str = "female"               # "female" | "male"
+    tts_engine: str = "edge-tts"            # khoá của config.settings.TTS_VOICES
+    tts_voice: str = "female"               # khoá giọng trong engine đó
+    # Giọng mẫu để VieNeu clone (giọng "mine"), đường dẫn trên volume dữ liệu.
+    tts_ref_audio: Optional[str] = None
     original_volume: float = 0.1            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -274,7 +276,8 @@ class DubbingPipeline:
             # ── Bước 4: TTS ────────────────────────────────────────────
             _progress(70, "Tổng hợp giọng đọc...")
             step_started = time.time()
-            tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts")
+            tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
+                            ref_audio=cfg.tts_ref_audio)
             tts_results, start_times = tts.place_on_timeline(tts.synthesize_all(segments))
             tts_segments = [seg for seg, _ in tts_results]
             tts_paths = [path for _, path in tts_results]

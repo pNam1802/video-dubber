@@ -192,6 +192,7 @@
         <div>
           <label class="{{ label_class }}" for="tts_engine">Giọng đọc</label>
           <select name="tts_engine" id="tts_engine" class="{{ field_class }}">
+            <option value="vieneu" selected>VieNeu — tự nhiên, clone giọng (miễn phí)</option>
             <option value="edge-tts">Edge-TTS — miễn phí</option>
             {% if gemini_key_exists %}<option value="gemini">Gemini — có cảm xúc (tính phí)</option>{% endif %}
             <option value="gtts">gTTS — đơn giản</option>
@@ -201,6 +202,13 @@
         <div>
           <label class="{{ label_class }}" for="tts_voice">Chất giọng</label>
           <select name="tts_voice" id="tts_voice" class="{{ field_class }}"></select>
+          <p id="voiceCloneHint" class="font-label-sm text-label-sm text-on-surface-variant mt-1 hidden">
+            {% if tts_voice_keys.vieneu and 'mine' in tts_voice_keys.vieneu %}
+            Giọng của bạn lấy từ giọng mẫu ở <a href="{{ url_for('main.account_settings') }}#giong-cua-ban" class="text-primary hover:underline">Cài đặt</a>.
+            {% else %}
+            Muốn đọc bằng giọng của bạn? Tải giọng mẫu ở <a href="{{ url_for('main.account_settings') }}#giong-cua-ban" class="text-primary hover:underline">Cài đặt</a>.
+            {% endif %}
+          </p>
         </div>
 
         <div>
@@ -605,7 +613,12 @@
     const VOICE_LABELS = {
       "edge-tts": { female: "HoaiMy — nữ", male: "NamMinh — nam", vivienne: "Vivienne — nữ", seraphina: "Seraphina — nữ", florian: "Florian — nam" },
       gemini: { female: "Leda — nữ", male: "Charon — nam" },
-      gtts: { female: "Mặc định" }
+      gtts: { female: "Mặc định" },
+      vieneu: {
+        female: "Nora — nữ (mặc định)", ngochuyen: "Ngọc Huyền — nữ", quynhanh: "Quỳnh Anh — nữ, đọc truyện",
+        myduyen: "Mỹ Duyên — nữ miền Nam", kimthanh: "Kim Thanh — nữ miền Nam", male: "Thiện Minh — nam, kể chuyện",
+        ductri: "Đức Trí — nam miền Nam", mine: "Giọng của bạn (clone)"
+      }
     };
     const ttsEngineSelect = document.getElementById("tts_engine");
     const ttsVoiceSelect = document.getElementById("tts_voice");
@@ -618,6 +631,7 @@
         option.textContent = (VOICE_LABELS[engine] || {})[key] || key;
         ttsVoiceSelect.appendChild(option);
       });
+      document.getElementById("voiceCloneHint").classList.toggle("hidden", engine !== "vieneu");
     }
     ttsEngineSelect.addEventListener("change", syncVoices);
 

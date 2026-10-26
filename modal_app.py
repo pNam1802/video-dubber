@@ -14,6 +14,7 @@ Triển khai trên Modal: web chạy CPU, pipeline lồng tiếng chạy GPU.
 Kiến trúc:
   web (CPU)  --spawn()-->  Dubber (GPU, giai đoạn 1)    --ghi-->  Postgres + Volume
              --spawn()-->  Composer (CPU, giai đoạn 2)  --ghi-->  Postgres + Volume
+                             --remote()-->  VoiceCloner (GPU, giọng VieNeu)
 Web và GPU dùng chung một Volume cho file upload/kết quả, và chung một Postgres
 để trao đổi tiến trình — nên web không cần chờ GPU, và request HTTP không bao giờ
 chạm giới hạn 150 giây của Modal.
@@ -40,6 +41,7 @@ SOURCE_IGNORE = [
     "*.mp4",
     "!demo/voices/*.mp4",  # video demo cua landing page (/demo/...)
     "*.wav",
+    "!core/voices/*.wav",  # giong mau mac dinh cua VieNeu (NORA_VOICE_REF)
     ".venv/**",
     "venv/**",
     "node_modules/**",  # chi dung luc build CSS tren may local
@@ -76,6 +78,16 @@ web_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")  # /healthz kiem tra co ffmpeg — nhe, khong phai nguon phinh anh
     .pip_install_from_requirements("requirements-web.txt")
+    .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
+)
+
+# Anh RIENG cho VieNeu-TTS: can torch 2.8 (anh chinh ghim torch 2.5 cho
+# Whisper), nen khong cai chung duoc. Chi chay core/vieneu_client.py — nhan
+# van ban, tra mp3 — khong dung Flask/DB.
+vieneu_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install("ffmpeg")
+    .pip_install("vieneu[cuda,watermark]==3.8.3", "transformers==4.57.6", "soundfile==0.13.1")
     .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
 )
 
@@ -214,6 +226,50 @@ class Composer:
             run_job_phase2(flask_app, job_id, Path(video_path), config)
         finally:
             data_volume.commit()
+
+
+# Giong VieNeu (mac dinh "Nora" va giong clone). Composer goi .remote() mot
+# lan cho ca video: do that tren T4 (26/10/2026) ~25 giay cho 103 cau / 9,5
+# phut giong doc; nap model ~50 giay khi container lanh. Trong so luu o
+# volume /models nhu Whisper.
+@app.cls(
+    image=vieneu_image,
+    gpu="T4",
+    volumes={"/models": model_volume},
+    env={"HF_HOME": "/models/huggingface", "XDG_CACHE_HOME": "/models/cache"},
+    timeout=1800,
+    scaledown_window=60,
+    max_containers=1,
+)
+class VoiceCloner:
+    """Container GPU: VieNeu-TTS đọc văn bản bằng giọng có sẵn hoặc giọng clone."""
+
+    @modal.enter()
+    def load(self):
+        import os
+
+        from core.vieneu_client import load_model
+
+        # Model kéo theo code của bộ mã hoá âm thanh (trust_remote_code) từ
+        # Hugging Face. Đã có bản cache thì nạp OFFLINE — code đã chạy được
+        # không tự đổi theo bản mới trên mạng; chỉ lần đầu mới tải. Phải đặt
+        # biến TRƯỚC khi huggingface_hub được import (nó đọc một lần lúc import).
+        hub = "/models/huggingface/hub"
+        cached = all(
+            os.path.isdir(f"{hub}/models--{repo}")
+            for repo in ("pnnbao-ump--VieNeu-TTS-v3-Turbo", "OpenMOSS-Team--MOSS-Audio-Tokenizer-Nano")
+        )
+        if cached:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+        self.tts = load_model()
+        if not cached:
+            model_volume.commit()
+
+    @modal.method()
+    def synthesize(self, texts: list, voice: str | None = None, ref_wav: bytes | None = None) -> list:
+        from core.vieneu_client import synthesize_with
+
+        return synthesize_with(self.tts, texts, voice, ref_wav)
 
 
 @app.function(volumes=VOLUMES, secrets=secrets, env=RUNTIME_ENV, timeout=600)
