@@ -6,11 +6,13 @@ End-to-end pipeline to dub English videos into Vietnamese, with subtitle export 
 
 This project automates the full dubbing process:
 1. Extract audio from video with ffmpeg
-2. Transcribe speech to text with Whisper
-3. Translate to Vietnamese (or Japanese/Chinese/Korean) with Gemini or OpenAI
-4. Synthesize Vietnamese speech with edge-tts, gTTS, or VietTTS
-5. Compose dubbed audio back into the original video
-6. Export video and SRT subtitles
+2. Transcribe speech to text with Whisper (word timestamps, split into full sentences)
+3. Translate to Vietnamese (or Japanese/Chinese/Korean) with DeepSeek (default),
+   falling back to Gemini then OpenAI
+4. Review/edit the transcript before any voice is generated
+5. Synthesize speech with edge-tts (free), Gemini TTS (expressive, paid) or gTTS,
+   laid out as continuous narration (see "Giọng đọc" below)
+6. Compose dubbed audio back into the original video and export SRT subtitles
 
 Supported usage modes:
 - Flask web application (login, upload, progress tracking, history)
@@ -20,9 +22,10 @@ Supported usage modes:
 
 - Python 3.10+
 - ffmpeg, ffprobe
-- openai-whisper
-- transformers + torch
-- edge-tts, gTTS
+- faster-whisper (openai-whisper as fallback) + torch
+- DeepSeek / OpenAI (openai SDK), Gemini (google-genai)
+- edge-tts, Gemini TTS, gTTS, pydub
+- Flask, SQLAlchemy, Postgres (Neon) on Modal
 - yt-dlp (optional for download workflows)
 
 ## Project Layout
@@ -37,6 +40,12 @@ Supported usage modes:
 	  cli.py            flask create-admin, flask set-role
 	  errors.py         chuẩn hoá lỗi JSON/HTML
 	core/               pipeline lồng tiếng (không phụ thuộc Flask)
+	  transcriber.py    Whisper + tách câu theo mốc thời gian từng từ
+	  translator/       DeepSeek, Gemini, OpenAI (dùng chung llm_common.py)
+	  tts_engine.py     edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
+	  voice_timeline.py xếp giọng đọc liền mạch lên dòng thời gian
+	  video_composer.py trộn giọng vào video bằng ffmpeg
+	demo/               video demo (xem mục Demo Videos)
 	migrations/         Alembic
 	wsgi.py             điểm vào WSGI
 
@@ -52,7 +61,8 @@ Setup:
 	copy .env.example .env
 	flask --app wsgi db upgrade
 
-If using OpenAI translation, set OPENAI_API_KEY in .env.
+Set `DEEPSEEK_API_KEY` in .env (default translator). `GEMINI_API_KEY` enables Gemini
+translation fallback and the Gemini TTS voices; `OPENAI_API_KEY` is the last fallback.
 
 Create the first admin account:
 
@@ -81,9 +91,9 @@ Generate one with:
 Health check: `GET /healthz` returns 200 when the database, ffmpeg and ffprobe are all
 reachable, 503 otherwise — point your load balancer at it.
 
-Run from CLI (defaults to Gemini):
+Run from CLI (defaults to DeepSeek, key from `DEEPSEEK_API_KEY`):
 
-	python cli.py path/to/video.mp4 --gemini-api-key AIza...
+	python cli.py path/to/video.mp4
 
 OpenAI translation example:
 
@@ -96,14 +106,33 @@ Gemini translation example:
 Mặc định dùng `gemini-3.6-flash`. Model 2.5 đã bị Google ngừng cấp cho tài khoản mới;
 liệt kê model khả dụng cho key của bạn bằng `client.models.list()` nếu gặp lỗi 404.
 
-VietTTS example:
-
-	python cli.py path/to/video.mp4 --tts-engine viettts
-
 ## Output Artifacts
 
 - Dubbed video: data/outputs/*_dubbed.mp4
 - Subtitle file: data/outputs/*_dubbed.srt
+
+## Giọng đọc
+
+Hai thứ quyết định bản lồng tiếng nghe có "TikTok" hay không: đọc **trọn câu** và **liền mạch**.
+
+- **Tách câu theo từng từ**: Whisper trả mốc thời gian từng từ, câu được cắt đúng tại dấu
+  chấm (quá 12 giây mới cắt ở dấu phẩy). Trước đây ghép theo đoạn Whisper, 46/66 câu bị cắt
+  giữa chừng và giọng đọc hạ giọng như hết câu ngay giữa ý.
+- **Xếp giọng liền mạch** ([`core/voice_timeline.py`](core/voice_timeline.py)): câu sau vào
+  ngay khi câu trước đọc xong (+0,25 giây), được vào sớm tối đa 2 giây; một tốc độ chung cho cả
+  video để tổng giọng Việt khớp thời gian nói gốc, câu còn hở thì đọc chậm thêm tối đa 10%.
+  Không bao giờ chồng giọng. Đo trên video 11 phút: khoảng lặng ≥ 0,8 giây từ 57 còn 8.
+- **Đổi tốc độ không làm méo giọng**: edge-tts tổng hợp lại với tham số `rate`; Gemini/gTTS
+  dùng `atempo` của ffmpeg trên bản đã có (không gọi API lần nữa).
+
+| Công cụ | Giọng | Chi phí | Ghi chú |
+|---|---|---|---|
+| edge-tts (mặc định) | HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam) | Miễn phí | Vivienne/Seraphina/Florian là giọng *Multilingual* đọc được tiếng Việt |
+| Gemini TTS (`gemini-3.8-flash-tts`) | Leda (nữ), Charon (nam) | ≈ $0,13 / 10 phút giọng đọc (giá tới hết 2026) | Có cảm xúc theo chỉ dẫn `GEMINI_TTS_STYLE`; giới hạn 10 request/phút ở Tier 1 |
+| gTTS | — | Miễn phí | Dự phòng cuối cùng |
+
+Gemini lỗi thì câu đó rơi về edge-tts HoaiMy, rồi gTTS. Chi phí Gemini xem ở
+[Google AI Studio](https://aistudio.google.com) → Billing.
 
 ## Demo Videos
 
@@ -119,6 +148,23 @@ https://github.com/user-attachments/assets/458dfa22-e69a-4aa6-b86b-cb6ddb3e952f
 https://github.com/user-attachments/assets/3c90c685-9d6f-4107-a983-cd66ad8e9376
 
 
+### Demo 3: So sánh giọng đọc (pipeline hiện tại)
+
+Cùng một đoạn 2,5 phút, dịch bằng DeepSeek, xếp giọng liền mạch — chỉ khác giọng đọc
+(mỗi job dịch riêng nên câu chữ có thể lệch nhau đôi chút):
+
+| Video | Giọng | Khoảng lặng ≥ 0,8 giây | Chi phí giọng đọc |
+|---|---|---|---|
+| [1_Gemini_Leda_nu.mp4](demo/voices/1_Gemini_Leda_nu.mp4) | Gemini Leda (nữ) | 0 | ≈ $0,035 |
+| [2_Gemini_Charon_nam.mp4](demo/voices/2_Gemini_Charon_nam.mp4) | Gemini Charon (nam) | 4 | ≈ $0,033 |
+| [3_Edge_HoaiMy_nu.mp4](demo/voices/3_Edge_HoaiMy_nu.mp4) | edge-tts HoaiMy (nữ) | 2 | Miễn phí |
+| [4_Edge_Florian_nam.mp4](demo/voices/4_Edge_Florian_nam.mp4) | edge-tts Florian (nam) | 4 | Miễn phí |
+
+> **Nguồn:** trích đoạn 7:30–10:00 của video *"Chap 6 — The Apocalypse Has Come"* thuộc kênh
+> **Manhwa Academy**. Bản quyền nội dung gốc thuộc về kênh và tác giả truyện. Đoạn trích chỉ dùng
+> để minh hoạ chất lượng lồng tiếng cho mục đích học tập/đồ án, không dùng thương mại; sẽ gỡ nếu
+> chủ sở hữu yêu cầu.
+
 ## Recommended Repo Hygiene For Demo Videos
 
 - If a video is larger than 100 MB, use Git LFS or attach it in GitHub Releases.
@@ -128,10 +174,9 @@ https://github.com/user-attachments/assets/3c90c685-9d6f-4107-a983-cd66ad8e9376
 ## Notes
 
 - First run may be slower because Whisper models are downloaded.
-- Translation requires a Gemini or OpenAI API key; MarianMT (an in-house EN→VI fine-tune) has since
+- Translation requires a DeepSeek, Gemini or OpenAI API key; MarianMT (an in-house EN→VI fine-tune) has since
   been locked out of user-facing selection — it mistranslated silently for non-English sources and
   couldn't reach Japanese/Chinese/Korean at all. The code is kept for reference but no job can pick it.
-- VietTTS setup may vary by package variant and environment.
 
 ---
 
@@ -171,8 +216,11 @@ Ba ràng buộc của Modal quyết định toàn bộ thiết kế:
 ## Triển khai Modal
 
 Toàn bộ khai báo nằm trong [`modal_app.py`](modal_app.py): container web (CPU) bọc Flask
-bằng `@modal.wsgi_app()`, container GPU là `@app.cls(gpu="T4")` với `@modal.enter()` nạp
-model một lần. Hai bên dùng chung một Volume cho file và chung Postgres cho tiến trình.
+bằng `@modal.wsgi_app()`; giai đoạn 1 (nhận dạng + dịch) chạy trên `Dubber` —
+`@app.cls(gpu="T4")` với `@modal.enter()` nạp model một lần; giai đoạn 2 (giọng đọc + ghép
+video) chạy trên `Composer` — container **CPU** (`cpu=1.0`, `region="us"`), vì bước này không
+dùng GPU (chờ mạng + ffmpeg). Tách ra giảm chi phí máy chủ mỗi video 11 phút từ ≈ $0,051 xuống
+≈ $0,015. Tất cả dùng chung một Volume cho file và chung Postgres cho tiến trình.
 
 Các bước, chạy một lần:
 
@@ -186,6 +234,7 @@ Các bước, chạy một lần:
 	    DATABASE_URL=postgresql://... \
 	    JOB_RUNNER=modal \
 	    DATA_DIR=/data \
+	    DEEPSEEK_API_KEY=... \
 	    GEMINI_API_KEY=...
 
 Mỗi lần deploy:
