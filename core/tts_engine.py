@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import re
 import sys
 import time
@@ -16,8 +17,16 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:
             pass
 
-from config.settings import TEMP_DIR, TTS_CONCURRENCY
+from config.settings import FFMPEG_BIN, FFMPEG_TIMEOUT, TEMP_DIR, TTS_CONCURRENCY
 from core.transcriber import Segment
+from core.voice_timeline import base_speed, fill_gaps, plan_timeline
+from utils.proc import run_command
+
+# edge-tts chap chon ("No audio was received") kha thuong xuyen, nhat la khi
+# goi song song. Het luot thu thi segment roi ve gTTS — GIONG KHAC HAN giua
+# chung video — nen thu lai nhieu hon va gian cach dai hon truoc khi bo cuoc.
+_EDGE_ATTEMPTS = 6
+_EDGE_BACKOFF = 1.0
 
 
 class TTSEngine:
@@ -84,17 +93,16 @@ class TTSEngine:
 	def _synthesize_segment(self, idx: int, segment: Segment, text: str) -> tuple[tuple | None, str | None]:
 		"""Tổng hợp một segment. Trả về ((segment, path), None) hoặc (None, thông báo lỗi)."""
 		out = self.tts_dir / f"seg_{idx:05d}.mp3"
-		target_duration = max(0, segment.end - segment.start)
 		try:
-			self.synthesize_text(text, out)
-			self._adjust_audio_duration(out, target_duration)
+			self._synthesize_checked(text, out)
 			return (segment, out), None
 		except Exception as exc:
 			# Fallback to gTTS for non-gTTS engines
 			if self.engine != "gtts":
 				try:
 					self._synthesize_gtts(text, out)
-					self._adjust_audio_duration(out, target_duration)
+					self._trim_silence(out)
+					self._check_audio(out, text)
 					print(f"[TTS] Segment {idx}: fallback gTTS succeeded (primary error: {exc})")
 					return (segment, out), None
 				except Exception as fb_exc:
@@ -104,49 +112,112 @@ class TTSEngine:
 			print(f"[TTS] Skipping {err_msg}")
 			return None, err_msg
 
-	def _adjust_audio_duration(self, audio_path: Path, target_duration: float, max_speed: float = 1.35) -> None:
-		"""
-		Điều chỉnh độ dài âm thanh để khớp với duration của đoạn video.
-		(Áp dụng cách 1 và cách 2: Silence Trimming & Audio Speedup).
-		"""
-		if target_duration <= 0:
-			return
-		
+	def _synthesize_checked(self, text: str, out: Path, speed: float = 1.0, attempts: int = 3) -> None:
+		"""Tổng hợp + cắt khoảng lặng + kiểm tra âm thanh không rỗng/cụt; thử lại
+		vài lần trước khi báo lỗi."""
+		last_exc: Exception | None = None
+		for _ in range(attempts):
+			try:
+				self.synthesize_text(text, out, speed=speed)
+				self._trim_silence(out)
+				self._check_audio(out, text)
+				return
+			except Exception as exc:
+				last_exc = exc
+		raise RuntimeError(str(last_exc)) from last_exc
+
+	@classmethod
+	def _check_audio(cls, path: Path, text: str) -> None:
+		"""edge-tts đôi khi trả về file có dung lượng nhưng gần như không có
+		tiếng — vượt qua kiểm tra "file > 0 byte" và câu đó biến mất khỏi
+		video (job #33: câu #13 mất, im lặng 7.6s). Không ai nói nổi quá
+		~12 âm tiết/giây, nên ngắn hơn mức đó là âm thanh hỏng."""
+		duration = cls._duration(path)
+		syllables = len(text.split())
+		if duration < max(0.3, syllables / 12.0):
+			raise RuntimeError(f"Âm thanh TTS bất thường: {duration:.2f}s cho {syllables} âm tiết")
+
+	def place_on_timeline(self, results: List[tuple]) -> tuple[List[tuple], List[float]]:
+		"""Xếp các câu đã tổng hợp lên dòng thời gian cho nghe liền mạch (xem
+		core/voice_timeline.py). Đổi tốc độ bằng cách TỔNG HỢP LẠI với tham số
+		rate của edge-tts — giọng vẫn tự nhiên — thay vì cắt ghép mẫu âm thanh
+		(pydub.speedup) vốn làm giọng rè.
+
+		Hai lượt: lượt đầu (synthesize_all) ở tốc độ thường để ĐO độ dài thật;
+		từ đó tính tốc độ chung + tốc độ riêng từng câu, rồi tổng hợp lại một
+		lần các câu cần đổi. Độ dài ở tốc độ s xấp xỉ độ dài thường / s (đo
+		thật: -10% cho 1.11 lần).
+
+		Trả về (results, thời điểm bắt đầu của từng câu)."""
+		slots = [(seg.start, seg.end) for seg, _ in results]
+		durations = [self._duration(path) for _, path in results]
+
+		base = base_speed(slots, durations)
+		estimated = [d / base for d in durations]
+		plan = plan_timeline(slots, estimated)
+		factors = fill_gaps(estimated, plan)
+		speeds = [base * (p.speed if p.speed > 1.0 else f) for p, f in zip(plan, factors)]
+
+		redo = [(i, s) for i, s in enumerate(speeds) if abs(s - 1.0) > 0.02]
+		if redo:
+			print(f"[TTS] Tốc độ chung {base:.2f}; tổng hợp lại {len(redo)}/{len(results)} câu để giữ nhịp liền mạch...")
+			workers = min(self.concurrency, len(redo))
+			with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="tts-rate") as pool:
+				new_durations = list(pool.map(lambda job: self._resynthesize(results[job[0]], job[1]), redo))
+			for (i, _), duration in zip(redo, new_durations):
+				if duration is not None:
+					durations[i] = duration
+
+		# Lần xếp cuối với tốc độ cố định 1.0: chỉ dời thời điểm bắt đầu, nên
+		# không câu nào chồng lên câu trước dù rate của edge-tts không khớp
+		# tuyệt đối với tốc độ đã yêu cầu.
+		final = plan_timeline(slots, durations, max_speed=1.0)
+		starts = [p.start for p in final]
+		gaps = [starts[i + 1] - (starts[i] + durations[i]) for i in range(len(starts) - 1)]
+		lags = [start - slot[0] for start, slot in zip(starts, slots)]
+		if gaps:
+			print(
+				f"[TTS] Nhịp đọc: {sum(g >= 0.5 for g in gaps)}/{len(gaps)} chỗ nghỉ ≥0.5s, "
+				f"nghỉ dài nhất {max(gaps):.2f}s, lệch hình từ {min(lags):+.2f}s tới {max(lags):+.2f}s"
+			)
+		return results, starts
+
+	def _resynthesize(self, pair: tuple, speed: float) -> float | None:
+		segment, path = pair
+		text = (segment.translated or segment.text).strip()
+		# Ghi ra file tạm: lỗi giữa chừng thì bản tốc độ thường vẫn còn nguyên.
+		tmp = path.with_name(path.stem + "_rate" + path.suffix)
+		try:
+			self._synthesize_checked(text, tmp, speed=speed)
+			tmp.replace(path)
+			return self._duration(path)
+		except Exception as exc:
+			# Giữ bản tốc độ thường đã có — lệch nhịp một chút còn hơn mất câu.
+			tmp.unlink(missing_ok=True)
+			print(f"[TTS] Đổi tốc độ {path.name} thất bại, giữ tốc độ thường: {exc}")
+			return None
+
+	@staticmethod
+	def _duration(path: Path) -> float:
+		from pydub import AudioSegment
+
+		return len(AudioSegment.from_file(str(path))) / 1000.0
+
+	@staticmethod
+	def _trim_silence(audio_path: Path) -> None:
+		"""Cắt khoảng lặng đầu/cuối mà TTS tự chèn — để nhịp nghỉ giữa các câu
+		do place_on_timeline() quyết định, không cộng dồn khoảng lặng thừa."""
 		try:
 			from pydub import AudioSegment
 			from pydub.silence import detect_nonsilent
-			from pydub.effects import speedup
-			
+
 			audio = AudioSegment.from_file(str(audio_path))
-			if len(audio) == 0:
+			ranges = detect_nonsilent(audio, min_silence_len=150, silence_thresh=-45)
+			if not ranges:
 				return
-			
-			# 1. Option 2: Cắt bớt khoảng trống đầu/cuối của audio (Silence Trimming)
-			nonsilent_ranges = detect_nonsilent(audio, min_silence_len=150, silence_thresh=-45)
-			if nonsilent_ranges:
-				start_trim = nonsilent_ranges[0][0]
-				end_trim = nonsilent_ranges[-1][1]
-				audio = audio[start_trim:end_trim]
-
-			current_dur = len(audio) / 1000.0
-			
-			# 2. Option 1: Tăng tốc nếu độ dài audio lớn hơn so với thời gian của segment (Audio Speedup)
-			if current_dur > target_duration + 0.1: # Chỉ ép tốc độ nếu audio bị dài hơn quá 0.1s
-				rate = current_dur / target_duration
-				rate = min(rate, max_speed) # Không được ép tốc độ quá max_speed, kẻo giọng chói
-				
-				if rate > 1.05:
-					# chunk_size=50, crossfade=25 cho result mượt mà
-					audio = speedup(audio, playback_speed=rate, chunk_size=50, crossfade=25)
-
-			# Xuất đè lên lại file cũ
-			ext = audio_path.suffix.lstrip(".")
-			if ext == "": 
-				ext = "mp3"
-			audio.export(str(audio_path), format=ext)
-			
+			audio[ranges[0][0]:ranges[-1][1]].export(str(audio_path), format=audio_path.suffix.lstrip(".") or "mp3")
 		except Exception as exc:
-			print(f"[TTS] Áp dụng Silence Trimming & Speedup thất bại cho {audio_path}: {exc}")
+			print(f"[TTS] Cắt khoảng lặng thất bại cho {audio_path}: {exc}")
 
 	@staticmethod
 	def _is_tts_text_valid(text: str) -> bool:
@@ -163,15 +234,17 @@ class TTSEngine:
 			return False
 		return True
 
-	def synthesize_text(self, text: str, output_path: str | Path) -> Path:
+	def synthesize_text(self, text: str, output_path: str | Path, speed: float = 1.0) -> Path:
 		output_path = Path(output_path)
 		output_path.parent.mkdir(parents=True, exist_ok=True)
 
 		if self.engine == "edge-tts":
-			self._synthesize_edge(text, output_path)
+			self._synthesize_edge(text, output_path, speed=speed)
 			return output_path
 		if self.engine == "gtts":
 			self._synthesize_gtts(text, output_path)
+			if abs(speed - 1.0) > 1e-3:
+				self._atempo(output_path, speed)
 			return output_path
 		raise ValueError(f"Unsupported TTS engine: {self.engine}")
 
@@ -186,19 +259,41 @@ class TTSEngine:
 		if not output_path.exists() or output_path.stat().st_size == 0:
 			raise RuntimeError("gTTS produced no valid audio file.")
 
+	@staticmethod
+	def _atempo(path: Path, speed: float) -> None:
+		"""gTTS không có tham số tốc độ: dùng atempo của ffmpeg (nhanh hoặc chậm, giữ cao độ,
+		ít rè hơn nhiều so với pydub.speedup)."""
+		tmp = path.with_name(path.stem + "_tempo" + path.suffix)
+		run_command(
+			[FFMPEG_BIN, "-y", "-i", str(path), "-filter:a", f"atempo={speed:.3f}", str(tmp)],
+			timeout=FFMPEG_TIMEOUT,
+			error_message="Đổi tốc độ giọng gTTS thất bại",
+		)
+		tmp.replace(path)
+
+	@staticmethod
+	def edge_rate(speed: float) -> str:
+		"""rate của edge-tts là % so với tốc độ thường. Luôn làm tròn về phía
+		câu NGẮN hơn (nhanh: tròn lên; chậm: bớt chậm) để không lấn sang câu sau."""
+		if speed >= 1.0:
+			return f"+{math.ceil(round((speed - 1.0) * 100, 6))}%"
+		return f"-{math.floor(round((1.0 - speed) * 100, 6))}%"
+
 	# Fix asyncio in _synthesize_edge:
-	def _synthesize_edge(self, text: str, output_path: Path) -> None:
+	def _synthesize_edge(self, text: str, output_path: Path, speed: float = 1.0) -> None:
 		try:
 			import edge_tts
 		except Exception as exc:
 			raise RuntimeError("Missing dependency 'edge-tts'. Install with: pip install edge-tts") from exc
 
+		rate = self.edge_rate(speed)
+
 		async def _run() -> None:
-			communicate = edge_tts.Communicate(text=text, voice=self.edge_voice)
+			communicate = edge_tts.Communicate(text=text, voice=self.edge_voice, rate=rate)
 			await communicate.save(str(output_path))
 
 		last_exc: Exception | None = None
-		for attempt in range(3):
+		for attempt in range(_EDGE_ATTEMPTS):
 			try:
 				# Mỗi lần gọi tạo event loop mới riêng cho thread hiện tại.
 				# Tránh dùng asyncio.run() vì có thể conflict với loop của Flask thread.
@@ -222,9 +317,9 @@ class TTSEngine:
 					or "WinError" in msg
 					or "ConnectionResetError" in msg
 				)
-				if not is_retryable or attempt == 2:
+				if not is_retryable or attempt == _EDGE_ATTEMPTS - 1:
 					raise RuntimeError(f"edge-tts failed after {attempt + 1} attempt(s): {msg}") from exc
-				time.sleep(0.5 * (attempt + 1))
+				time.sleep(_EDGE_BACKOFF * (attempt + 1))
 
 		raise RuntimeError(f"edge-tts failed: {last_exc}")
 

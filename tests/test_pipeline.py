@@ -127,9 +127,13 @@ class FakeTTS:
         out.write_bytes(b"fake-audio")
         return [(segs[0], out)]
 
+    def place_on_timeline(self, results):
+        return results, [seg.start for seg, _ in results]
+
 
 class FakeComposer:
-    def compose(self, video_path, segments, tts_paths, original_volume=0.1, tts_volume=1.6, video_duration=None):
+    def compose(self, video_path, segments, tts_paths, original_volume=0.1, tts_volume=1.6, video_duration=None,
+                start_times=None):
         out = Path(video_path).parent / "out_dubbed.mp4"
         out.write_bytes(b"fake-video")
         return out

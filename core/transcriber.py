@@ -3,9 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
-from typing import List
+from typing import List, Tuple
 
 from config.settings import WHISPER_BACKEND
+
+
+#: (start, end, text) của từng từ Whisper nhận dạng — text giữ nguyên khoảng
+#: trắng đầu từ như Whisper trả về (" Hello"), nối thẳng là ra câu.
+Word = Tuple[float, float, str]
 
 
 @dataclass
@@ -27,6 +32,14 @@ class Transcriber:
 	"""
 
 	_SENTENCE_END_RE = re.compile(r"[.!?][\"'\)\]]*$")
+	_CLAUSE_END_RE = re.compile(r"[,;:—-][\"'\)\]]*$")
+	# Giong ke lien mach (review phim/truyen) gan nhu khong co khoang lang va
+	# Whisper hay cat giua cau, nen chi dua vao dau cham/khoang lang thi mot
+	# "cau" co the dai hon 100 giay — phu de dai ca trang, giong doc lech dan
+	# so voi hinh, va ban dich vuot gioi han token. Qua SOFT thi cat o dau
+	# phay gan nhat; qua HARD thi cat o ranh gioi doan Whisper bat ky.
+	_SOFT_MAX_DURATION = 8.0
+	_HARD_MAX_DURATION = 14.0
 	_LEADING_PUNCT_RE = re.compile(r"^[,.;:!?%\)\]\}]+")
 
 	def __init__(self, model_size: str = "base", device: str = "auto", backend: str | None = None):
@@ -147,6 +160,45 @@ class Transcriber:
 				joined += " " + part
 		return joined.strip()
 
+	#: Từ viết tắt kết thúc bằng dấu chấm nhưng KHÔNG phải hết câu.
+	_ABBREVIATIONS = {"mr.", "mrs.", "ms.", "dr.", "st.", "vs.", "jr.", "sr.", "prof.", "etc.", "e.g.", "i.e."}
+	_WORD_SOFT_MAX = 12.0
+	_WORD_HARD_MAX = 20.0
+	#: Ngắt hẳn tại khoảng lặng dài dù câu chưa hết (người nói dừng thật).
+	_WORD_LONG_PAUSE = 1.5
+
+	@classmethod
+	def _sentences_from_words(cls, words: List[Word], silence_threshold: float = 0.45) -> List[Segment]:
+		"""Gộp từ thành câu: cắt tại dấu . ! ? ; câu dài quá SOFT thì cắt ở dấu
+		phẩy kế tiếp, quá HARD thì cắt ở từ bất kỳ. silence_threshold giữ cho
+		đồng chữ ký với _merge_segments_into_sentences() — ở mức từ, khoảng
+		lặng ngắn giữa các từ là bình thường nên chỉ ngắt ở _WORD_LONG_PAUSE."""
+		del silence_threshold
+		ordered = [w for w in sorted(words, key=lambda w: w[0]) if (w[2] or "").strip() and w[1] >= w[0]]
+		sentences: List[Segment] = []
+		bucket: List[Word] = []
+		for i, word in enumerate(ordered):
+			bucket.append(word)
+			token = word[2].strip()
+			duration = word[1] - bucket[0][0]
+			nxt = ordered[i + 1] if i + 1 < len(ordered) else None
+
+			ends_sentence = bool(cls._SENTENCE_END_RE.search(token)) and token.lower() not in cls._ABBREVIATIONS
+			flush = (
+				nxt is None
+				or ends_sentence
+				or (duration >= cls._WORD_SOFT_MAX and cls._CLAUSE_END_RE.search(token))
+				or nxt[1] - bucket[0][0] > cls._WORD_HARD_MAX
+				or nxt[0] - word[1] >= cls._WORD_LONG_PAUSE
+			)
+			if flush:
+				text = "".join(w[2] for w in bucket).strip()
+				text = re.sub(r"\s+", " ", text)
+				if text:
+					sentences.append(Segment(start=bucket[0][0], end=bucket[-1][1], text=text))
+				bucket = []
+		return sentences
+
 	@classmethod
 	def _merge_segments_into_sentences(
 		cls,
@@ -190,6 +242,11 @@ class Transcriber:
 				should_flush = True
 			elif next_gap >= silence_threshold and not next_starts_lower:
 				should_flush = True
+			elif ordered[idx + 1].end - bucket[0].start > cls._HARD_MAX_DURATION:
+				# Them doan ke tiep se vuot HARD — cat ngay tai day.
+				should_flush = True
+			elif duration >= cls._SOFT_MAX_DURATION and cls._CLAUSE_END_RE.search(current_text):
+				should_flush = True
 
 			if should_flush and bucket:
 				merged.append(
@@ -205,21 +262,25 @@ class Transcriber:
 		return merged
 
 	# ── Nhận dạng ────────────────────────────────────────────────
-	def _transcribe_faster(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str]:
-		segments, info = self.model.transcribe(str(audio_path), language=language, beam_size=5)
+	def _transcribe_faster(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str, List[Word]]:
+		segments, info = self.model.transcribe(
+			str(audio_path), language=language, beam_size=5, word_timestamps=True
+		)
 		# transcribe() trả về generator — phải duyệt hết thì mới thực sự chạy,
 		# và info.language chỉ có giá trị thật (khác None) SAU khi duyệt xong
 		# nếu language=None (tự nhận dạng dựa trên đoạn âm thanh đầu tiên).
-		result = [
-			Segment(start=float(s.start), end=float(s.end), text=s.text.strip())
-			for s in segments
-			if (s.text or "").strip()
-		]
-		return result, (info.language or language or "en")
+		result: List[Segment] = []
+		words: List[Word] = []
+		for s in segments:
+			if not (s.text or "").strip():
+				continue
+			result.append(Segment(start=float(s.start), end=float(s.end), text=s.text.strip()))
+			words.extend((float(w.start), float(w.end), w.word) for w in (s.words or []))
+		return result, (info.language or language or "en"), words
 
-	def _transcribe_openai(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str]:
+	def _transcribe_openai(self, audio_path: Path, language: str | None) -> tuple[List[Segment], str, List[Word]]:
 		try:
-			result = self.model.transcribe(str(audio_path), language=language, fp16=self.use_fp16)
+			result = self.model.transcribe(str(audio_path), language=language, fp16=self.use_fp16, word_timestamps=True)
 		except RuntimeError as exc:
 			msg = str(exc).lower()
 			if self.device == "cuda" and (
@@ -234,15 +295,20 @@ class Transcriber:
 				self.device = "cpu"
 				self.use_fp16 = False
 				self.model = self._whisper.load_model(self.model_size, device=self.device)
-				result = self.model.transcribe(str(audio_path), language=language, fp16=self.use_fp16)
+				result = self.model.transcribe(str(audio_path), language=language, fp16=self.use_fp16, word_timestamps=True)
 			else:
 				raise
 
 		segments: List[Segment] = []
+		words: List[Word] = []
 		for seg in result.get("segments", []):
 			text = (seg.get("text") or "").strip()
 			if not text:
 				continue
+			words.extend(
+				(float(w.get("start", 0.0)), float(w.get("end", 0.0)), w.get("word", ""))
+				for w in seg.get("words") or []
+			)
 			segments.append(
 				Segment(
 					start=float(seg.get("start", 0.0)),
@@ -250,7 +316,7 @@ class Transcriber:
 					text=text,
 				)
 			)
-		return segments, (result.get("language") or language or "en")
+		return segments, (result.get("language") or language or "en"), words
 
 	def transcribe(
 		self,
@@ -272,12 +338,21 @@ class Transcriber:
 			raise FileNotFoundError(f"Audio not found: {audio_path}")
 
 		if self.backend == "faster":
-			segments, detected_language = self._transcribe_faster(audio_path, language)
+			segments, detected_language, words = self._transcribe_faster(audio_path, language)
 		else:
-			segments, detected_language = self._transcribe_openai(audio_path, language)
+			segments, detected_language, words = self._transcribe_openai(audio_path, language)
 
 		if not sentence_resegment:
 			return segments, detected_language
+
+		# Có mốc thời gian từng từ thì cắt đúng tại dấu chấm câu — đoạn Whisper
+		# thường kết thúc GIỮA câu, gộp theo đoạn buộc phải cắt giữa câu khi
+		# câu quá dài (46/66 câu ở job #32), giọng đọc hạ giọng như hết câu
+		# rồi nghỉ ngay giữa ý.
+		if words:
+			sentences = self._sentences_from_words(words, silence_threshold=silence_threshold)
+			if sentences:
+				return sentences, detected_language
 
 		merged = self._merge_segments_into_sentences(
 			segments,

@@ -45,6 +45,7 @@ class VideoComposer:
 		original_volume: float = 0.1,
 		tts_volume: float = 1.6,
 		video_duration: Optional[float] = None,
+		start_times: Optional[List[float]] = None,
 	) -> Path:
 		video_path = Path(video_path)
 		if not video_path.exists():
@@ -65,7 +66,10 @@ class VideoComposer:
 
 		limit = min(len(segments), len(normalized_tts))
 		for idx in range(limit):
-			delay_ms = max(0, int(segments[idx].start * 1000))
+			# start_times: thời điểm đã xếp bởi TTSEngine.place_on_timeline()
+			# (nghe liền mạch); không có thì đặt đúng thời điểm câu gốc.
+			start = start_times[idx] if start_times is not None else segments[idx].start
+			delay_ms = max(0, int(start * 1000))
 			label = f"t{idx}"
 			filter_parts.append(
 				f"[{idx + 1}:a]volume={tts_volume},adelay={delay_ms}|{delay_ms}[{label}]"

@@ -275,7 +275,7 @@ class DubbingPipeline:
             _progress(70, "Tổng hợp giọng đọc...")
             step_started = time.time()
             tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts")
-            tts_results = tts.synthesize_all(segments)
+            tts_results, start_times = tts.place_on_timeline(tts.synthesize_all(segments))
             tts_segments = [seg for seg, _ in tts_results]
             tts_paths = [path for _, path in tts_results]
             result.timings["tts"] = round(time.time() - step_started, 2)
@@ -291,6 +291,7 @@ class DubbingPipeline:
                 tts_paths=tts_paths,
                 original_volume=cfg.original_volume,
                 video_duration=video_duration,
+                start_times=start_times,
             )
 
             result.timings["compose"] = round(time.time() - step_started, 2)
