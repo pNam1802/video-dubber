@@ -64,6 +64,10 @@ def create_app(config_overrides: dict | None = None) -> Flask:
         PERMANENT_SESSION_LIFETIME=timedelta(days=SESSION_LIFETIME_DAYS),
         SQLALCHEMY_DATABASE_URI=SQLALCHEMY_DATABASE_URI,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Neon tu ngu khi khong ai dung va cat het ket noi cu — ket noi chet
+        # nam trong pool lam request dau tien sau do loi AdminShutdown.
+        # pre_ping thu ket noi truoc khi dung, recycle bo ket noi qua cu.
+        SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True, "pool_recycle": 280},
         # Mac dinh cua Flask la "no-cache": moi lan chuyen trang trinh duyet
         # van phai hoi lai server truoc khi ve duoc gi — tu Viet Nam la them
         # nua giay cho mot vong di ve. Cache mot nam chi an toan vi asset()

@@ -18,6 +18,7 @@ from flask_login import current_user
 from flask_wtf.csrf import CSRFError
 from werkzeug.exceptions import HTTPException
 
+from app.extensions import db
 from config.settings import MAX_UPLOAD_MB
 
 
@@ -83,6 +84,12 @@ def register_error_handlers(app: Flask) -> None:
         if isinstance(exc, HTTPException):
             return exc
         current_app.logger.exception("Unhandled error on %s", request.path)
+        # Loi DB de lai session o trang thai hong: khong rollback thi chinh
+        # trang bao loi (load_user khi render) cung no PendingRollbackError.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         if wants_json():
             return jsonify({"error": "Lỗi hệ thống, vui lòng thử lại.", "code": 500}), 500
         # Khi chay test hay debug thi de exception noi len de con thay traceback.
