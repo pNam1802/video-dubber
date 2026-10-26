@@ -12,8 +12,13 @@ from config.settings import OPENAI_API_KEY, OPENAI_MODEL
 from core.translator.base import BaseTranslator
 from core.translator.llm_common import (
     build_batch_prompt,
+    BATCH_MAX_TOKENS,
+    BATCH_SIZE,
+    SINGLE_MAX_TOKENS,
+    batch_context,
     build_system_prompt,
     call_with_retry,
+    drop_truncated_tail,
     fill_batch_gaps,
     parse_numbered_lines,
 )
@@ -70,12 +75,14 @@ class OpenAITranslator(BaseTranslator):
                     {"role": "user", "content": text},
                 ],
                 temperature=0.3,
-                max_tokens=500,
+                max_tokens=SINGLE_MAX_TOKENS,
                 extra_body=self.extra_body,
             ),
             what=self.provider,
         )
         self._record_response_usage(response)
+        if response.choices[0].finish_reason == "length":
+            print(f"[{self.provider}] Bản dịch bị cắt vì hết token ({len(text)} ký tự nguồn).")
         translated = response.choices[0].message.content.strip()
         self._cache[text] = translated
         return translated
@@ -92,12 +99,14 @@ class OpenAITranslator(BaseTranslator):
         translated_segments = self.translate_segments_batch(segments)
         return [seg.translated for seg in translated_segments]
 
-    def translate_segments_batch(self, segments: List[Segment], batch_size: int = 10) -> List[Segment]:
+    def translate_segments_batch(self, segments: List[Segment], batch_size: int = BATCH_SIZE) -> List[Segment]:
         for i in range(0, len(segments), batch_size):
             batch = segments[i : i + batch_size]
             texts = [seg.text for seg in batch]
 
-            prompt = build_batch_prompt(texts, self.source_language, self.target_language)
+            prompt = build_batch_prompt(
+                texts, self.source_language, self.target_language, context=batch_context(segments, i)
+            )
             response = call_with_retry(
                 lambda: self.client.chat.completions.create(
                     model=self.model,
@@ -106,7 +115,7 @@ class OpenAITranslator(BaseTranslator):
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.3,
-                    max_tokens=1000,
+                    max_tokens=BATCH_MAX_TOKENS,
                     extra_body=self.extra_body,
                 ),
                 what=f"{self.provider} batch {i // batch_size + 1}",
@@ -115,6 +124,8 @@ class OpenAITranslator(BaseTranslator):
 
             raw = response.choices[0].message.content.strip()
             parts = parse_numbered_lines(raw)
+            if response.choices[0].finish_reason == "length":
+                parts = drop_truncated_tail(parts)
             fill_batch_gaps(batch, parts, self.translate_text)
 
         return segments

@@ -12,13 +12,24 @@ from google.genai import types
 from config.settings import GEMINI_API_KEY, GEMINI_MODEL
 from core.translator.base import BaseTranslator
 from core.translator.llm_common import (
+    BATCH_MAX_TOKENS,
+    BATCH_SIZE,
+    SINGLE_MAX_TOKENS,
+    batch_context,
     build_batch_prompt,
     build_system_prompt,
     call_with_retry,
+    drop_truncated_tail,
     fill_batch_gaps,
     parse_numbered_lines,
 )
 from core.transcriber import Segment
+
+
+def _hit_token_limit(response) -> bool:
+    candidates = getattr(response, "candidates", None) or []
+    reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    return "MAX_TOKENS" in str(reason or "")
 
 
 class GeminiTranslator(BaseTranslator):
@@ -39,6 +50,8 @@ class GeminiTranslator(BaseTranslator):
         self.source_language = source_language
         self.target_language = target_language
         self._cache: dict[str, str] = {}
+        #: Lượt _generate() gần nhất có bị cắt vì chạm max_output_tokens không.
+        self._last_truncated = False
         # Model 2.5 hỗ trợ tắt "thinking" cho nhanh; model cũ thì không.
         # Lần đầu gặp lỗi vì cấu hình này thì nhớ lại để khỏi thử nữa.
         self._thinking_supported = True
@@ -74,6 +87,7 @@ class GeminiTranslator(BaseTranslator):
                     # như output — bỏ sót thì chi phí tính ra thấp hơn hoá đơn thật.
                     output_tokens = (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
                     self._record_usage(usage.prompt_token_count, output_tokens)
+                self._last_truncated = _hit_token_limit(response)
                 return (response.text or "").strip()
             except Exception as exc:
                 if use_thinking:
@@ -89,7 +103,9 @@ class GeminiTranslator(BaseTranslator):
         if text in self._cache:
             return self._cache[text]
 
-        translated = self._generate(text, max_output_tokens=1000) or text
+        translated = self._generate(text, max_output_tokens=SINGLE_MAX_TOKENS) or text
+        if self._last_truncated:
+            print(f"[Gemini] Bản dịch bị cắt vì hết token ({len(text)} ký tự nguồn).")
         self._cache[text] = translated
         return translated
 
@@ -102,17 +118,21 @@ class GeminiTranslator(BaseTranslator):
         translated_segments = self.translate_segments_batch(segments)
         return [seg.translated for seg in translated_segments]
 
-    def translate_segments_batch(self, segments: List[Segment], batch_size: int = 10) -> List[Segment]:
+    def translate_segments_batch(self, segments: List[Segment], batch_size: int = BATCH_SIZE) -> List[Segment]:
         for i in range(0, len(segments), batch_size):
             batch = segments[i : i + batch_size]
             texts = [seg.text for seg in batch]
 
             raw = self._generate(
-                build_batch_prompt(texts, self.source_language, self.target_language),
-                max_output_tokens=2000,
+                build_batch_prompt(
+                    texts, self.source_language, self.target_language, context=batch_context(segments, i)
+                ),
+                max_output_tokens=BATCH_MAX_TOKENS,
                 what=f"Gemini batch {i // batch_size + 1}",
             )
             parts = parse_numbered_lines(raw)
+            if self._last_truncated:
+                parts = drop_truncated_tail(parts)
             fill_batch_gaps(batch, parts, self.translate_text)
 
         return segments

@@ -18,6 +18,7 @@ from core.translator.gemini_translator import GeminiTranslator
 from core.translator.llm_common import (
     build_batch_prompt,
     build_system_prompt,
+    drop_truncated_tail,
     estimate_llm_cost,
     fill_batch_gaps,
     language_name,
@@ -100,13 +101,14 @@ class _FakeMessage:
 
 
 class _FakeChoice:
-    def __init__(self, content: str):
+    def __init__(self, content: str, finish_reason: str = "stop"):
         self.message = _FakeMessage(content)
+        self.finish_reason = finish_reason
 
 
 class _FakeResponse:
-    def __init__(self, content: str):
-        self.choices = [_FakeChoice(content)]
+    def __init__(self, content: str, finish_reason: str = "stop"):
+        self.choices = [_FakeChoice(content, finish_reason)]
 
 
 class _FakeCompletions:
@@ -338,3 +340,60 @@ def test_openai_sends_no_extra_body():
 def test_estimate_llm_cost_deepseek_uses_peak_price():
     cost = estimate_llm_cost("deepseek-flash", prompt_tokens=1_000_000, completion_tokens=1_000_000)
     assert cost == 1.5
+
+
+# ── Phản hồi bị cắt vì hết token: không nhận nửa câu ─────────
+def test_drop_truncated_tail_removes_last_line_only():
+    assert drop_truncated_tail({1: "Một.", 2: "Hai.", 3: "Ba dở da"}) == {1: "Một.", 2: "Hai."}
+    assert drop_truncated_tail({}) == {}
+
+
+def test_openai_truncated_batch_retranslates_cut_off_line():
+    """Bug thật (job #29): lô 10 câu dài chạm max_tokens, câu cuối kết thúc
+    "…đang chờ ngay tr" mà vẫn được nhận như bản dịch hoàn chỉnh."""
+    translator = OpenAITranslator(api_key="test-key")
+    responses = [
+        _FakeResponse("1. Xin chào.\n2. Đây là câu bị cắt ngay tr", finish_reason="length"),
+        _FakeResponse("Đây là câu hai đầy đủ."),
+    ]
+    completions = type("Comp", (), {"create": lambda self, **kw: responses.pop(0)})()
+    translator.client = type("C", (), {"chat": type("Chat", (), {"completions": completions})()})()
+
+    segments = [Segment(start=0, end=1, text="Hello."), Segment(start=1, end=2, text="This is two.")]
+    result = translator.translate_segments_batch(segments)
+
+    assert result[0].translated == "Xin chào."
+    assert result[1].translated == "Đây là câu hai đầy đủ."
+
+
+# ── Ngữ cảnh giữa các lô: giữ xưng hô nhất quán ──────────────
+def test_batch_prompt_includes_previous_translations_as_context():
+    prompt = build_batch_prompt(["He nods."], context=[("Minjun looks back.", "Minjun quay lại nhìn, anh mỉm cười.")])
+    assert "Minjun quay lại nhìn, anh mỉm cười." in prompt
+    assert "KHÔNG dịch lại" in prompt
+    assert prompt.rstrip().endswith("1. He nods.")
+
+
+def test_batch_prompt_without_context_has_no_context_block():
+    assert "NGAY TRƯỚC" not in build_batch_prompt(["Hello."])
+
+
+def test_second_batch_receives_first_batch_translations():
+    """Bug thật (job #30): lô 2 không biết lô 1 gọi Minjun là "anh" nên tự
+    chọn "cậu". Lô sau phải nhận các câu đã dịch của lô trước."""
+    translator = OpenAITranslator(api_key="test-key")
+    prompts: list[str] = []
+
+    def create(**kwargs):
+        user = kwargs["messages"][1]["content"]
+        prompts.append(user)
+        n = user.rstrip().splitlines()[-1].split(".")[0]
+        return _FakeResponse("\n".join(f"{k}. Bản dịch {k}" for k in range(1, int(n) + 1)))
+
+    translator.client = type("C", (), {"chat": type("Chat", (), {
+        "completions": type("Comp", (), {"create": lambda self, **kw: create(**kw)})()})()})()
+    segments = [Segment(start=i, end=i + 1, text=f"Line {i}.") for i in range(4)]
+    translator.translate_segments_batch(segments, batch_size=2)
+
+    assert "NGAY TRƯỚC" not in prompts[0]
+    assert "Line 1." in prompts[1] and "→ Bản dịch 2" in prompts[1]

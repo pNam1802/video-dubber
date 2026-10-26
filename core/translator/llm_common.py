@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import random
 import time
-from typing import Callable, Dict, List, TypeVar
+from typing import Callable, Dict, List, Sequence, Tuple, TypeVar
 
 from config.settings import LLM_MAX_RETRIES, LLM_PRICING_PER_MILLION_TOKENS
 from core.transcriber import Segment
@@ -70,20 +70,70 @@ Quy tắc dịch:
    mà người nói {target_name} vẫn quen dùng nguyên gốc.
 5. Không thêm giải thích hay chú thích, chỉ trả về văn bản đã dịch.
 6. Dịch ngắn gọn, độ dài gần với câu gốc, phù hợp để đọc thành lời nói.
+7. Giữ NHẤT QUÁN xưng hô (anh/cậu/cô/em...) và cách viết tên riêng xuyên suốt
+   video — người xem nghe liền một mạch, đổi xưng hô giữa chừng rất khó chịu.
 """
 
 
-def build_batch_prompt(texts: List[str], source_language: str = "en", target_language: str = "vi") -> str:
-    """Ghép nhiều câu thành 1 prompt đánh số để dịch trong một request."""
+#: Giới hạn token output. Trước đây 1000/lô và 500/câu — câu dài (vài trăm
+#: chữ) bị API cắt ngang giữa chừng, bản dịch kết thúc kiểu "…những người
+#: nhiễm bệ" mà không báo lỗi gì. Chỉ tính tiền theo token thật dùng nên
+#: đặt rộng tay không tốn thêm.
+BATCH_MAX_TOKENS = 8192
+SINGLE_MAX_TOKENS = 4096
+
+
+def drop_truncated_tail(parts: Dict[int, str]) -> Dict[int, str]:
+    """Phản hồi bị cắt vì hết token thì dòng CUỐI đã parse gần như chắc chắn
+    dở dang — bỏ nó đi để fill_batch_gaps() dịch lại riêng câu đó, thay vì
+    nhận nửa câu như bản dịch hoàn chỉnh."""
+    if parts:
+        parts = dict(parts)
+        parts.pop(max(parts))
+    return parts
+
+
+#: Số câu mỗi lô, và số cặp (gốc, dịch) của lô trước gửi kèm làm ngữ cảnh.
+BATCH_SIZE = 15
+CONTEXT_PAIRS = 6
+
+
+def build_batch_prompt(
+    texts: List[str],
+    source_language: str = "en",
+    target_language: str = "vi",
+    context: Sequence[Tuple[str, str]] = (),
+) -> str:
+    """Ghép nhiều câu thành 1 prompt đánh số để dịch trong một request.
+
+    context: vài cặp (gốc, đã dịch) ngay trước lô này. Mỗi lô là một request
+    độc lập — không có ngữ cảnh thì lô sau tự chọn xưng hô lại từ đầu (bug
+    thật, job #30: Minjun là "anh" ở lô 1, thành "cậu" ở lô 2, rồi lại "anh").
+    """
     source_name = language_name(source_language)
     target_name = language_name(target_language)
     numbered = "\n".join(f"{idx+1}. {t}" for idx, t in enumerate(texts))
+    context_block = ""
+    if context:
+        lines = "\n".join(f"- {src}\n  → {dst}" for src, dst in context)
+        context_block = (
+            "Các câu NGAY TRƯỚC đã được dịch như sau — chỉ để tham khảo, giữ đúng "
+            "xưng hô và tên riêng như vậy, KHÔNG dịch lại các câu này:\n"
+            f"{lines}\n\n"
+        )
     return (
-        f"Dịch {len(texts)} câu sau từ {source_name} sang {target_name}.\n"
+        context_block
+        + f"Dịch {len(texts)} câu sau từ {source_name} sang {target_name}.\n"
         f"Trả về đúng {len(texts)} dòng, mỗi dòng bắt đầu bằng số thứ tự tương ứng "
         f"(ví dụ: '1. ...', '2. ...'). Không thêm hoặc bỏ dòng nào.\n\n"
         f"{numbered}"
     )
+
+
+def batch_context(segments: List[Segment], start: int) -> List[Tuple[str, str]]:
+    """CONTEXT_PAIRS cặp (gốc, đã dịch) ngay trước vị trí start."""
+    previous = segments[max(0, start - CONTEXT_PAIRS):start]
+    return [(seg.text, seg.translated) for seg in previous if seg.translated]
 
 
 def parse_numbered_lines(raw: str) -> Dict[int, str]:
