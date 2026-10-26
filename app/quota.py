@@ -15,6 +15,7 @@ from sqlalchemy import func
 from app.extensions import db
 from app.models import Job, JobStatus, User
 from config.settings import (
+    CPU_COST_PER_SECOND,
     GPU_COST_PER_SECOND,
     QUOTA_GPU_SECONDS_PER_DAY,
     QUOTA_JOBS_PER_DAY,
@@ -54,6 +55,11 @@ def estimate_cost(gpu_seconds: float | None) -> float:
     giữa các user và các video, không dùng để đối chiếu hoá đơn.
     """
     return round((gpu_seconds or 0) * GPU_COST_PER_SECOND, 6)
+
+
+def estimate_cpu_cost(cpu_seconds: float | None) -> float:
+    """Như estimate_cost(), cho phần chạy trên container CPU (giai đoạn 2)."""
+    return round((cpu_seconds or 0) * CPU_COST_PER_SECOND, 6)
 
 
 def _limits(user: User) -> tuple[int, float, int]:

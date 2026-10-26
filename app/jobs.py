@@ -18,7 +18,7 @@ from flask import Flask
 from app.extensions import db
 from app.mailer import notify_job_status
 from app.models import Job, JobStatus, TranscriptSegment, utcnow
-from app.quota import estimate_cost
+from app.quota import estimate_cost, estimate_cpu_cost
 from config.settings import JOB_RUNNER, MODAL_APP_NAME
 from core.pipeline import DubbingConfig, DubbingPipeline
 from core.transcriber import Segment
@@ -80,17 +80,18 @@ def continue_job(flask_app: Flask, job_id: int, config: DubbingConfig) -> None:
 
 
 def _spawn_phase2_on_modal(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConfig) -> None:
-    """Như _spawn_on_modal(), nhưng gọi Dubber.run_phase2 — video đã có sẵn
-    trên Volume từ lúc upload, không cần commit lại trước khi spawn."""
+    """Như _spawn_on_modal(), nhưng gửi sang Composer (container CPU) —
+    giai đoạn 2 không dùng GPU, xem modal_app.py. Video đã có sẵn trên
+    Volume từ lúc upload, không cần commit lại trước khi spawn."""
     import modal
 
-    dubber = modal.Cls.from_name(MODAL_APP_NAME, "Dubber")()
-    call = dubber.run_phase2.spawn(job_id, str(video_path), config.__dict__)
+    composer = modal.Cls.from_name(MODAL_APP_NAME, "Composer")()
+    call = composer.run_phase2.spawn(job_id, str(video_path), config.__dict__)
 
     job = db.session.get(Job, job_id)
     if job is not None:
         job.modal_call_id = call.object_id
-        job.message = "Đã gửi sang GPU, đang chờ container..."
+        job.message = "Đã xác nhận, đang chuẩn bị tạo giọng đọc..."
         db.session.commit()
     flask_app.logger.info("Job %s -> Modal call %s (giai đoạn 2)", job_id, call.object_id)
 
@@ -314,8 +315,11 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
 
         # Cộng dồn với thời gian đã tốn ở giai đoạn 1 — KHÔNG tính thời gian
         # chờ người dùng duyệt ở giữa, vì đó không phải chi phí GPU/API.
-        job.elapsed_sec = (job.elapsed_sec or 0) + result.elapsed_seconds
-        job.estimated_cost_usd = estimate_cost(job.elapsed_sec)
+        # Giai đoạn 2 chạy trên container CPU nên tính theo giá CPU, cộng vào
+        # chi phí GPU đã ghi ở giai đoạn 1 (không tính lại cả hai theo giá GPU).
+        phase1_sec = job.elapsed_sec or 0
+        job.elapsed_sec = phase1_sec + result.elapsed_seconds
+        job.estimated_cost_usd = estimate_cost(phase1_sec) + estimate_cpu_cost(result.elapsed_seconds)
         job.tts_sec = result.timings.get("tts")
         job.compose_sec = result.timings.get("compose")
         job.finished_at = utcnow()

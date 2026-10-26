@@ -12,7 +12,8 @@ Triển khai trên Modal: web chạy CPU, pipeline lồng tiếng chạy GPU.
     modal deploy modal_app.py
 
 Kiến trúc:
-  web (CPU)  --spawn()-->  Dubber (GPU)  --ghi-->  Postgres + Volume
+  web (CPU)  --spawn()-->  Dubber (GPU, giai đoạn 1)    --ghi-->  Postgres + Volume
+             --spawn()-->  Composer (CPU, giai đoạn 2)  --ghi-->  Postgres + Volume
 Web và GPU dùng chung một Volume cho file upload/kết quả, và chung một Postgres
 để trao đổi tiến trình — nên web không cần chờ GPU, và request HTTP không bao giờ
 chạm giới hạn 150 giây của Modal.
@@ -166,6 +167,25 @@ class Dubber:
         finally:
             # Đẩy video/SRT kết quả lên volume để container web phục vụ được.
             data_volume.commit()
+
+
+# Giai doan 2 (giong doc + ghep video) KHONG dung GPU: edge-tts la cho mang,
+# ffmpeg libx264 chay CPU. Truoc day no chay tren chinh container T4 — job
+# #34 giu T4 237s/313s chi de cho mang va ma hoa video. Tach sang container
+# CPU, video dau ra giu nguyen (cung image, cung code, cung ffmpeg/edge-tts).
+# cpu=1.0 la muc DAT TRUOC (tinh tien toi thieu); ffmpeg can them thi Modal
+# cho dung vuot muc va tinh theo muc dung that.
+@app.cls(
+    cpu=1.0,
+    memory=2048,
+    volumes={"/data": data_volume},
+    secrets=secrets,
+    env=RUNTIME_ENV,
+    timeout=3600,
+    scaledown_window=60,
+)
+class Composer:
+    """Container CPU: tạo giọng đọc + ghép video cho giai đoạn 2."""
 
     @modal.method()
     def run_phase2(self, job_id: int, video_path: str, config_dict: dict) -> None:

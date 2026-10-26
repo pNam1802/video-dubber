@@ -827,3 +827,67 @@ def test_media_is_owner_only(app, as_other, user):
     with app.app_context():
         make_job(user, video_name="rieng.mp4", video_url="/media/output/rieng.mp4")
     assert as_other.get("/media/output/rieng.mp4").status_code == 403
+
+
+def test_phase2_cost_uses_cpu_price_not_gpu(app, user, monkeypatch, tmp_path):
+    """Giai đoạn 2 chạy trên container CPU (Composer) — chi phí = GPU của giai
+    đoạn 1 + CPU của giai đoạn 2, không tính cả hai theo giá T4 như trước."""
+    import app.jobs as jobs_mod
+    from app.models import TranscriptSegment
+    from app.quota import estimate_cost, estimate_cpu_cost
+    from core.pipeline import DubbingConfig, DubbingResult
+
+    class FakePipeline:
+        def __init__(self, config):
+            pass
+
+        def synthesize_and_compose(self, video_path, segments, progress_cb=None):
+            return DubbingResult(success=True, output_video=tmp_path / "out.mp4", elapsed_seconds=200.0)
+
+    monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
+    monkeypatch.setattr(jobs_mod, "notify_job_status", lambda job, event: None)
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.AWAITING_REVIEW, upload_path=str(video_path), elapsed_sec=60.0).id
+        db.session.add(TranscriptSegment(job_id=job_id, idx=0, start_sec=0.0, end_sec=1.0,
+                                         text_source="Hello.", text_target="Xin chào."))
+        db.session.commit()
+        jobs_mod.run_job_phase2(app, job_id, video_path, DubbingConfig())
+
+        job = db.session.get(Job, job_id)
+        assert job.elapsed_sec == 260.0
+        assert job.estimated_cost_usd == pytest.approx(estimate_cost(60.0) + estimate_cpu_cost(200.0))
+        assert job.estimated_cost_usd < estimate_cost(260.0)
+
+
+def test_phase2_spawns_on_cpu_composer(app, user, monkeypatch, tmp_path):
+    import sys
+    import types
+
+    import app.jobs as jobs_mod
+    from core.pipeline import DubbingConfig
+
+    looked_up = []
+
+    class FakeCall:
+        object_id = "fc-123"
+
+    class FakeMethod:
+        def spawn(self, *args):
+            return FakeCall()
+
+    class FakeCls:
+        run_phase2 = FakeMethod()
+
+    fake_modal = types.SimpleNamespace(
+        Cls=types.SimpleNamespace(from_name=lambda app_name, name: looked_up.append(name) or (lambda: FakeCls()))
+    )
+    monkeypatch.setitem(sys.modules, "modal", fake_modal)
+
+    with app.app_context():
+        job_id = make_job(user, status=JobStatus.QUEUED).id
+        jobs_mod._spawn_phase2_on_modal(app, job_id, tmp_path / "v.mp4", DubbingConfig())
+        assert db.session.get(Job, job_id).modal_call_id == "fc-123"
+    assert looked_up == ["Composer"]

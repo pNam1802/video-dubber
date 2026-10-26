@@ -126,6 +126,11 @@ QUOTA_STORAGE_MB = _env_int("QUOTA_STORAGE_MB", 2048)
 
 # Don gia GPU de uoc tinh chi phi moi job. Mac dinh theo T4 tren Modal.
 GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))
+# Giai doan 2 (giong doc + ghep video) chay tren container CPU (Composer trong
+# modal_app.py): 1 loi vat ly $0.0000131/s + 2 GiB x $0.00000222/s, gia Modal
+# chot 26/10/2026 (https://modal.com/pricing). Luc ffmpeg dung them loi thi
+# Modal tinh theo muc dung that — so nay la can duoi.
+CPU_COST_PER_SECOND = float(os.getenv("CPU_COST_PER_SECOND", "0.0000175"))
 
 # Gia LLM THAT (USD / 1 trieu token) — dung de tinh chi phi DICH thuc su,
 # khac han GPU_COST_PER_SECOND (tien Modal, khong lien quan gi den API
