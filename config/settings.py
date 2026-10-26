@@ -68,7 +68,9 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 # Gemini TTS: giong AI co cam xuc, lam theo chi dan giong dieu (xem
 # core/tts_engine.py::_synthesize_gemini). Dung chung GEMINI_API_KEY.
-GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
+# Flash-Lite: nghe thu 26/10/2026 gan nhu khong khac ban Flash, re hon ~30%
+# ($6 so voi $9 / 1 trieu token am thanh) va tra ket qua nhanh hon (~5.5s so voi ~9s).
+GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
 GEMINI_TTS_STYLE = os.getenv(
 	"GEMINI_TTS_STYLE",
 	"Giọng người kể chuyện review phim, truyện trên TikTok bằng tiếng Việt chuẩn: cuốn hút, "
