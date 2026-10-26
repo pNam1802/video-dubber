@@ -160,6 +160,22 @@ Cùng một đoạn 2,5 phút, dịch bằng DeepSeek, xếp giọng liền mạ
 | [3_Edge_HoaiMy_nu.mp4](demo/voices/3_Edge_HoaiMy_nu.mp4) | edge-tts HoaiMy (nữ) | 2 | Miễn phí |
 | [4_Edge_Florian_nam.mp4](demo/voices/4_Edge_Florian_nam.mp4) | edge-tts Florian (nam) | 4 | Miễn phí |
 
+#### Gemini Leda (nữ)
+
+https://github.com/user-attachments/assets/7828d5d9-df73-46ab-b3ad-b27781d11006
+
+#### Gemini Charon (nam)
+
+https://github.com/user-attachments/assets/d5559380-e327-43c0-ba26-4cd37f28e76a
+
+#### edge-tts HoaiMy (nữ)
+
+https://github.com/user-attachments/assets/1e4878cf-9b97-4537-b8cb-7934fdbe94c7
+
+#### edge-tts Florian (nam)
+
+https://github.com/user-attachments/assets/44b4492c-fca9-4ca0-a7fc-d7be3dc0026b
+
 > **Nguồn:** trích đoạn 7:30–10:00 của video *"Chap 6 — The Apocalypse Has Come"* thuộc kênh
 > **Manhwa Academy**. Bản quyền nội dung gốc thuộc về kênh và tác giả truyện. Đoạn trích chỉ dùng
 > để minh hoạ chất lượng lồng tiếng cho mục đích học tập/đồ án, không dùng thương mại; sẽ gỡ nếu
