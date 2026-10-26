@@ -175,9 +175,13 @@ class Dubber:
 # CPU, video dau ra giu nguyen (cung image, cung code, cung ffmpeg/edge-tts).
 # cpu=1.0 la muc DAT TRUOC (tinh tien toi thieu); ffmpeg can them thi Modal
 # cho dung vuot muc va tinh theo muc dung that.
+# region="us": Gemini TTS tu choi mot so vung ("User location is not
+# supported" — gap that khi thu giong 26/10/2026). Ghim vung rong "us" bi
+# nhan gia 1.15x, chi dang ke voi GPU, khong dang ke voi container CPU nay.
 @app.cls(
     cpu=1.0,
     memory=2048,
+    region="us",
     volumes={"/data": data_volume},
     secrets=secrets,
     env=RUNTIME_ENV,

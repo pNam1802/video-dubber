@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import math
 import re
+import shutil
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -17,7 +21,16 @@ for _stream in (sys.stdout, sys.stderr):
         except Exception:
             pass
 
-from config.settings import FFMPEG_BIN, FFMPEG_TIMEOUT, TEMP_DIR, TTS_CONCURRENCY
+from config.settings import (
+	FFMPEG_BIN,
+	FFMPEG_TIMEOUT,
+	GEMINI_API_KEY,
+	GEMINI_TTS_MODEL,
+	GEMINI_TTS_STYLE,
+	TEMP_DIR,
+	TTS_CONCURRENCY,
+	TTS_VOICES,
+)
 from core.transcriber import Segment
 from core.voice_timeline import base_speed, fill_gaps, plan_timeline
 from utils.proc import run_command
@@ -30,7 +43,7 @@ _EDGE_BACKOFF = 1.0
 
 
 class TTSEngine:
-	"""Vietnamese text-to-speech wrapper for edge-tts and gTTS."""
+	"""Vietnamese text-to-speech wrapper for edge-tts, Gemini TTS and gTTS."""
 
 	def __init__(
 		self,
@@ -45,7 +58,16 @@ class TTSEngine:
 		self.tts_dir.mkdir(parents=True, exist_ok=True)
 		self.concurrency = max(1, int(concurrency or TTS_CONCURRENCY))
 
-		self.edge_voice = "vi-VN-HoaiMyNeural" if voice == "female" else "vi-VN-NamMinhNeural"
+		voices = TTS_VOICES.get(self.engine, {})
+		#: Tên giọng thật của nhà cung cấp (vd "Leda", "vi-VN-HoaiMyNeural").
+		self.voice_name = voices.get(voice) or voices.get("female", "")
+		# edge-tts còn là phương án dự phòng khi Gemini lỗi — khi đó đọc bằng
+		# HoaiMy, gần giọng Việt tự nhiên nhất trong các giọng miễn phí.
+		self.edge_voice = self.voice_name if self.engine == "edge-tts" else TTS_VOICES["edge-tts"]["female"]
+		self._gemini_client = None
+		self._gemini_lock = threading.Lock()
+		#: Token âm thanh Gemini đã dùng — để ghi log chi phí thật.
+		self.gemini_audio_tokens = 0
 
 	def synthesize_all(self, segments: List[Segment]) -> List[tuple]:
 		"""Return list of (segment, path) pairs — only for successfully synthesized segments.
@@ -88,6 +110,8 @@ class TTSEngine:
 			if error_samples:
 				detail += " Sample errors: " + " | ".join(error_samples)
 			raise RuntimeError(detail)
+		if self.gemini_audio_tokens:
+			print(f"[TTS] Gemini: {self.gemini_audio_tokens} token âm thanh (xem chi phí thật trên AI Studio).")
 		return results
 
 	def _synthesize_segment(self, idx: int, segment: Segment, text: str) -> tuple[tuple | None, str | None]:
@@ -99,14 +123,21 @@ class TTSEngine:
 		except Exception as exc:
 			# Fallback to gTTS for non-gTTS engines
 			if self.engine != "gtts":
-				try:
-					self._synthesize_gtts(text, out)
-					self._trim_silence(out)
-					self._check_audio(out, text)
-					print(f"[TTS] Segment {idx}: fallback gTTS succeeded (primary error: {exc})")
-					return (segment, out), None
-				except Exception as fb_exc:
-					err_msg = f"segment {idx}: {exc}; fallback gTTS failed: {fb_exc}"
+				# Gemini lỗi thì thử edge-tts trước (giọng tốt hơn gTTS nhiều).
+				fallbacks = (["edge-tts"] if self.engine == "gemini" else []) + ["gtts"]
+				err_msg = f"segment {idx}: {exc}"
+				for fallback in fallbacks:
+					try:
+						if fallback == "edge-tts":
+							self._synthesize_edge(text, out)
+						else:
+							self._synthesize_gtts(text, out)
+						self._trim_silence(out)
+						self._check_audio(out, text)
+						print(f"[TTS] Segment {idx}: fallback {fallback} succeeded (primary error: {exc})")
+						return (segment, out), None
+					except Exception as fb_exc:
+						err_msg += f"; fallback {fallback} failed: {fb_exc}"
 			else:
 				err_msg = f"segment {idx}: {exc}"
 			print(f"[TTS] Skipping {err_msg}")
@@ -188,7 +219,15 @@ class TTSEngine:
 		# Ghi ra file tạm: lỗi giữa chừng thì bản tốc độ thường vẫn còn nguyên.
 		tmp = path.with_name(path.stem + "_rate" + path.suffix)
 		try:
-			self._synthesize_checked(text, tmp, speed=speed)
+			if self.engine == "edge-tts":
+				self._synthesize_checked(text, tmp, speed=speed)
+			else:
+				# Gemini/gTTS không có tham số tốc độ chính xác: chỉnh bằng atempo
+				# trên bản đã có, KHÔNG gọi API lần nữa — đỡ tốn tiền, và giữ
+				# nguyên ngữ điệu (gọi lại thì Gemini đọc mỗi lần một kiểu).
+				shutil.copy(path, tmp)
+				self._atempo(tmp, speed)
+				self._check_audio(tmp, text)
 			tmp.replace(path)
 			return self._duration(path)
 		except Exception as exc:
@@ -241,12 +280,57 @@ class TTSEngine:
 		if self.engine == "edge-tts":
 			self._synthesize_edge(text, output_path, speed=speed)
 			return output_path
-		if self.engine == "gtts":
-			self._synthesize_gtts(text, output_path)
+		if self.engine in ("gtts", "gemini"):
+			if self.engine == "gtts":
+				self._synthesize_gtts(text, output_path)
+			else:
+				self._synthesize_gemini(text, output_path)
 			if abs(speed - 1.0) > 1e-3:
 				self._atempo(output_path, speed)
 			return output_path
 		raise ValueError(f"Unsupported TTS engine: {self.engine}")
+
+	def _synthesize_gemini(self, text: str, output_path: Path) -> None:
+		"""Gemini TTS: giọng AI có cảm xúc, làm theo GEMINI_TTS_STYLE. Trả về WAV
+		24 kHz mono — chuyển sang định dạng của output_path (mp3) để các bước
+		sau (cắt khoảng lặng, ghép video) xử lý như mọi giọng khác."""
+		from pydub import AudioSegment
+
+		from core.translator.llm_common import call_with_retry
+
+		if not GEMINI_API_KEY:
+			raise RuntimeError("GEMINI_API_KEY chưa được thiết lập!")
+		with self._gemini_lock:
+			if self._gemini_client is None:
+				from google import genai
+
+				self._gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+		client = self._gemini_client
+
+		interaction = call_with_retry(
+			lambda: client.interactions.create(
+				model=GEMINI_TTS_MODEL,
+				input=[{
+					"type": "user_input",
+					"content": [{
+						"type": "text",
+						"text": text,
+						"annotations": [{"type": "speech_metadata", "style": GEMINI_TTS_STYLE}],
+					}],
+				}],
+				response_format={"type": "audio"},
+				generation_config={"speech_config": [{"voice": self.voice_name}]},
+			),
+			what="Gemini TTS",
+		)
+		audio = AudioSegment.from_file(io.BytesIO(base64.b64decode(interaction.output_audio.data)), format="wav")
+		audio.export(str(output_path), format=output_path.suffix.lstrip(".") or "mp3")
+
+		usage = getattr(interaction, "usage", None)
+		for item in getattr(usage, "output_tokens_by_modality", None) or []:
+			if str(getattr(item, "modality", "")).lower().endswith("audio"):
+				with self._gemini_lock:
+					self.gemini_audio_tokens += int(getattr(item, "tokens", 0) or 0)
 
 	def _synthesize_gtts(self, text: str, output_path: Path) -> None:
 		"""Synthesize speech using Google TTS (gTTS)."""

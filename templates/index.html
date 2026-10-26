@@ -192,17 +192,15 @@
         <div>
           <label class="{{ label_class }}" for="tts_engine">Giọng đọc</label>
           <select name="tts_engine" id="tts_engine" class="{{ field_class }}">
-            <option value="edge-tts">Edge-TTS — tự nhiên hơn</option>
+            <option value="edge-tts">Edge-TTS — miễn phí</option>
+            {% if gemini_key_exists %}<option value="gemini">Gemini — có cảm xúc (tính phí)</option>{% endif %}
             <option value="gtts">gTTS — đơn giản</option>
           </select>
         </div>
 
         <div>
           <label class="{{ label_class }}" for="tts_voice">Chất giọng</label>
-          <select name="tts_voice" id="tts_voice" class="{{ field_class }}">
-            <option value="female">Nữ</option>
-            <option value="male">Nam</option>
-          </select>
+          <select name="tts_voice" id="tts_voice" class="{{ field_class }}"></select>
         </div>
 
         <div>
@@ -594,8 +592,31 @@
 
     document.getElementById("retryBtn").addEventListener("click", function () { window.location.reload(); });
 
+    // ── Chất giọng theo từng công cụ đọc ─────────────────
+    // Khoá phải khớp config.settings.TTS_VOICES; nhãn chỉ để hiển thị.
+    const VOICE_KEYS = {{ tts_voice_keys | tojson }};
+    const VOICE_LABELS = {
+      "edge-tts": { female: "HoaiMy — nữ", male: "NamMinh — nam", vivienne: "Vivienne — nữ", seraphina: "Seraphina — nữ", florian: "Florian — nam" },
+      gemini: { female: "Leda — nữ", male: "Charon — nam" },
+      gtts: { female: "Mặc định" }
+    };
+    const ttsEngineSelect = document.getElementById("tts_engine");
+    const ttsVoiceSelect = document.getElementById("tts_voice");
+    function syncVoices() {
+      const engine = ttsEngineSelect.value;
+      ttsVoiceSelect.innerHTML = "";
+      (VOICE_KEYS[engine] || []).forEach(function (key) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = (VOICE_LABELS[engine] || {})[key] || key;
+        ttsVoiceSelect.appendChild(option);
+      });
+    }
+    ttsEngineSelect.addEventListener("change", syncVoices);
+
     paintPresets("balanced");
     syncEngineHint();
+    syncVoices();
   })();
 </script>
 {% endblock %}

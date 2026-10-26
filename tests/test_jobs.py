@@ -891,3 +891,37 @@ def test_phase2_spawns_on_cpu_composer(app, user, monkeypatch, tmp_path):
         jobs_mod._spawn_phase2_on_modal(app, job_id, tmp_path / "v.mp4", DubbingConfig())
         assert db.session.get(Job, job_id).modal_call_id == "fc-123"
     assert looked_up == ["Composer"]
+
+
+# ── Chọn giọng theo từng công cụ đọc (config.settings.TTS_VOICES) ──
+def test_upload_gemini_voice_is_kept(app, as_user, monkeypatch):
+    import app.api as api_mod
+
+    monkeypatch.setattr(api_mod, "GEMINI_API_KEY", "test-key")
+    response, config = _upload_and_capture_config(as_user, monkeypatch, tts_engine="gemini", tts_voice="male")
+    assert response.status_code == 202
+    assert (config.tts_engine, config.tts_voice) == ("gemini", "male")
+
+
+def test_upload_voice_not_in_engine_falls_back_to_default(app, as_user, monkeypatch):
+    # "florian" chỉ có ở edge-tts — gửi kèm gemini thì rơi về giọng mặc định.
+    import app.api as api_mod
+
+    monkeypatch.setattr(api_mod, "GEMINI_API_KEY", "test-key")
+    response, config = _upload_and_capture_config(as_user, monkeypatch, tts_engine="gemini", tts_voice="florian")
+    assert response.status_code == 202
+    assert config.tts_voice == "female"
+
+
+def test_upload_edge_multilingual_voice(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(as_user, monkeypatch, tts_engine="edge-tts", tts_voice="florian")
+    assert response.status_code == 202
+    assert config.tts_voice == "florian"
+
+
+def test_upload_gemini_voice_without_server_key_is_rejected(app, as_user, monkeypatch):
+    import app.api as api_mod
+
+    monkeypatch.setattr(api_mod, "GEMINI_API_KEY", "")
+    response, _ = _upload_and_capture_config(as_user, monkeypatch, tts_engine="gemini")
+    assert response.status_code == 400

@@ -35,3 +35,36 @@ def test_synthesize_checked_retries_bad_audio(monkeypatch, tmp_path):
     monkeypatch.setattr(TTSEngine, "_duration", staticmethod(lambda path: next(durations)))
     engine._synthesize_checked("Một câu đủ dài để kiểm tra", tmp_path / "x.mp3")
     assert len(calls) == 2
+
+
+# ── Danh mục giọng + Gemini ───────────────────────────────────
+def test_voice_names_from_catalog(tmp_path):
+    assert TTSEngine(engine="gemini", voice="male", tts_dir=tmp_path).voice_name == "Charon"
+    assert TTSEngine(engine="gemini", voice="female", tts_dir=tmp_path).voice_name == "Leda"
+    edge = TTSEngine(engine="edge-tts", voice="florian", tts_dir=tmp_path)
+    assert edge.edge_voice == "de-DE-FlorianMultilingualNeural"
+
+
+def test_unknown_voice_falls_back_to_engine_default(tmp_path):
+    assert TTSEngine(engine="edge-tts", voice="khong-co", tts_dir=tmp_path).edge_voice == "vi-VN-HoaiMyNeural"
+
+
+def test_gemini_engine_falls_back_to_hoaimy_on_edge(tmp_path):
+    assert TTSEngine(engine="gemini", voice="male", tts_dir=tmp_path).edge_voice == "vi-VN-HoaiMyNeural"
+
+
+def test_gemini_speed_change_uses_atempo_not_another_api_call(monkeypatch, tmp_path):
+    """Đổi tốc độ giọng Gemini không được gọi API lần nữa — tốn tiền gấp đôi
+    và Gemini đọc lại mỗi lần một kiểu."""
+    from core.transcriber import Segment
+
+    engine = TTSEngine(engine="gemini", voice="female", tts_dir=tmp_path)
+    path = tmp_path / "seg_00000.mp3"
+    path.write_bytes(b"audio")
+    tempos: list[float] = []
+    monkeypatch.setattr(engine, "synthesize_text", lambda *a, **k: (_ for _ in ()).throw(AssertionError("API gọi lại")))
+    monkeypatch.setattr(TTSEngine, "_atempo", staticmethod(lambda p, speed: tempos.append(speed)))
+    monkeypatch.setattr(TTSEngine, "_duration", staticmethod(lambda p: 3.0))
+    duration = engine._resynthesize((Segment(0, 3, "Hello.", "Xin chào các bạn."), path), 0.92)
+    assert tempos == [0.92]
+    assert duration == 3.0

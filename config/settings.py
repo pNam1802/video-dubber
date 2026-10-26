@@ -66,6 +66,35 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
+# Gemini TTS: giong AI co cam xuc, lam theo chi dan giong dieu (xem
+# core/tts_engine.py::_synthesize_gemini). Dung chung GEMINI_API_KEY.
+GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
+GEMINI_TTS_STYLE = os.getenv(
+	"GEMINI_TTS_STYLE",
+	"Giọng người kể chuyện review phim, truyện trên TikTok bằng tiếng Việt chuẩn: cuốn hút, "
+	"nhấn nhá tự nhiên theo nội dung, tốc độ vừa phải, không đọc như đọc tin tức.",
+)
+
+# Danh muc giong theo tung engine: khoa luu trong Job.tts_voice -> ten giong
+# that cua nha cung cap. "female"/"male" giu nguyen nghia cu cho job da co.
+# Giong *Multilingual* cua edge-tts doc duoc tieng Viet (thu that 26/10/2026).
+TTS_VOICES: dict[str, dict[str, str]] = {
+	"edge-tts": {
+		"female": "vi-VN-HoaiMyNeural",
+		"male": "vi-VN-NamMinhNeural",
+		"vivienne": "fr-FR-VivienneMultilingualNeural",
+		"seraphina": "de-DE-SeraphinaMultilingualNeural",
+		"florian": "de-DE-FlorianMultilingualNeural",
+	},
+	"gemini": {
+		"female": "Leda",
+		"male": "Charon",
+	},
+	"gtts": {
+		"female": "vi",
+	},
+}
+
 # DeepSeek dung API tuong thich OpenAI — xem core/translator/deepseek_translator.py.
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")

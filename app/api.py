@@ -23,6 +23,7 @@ from config.settings import (
     DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
     UPLOAD_DIR,
@@ -45,8 +46,7 @@ ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 ALLOWED_SOURCE_LANGUAGES = {"auto", "en", "vi", "ja", "zh", "ko"}
 ALLOWED_TARGET_LANGUAGES = {"vi", "ja", "zh", "ko"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
-ALLOWED_TTS_ENGINES = {"edge-tts", "gtts"}
-ALLOWED_VOICES = {"female", "male"}
+ALLOWED_TTS_ENGINES = set(TTS_VOICES)
 ALLOWED_SUBTITLE_MODES = {"bilingual", "target", "source", "none"}
 
 
@@ -86,7 +86,11 @@ def upload_video():
     source_language = _pick("source_language", ALLOWED_SOURCE_LANGUAGES, "auto")
     compute_device = _pick("compute_device", ALLOWED_DEVICES, "auto")
     tts_engine = _pick("tts_engine", ALLOWED_TTS_ENGINES, "edge-tts")
-    tts_voice = _pick("tts_voice", ALLOWED_VOICES, "female")
+    # Mỗi engine có bộ giọng riêng — giọng không thuộc engine đã chọn (form
+    # cũ, client sửa tay) thì rơi về giọng mặc định của engine đó.
+    tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
+    if tts_engine == "gemini" and not GEMINI_API_KEY:
+        return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
     subtitle_mode = _pick("subtitle_mode", ALLOWED_SUBTITLE_MODES, "bilingual")
 
     try:

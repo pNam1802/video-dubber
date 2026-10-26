@@ -24,7 +24,7 @@ python-dotenv==1.2.2
 
 # ── Dịch thuật ───────────────────────────────────────
 openai==2.52.0
-google-genai==2.14.0
+google-genai==2.30.1
 
 # ── Stack ML (pin theo env thật của dự án: miniconda3/envs/venv) ──
 # GPU: cài torch theo index CUDA riêng, ví dụ
