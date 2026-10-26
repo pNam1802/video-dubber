@@ -31,6 +31,9 @@ google-genai==2.14.0
 #   pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 torch==2.5.1
 faster-whisper==1.2.1
+# faster-whisper 1.2.1 goi av.open(metadata_errors=...) — PyAV 19 bo tham so
+# nay, nhan dang giong noi hong ngay. Ghim de build lai image khong keo ban moi.
+av==18.1.0
 # Giu lai lam backend du phong khi faster-whisper khong chay duoc
 openai-whisper==20250625
 transformers==4.57.6
@@ -38,6 +41,6 @@ sentencepiece==0.2.1
 
 # ── Audio / TTS ──────────────────────────────────────
 gTTS==2.5.4
-edge-tts==7.2.8
+edge-tts==7.3.1
 pydub==0.25.1
 soundfile==0.13.1
