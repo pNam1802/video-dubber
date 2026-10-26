@@ -1,6 +1,6 @@
 """
 core/translator/gemini_translator.py
-Dịch bằng Google Gemini API, tối ưu cho thuật ngữ AI/ML.
+Dịch bằng Google Gemini API.
 """
 from __future__ import annotations
 

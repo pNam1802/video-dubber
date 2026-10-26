@@ -16,6 +16,8 @@ from app.models import Job, JobStatus, Role, User
 from app.permissions import require_admin
 from app.quota import get_usage
 from config.settings import (
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     JOB_RUNNER,
@@ -110,6 +112,7 @@ def config_status():
             # hien du lieu binh thuong o /admin/stats (data-driven, khong
             # phu thuoc danh sach nay).
             "engines": {
+                "deepseek": {**_key_status(DEEPSEEK_API_KEY), "model": DEEPSEEK_MODEL},
                 "gemini": {**_key_status(GEMINI_API_KEY), "model": GEMINI_MODEL},
                 "openai": {**_key_status(OPENAI_API_KEY), "model": OPENAI_MODEL},
             },

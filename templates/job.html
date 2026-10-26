@@ -375,7 +375,7 @@
 
       apiKeyBox.classList.remove("hidden");
       apiKeyBox.classList.add("flex");
-      apiKeyInput.placeholder = (ENGINE === "openai" ? "OpenAI" : "Gemini") + " API key";
+      apiKeyInput.placeholder = ({ openai: "OpenAI", deepseek: "DeepSeek" }[ENGINE] || "Gemini") + " API key";
 
       let hideStatusTimer = null;
       function showStatus(text, isError) {
@@ -452,7 +452,7 @@
         try {
           const body = {};
           const key = apiKeyInput.value.trim();
-          if (key) body[ENGINE === "openai" ? "openai_api_key" : "gemini_api_key"] = key;
+          if (key) body[(ENGINE === "openai" || ENGINE === "deepseek" ? ENGINE : "gemini") + "_api_key"] = key;
           const res = await fetch("/api/jobs/" + JOB_ID + "/segments/" + row.dataset.segId + "/retranslate", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },

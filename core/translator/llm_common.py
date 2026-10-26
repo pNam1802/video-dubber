@@ -8,7 +8,7 @@ import random
 import time
 from typing import Callable, Dict, List, TypeVar
 
-from config.settings import AI_PRESERVE_TERMS, LLM_MAX_RETRIES, LLM_PRICING_PER_MILLION_TOKENS
+from config.settings import LLM_MAX_RETRIES, LLM_PRICING_PER_MILLION_TOKENS
 from core.transcriber import Segment
 
 T = TypeVar("T")
@@ -51,20 +51,25 @@ def language_name(code: str) -> str:
 def build_system_prompt(source_language: str = "en", target_language: str = "vi") -> str:
     """Trước đây là hằng số cứng "tiếng Anh sang tiếng Việt" — giờ dựng theo
     đúng cặp ngôn ngữ thật của job (Whisper tự nhận dạng nguồn, người dùng
-    tự chọn đích), để hỗ trợ thêm Nhật/Trung/Hàn."""
+    tự chọn đích), để hỗ trợ thêm Nhật/Trung/Hàn.
+
+    Không gắn với lĩnh vực nào: trước đây prompt chuyên AI/ML kèm danh sách
+    thuật ngữ cố định, giờ video có thể là mọi chủ đề (nấu ăn, vlog, tin
+    tức, bài giảng...) nên để mô hình tự nhận ra ngữ cảnh."""
     source_name = language_name(source_language)
     target_name = language_name(target_language)
-    preserve_terms = ", ".join(AI_PRESERVE_TERMS[:20])
-    return f"""Bạn là chuyên gia dịch thuật {source_name} sang {target_name},
-chuyên lĩnh vực Trí tuệ nhân tạo (AI) và Học máy (ML).
+    return f"""Bạn là chuyên gia dịch thuật {source_name} sang {target_name} cho lồng tiếng video
+thuộc mọi chủ đề (giải trí, đời sống, giáo dục, tin tức, kỹ thuật...).
 
 Quy tắc dịch:
-1. Dịch tự nhiên, chuẩn ngữ pháp {target_name}.
-2. Giữ nguyên các thuật ngữ kỹ thuật AI/ML bằng tiếng Anh (không dịch):
-   {preserve_terms}
-3. Không thêm giải thích hay chú thích, chỉ trả về văn bản đã dịch.
-4. Giữ nguyên dấu câu và cấu trúc câu gốc.
-5. Dịch ngắn gọn, phù hợp để đọc thành lời nói.
+1. Dịch tự nhiên như người bản xứ nói, chuẩn ngữ pháp {target_name}.
+2. Tự nhận ra chủ đề và giọng điệu của video (trang trọng, thân mật, hài hước...)
+   rồi dịch cho phù hợp; dùng xưng hô tự nhiên theo ngữ cảnh.
+3. Thành ngữ, tiếng lóng, câu đùa: dịch theo NGHĨA, không dịch từng chữ.
+4. Giữ nguyên tên riêng, tên thương hiệu/sản phẩm, và thuật ngữ chuyên ngành
+   mà người nói {target_name} vẫn quen dùng nguyên gốc.
+5. Không thêm giải thích hay chú thích, chỉ trả về văn bản đã dịch.
+6. Dịch ngắn gọn, độ dài gần với câu gốc, phù hợp để đọc thành lời nói.
 """
 
 

@@ -12,7 +12,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   {# Preset ghi vào hai trường thật này; "Tuỳ chỉnh nâng cao" sửa trực tiếp #}
-  <input type="hidden" name="translator_engine" id="translator_engine" value="gemini">
+  <input type="hidden" name="translator_engine" id="translator_engine" value="deepseek">
   <input type="hidden" name="whisper_model" id="whisper_model" value="small">
 
   <div class="lg:col-span-8 flex flex-col gap-lg">
@@ -97,13 +97,13 @@
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {# Cả ba đều dịch bằng Gemini — khác nhau ở mô hình Whisper (đánh đổi
+        {# Cả ba đều dịch bằng DeepSeek — khác nhau ở mô hình Whisper (đánh đổi
            tốc độ/độ chính xác nhận dạng), không còn khác nhau ở công cụ
            dịch như trước (MarianMT đã bị khoá khỏi lựa chọn). #}
         {% set presets = [
-          ('fast', 'speed', 'Nhanh', 'Nhận dạng nhanh, hợp video giọng rõ', 'base', 'gemini', ''),
-          ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng cho hầu hết video', 'small', 'gemini', 'MẶC ĐỊNH'),
-          ('best', 'diamond', 'Tốt nhất', 'Nhận dạng chính xác hơn, chậm hơn', 'medium', 'gemini', '')
+          ('fast', 'speed', 'Nhanh', 'Nhận dạng nhanh, hợp video giọng rõ', 'base', 'deepseek', ''),
+          ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng cho hầu hết video', 'small', 'deepseek', 'MẶC ĐỊNH'),
+          ('best', 'diamond', 'Tốt nhất', 'Nhận dạng chính xác hơn, chậm hơn', 'medium', 'deepseek', '')
         ] %}
         {% for key, icon, name, desc, whisper, engine, badge in presets %}
         <button type="button" class="preset relative overflow-hidden rounded-2xl p-4 flex flex-col items-start gap-2 transition-all text-left group
@@ -178,11 +178,12 @@
             </button>
           </div>
           <p id="engineTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
-            Gemini và OpenAI đều dịch tự nhiên với câu phức tạp và hỗ trợ đủ các ngôn ngữ đích.
+            DeepSeek, Gemini và OpenAI đều dịch tự nhiên và hỗ trợ đủ các ngôn ngữ đích; DeepSeek rẻ nhất.
             Cần bạn tự có API key, tính phí theo lượng chữ. Nếu một bên gặp lỗi, hệ thống tự
             chuyển sang bên còn lại để job không bị hỏng giữa chừng.
           </p>
           <select id="translator_engine_select" class="{{ field_class }}">
+            <option value="deepseek">DeepSeek{% if not deepseek_key_exists %} — cần API key{% endif %}</option>
             <option value="gemini">Gemini{% if not gemini_key_exists %} — cần API key{% endif %}</option>
             <option value="openai">OpenAI{% if not openai_key_exists %} — cần API key{% endif %}</option>
           </select>
@@ -229,6 +230,18 @@
           </label>
           <input type="range" name="original_volume" id="original_volume" min="0" max="50" value="10"
             class="w-full accent-primary">
+        </div>
+
+        <div id="deepseekKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="{{ label_class }}" for="deepseek_model">Model DeepSeek</label>
+            <input type="text" name="deepseek_model" id="deepseek_model" value="{{ default_deepseek_model }}" class="{{ field_class }} tabular">
+          </div>
+          <div>
+            <label class="{{ label_class }}" for="deepseek_api_key">DeepSeek API key</label>
+            <input type="password" name="deepseek_api_key" id="deepseek_api_key" class="{{ field_class }}"
+              placeholder="{% if deepseek_key_exists %}Dùng key của hệ thống{% else %}sk-...{% endif %}">
+          </div>
         </div>
 
         <div id="geminiKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -482,13 +495,13 @@
 
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
-      const gemini = engineField.value === "gemini";
-      const openai = engineField.value === "openai";
-      document.getElementById("geminiKeyGroup").classList.toggle("hidden", !gemini);
-      document.getElementById("openaiKeyGroup").classList.toggle("hidden", !openai);
-      if (gemini || openai) {
-        const other = gemini ? "OpenAI" : "Gemini";
-        hint.textContent = "Nếu " + (gemini ? "Gemini" : "OpenAI") + " gặp lỗi, hệ thống tự chuyển sang " + other + " để job không bị hỏng.";
+      const names = { deepseek: "DeepSeek", gemini: "Gemini", openai: "OpenAI" };
+      const engine = engineField.value;
+      Object.keys(names).forEach(function (key) {
+        document.getElementById(key + "KeyGroup").classList.toggle("hidden", engine !== key);
+      });
+      if (names[engine]) {
+        hint.textContent = "Nếu " + names[engine] + " gặp lỗi, hệ thống tự chuyển sang nhà cung cấp khác để job không bị hỏng.";
         hint.classList.remove("hidden");
       } else {
         hint.classList.add("hidden");

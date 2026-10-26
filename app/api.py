@@ -19,6 +19,8 @@ from app.storage import commit_uploads, commit_volume
 from config.settings import (
     OUTPUT_DIR,
     RATELIMIT_UPLOAD,
+    DEEPSEEK_API_KEY,
+    DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
     OPENAI_API_KEY,
@@ -36,7 +38,7 @@ ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 # dich sai trong im lang khi nguon khong phai tieng Anh (van "thanh cong"),
 # va khong dich duoc sang Nhat/Trung/Han. Du an gio dung day du Gemini/OpenAI
 # nen khong can phuong an mien phi/offline nay nua.
-ALLOWED_TRANSLATORS = {"openai", "gemini"}
+ALLOWED_TRANSLATORS = {"deepseek", "openai", "gemini"}
 ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 # "auto" = Whisper tu nhan dang; con lai la khi nguoi dung tu chon vi tu nhan
 # dang doan sai (video co nhac nen dai, giong khong ro o dau video...).
@@ -65,7 +67,7 @@ def upload_video():
     if ext not in ALLOWED_VIDEO_EXTENSIONS:
         return jsonify({"error": "Định dạng video không được hỗ trợ."}), 400
 
-    translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "gemini")
+    translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "deepseek")
     target_language = _pick("target_language", ALLOWED_TARGET_LANGUAGES, "vi")
 
     openai_api_key = request.form.get("openai_api_key", "").strip() or OPENAI_API_KEY
@@ -75,6 +77,10 @@ def upload_video():
     gemini_api_key = request.form.get("gemini_api_key", "").strip() or GEMINI_API_KEY
     if translator_engine == "gemini" and not gemini_api_key:
         return jsonify({"error": "Cần GEMINI API key để dùng Gemini translator."}), 400
+
+    deepseek_api_key = request.form.get("deepseek_api_key", "").strip() or DEEPSEEK_API_KEY
+    if translator_engine == "deepseek" and not deepseek_api_key:
+        return jsonify({"error": "Cần DEEPSEEK API key để dùng DeepSeek translator."}), 400
 
     whisper_model = _pick("whisper_model", ALLOWED_WHISPER_MODELS, "base")
     source_language = _pick("source_language", ALLOWED_SOURCE_LANGUAGES, "auto")
@@ -133,6 +139,8 @@ def upload_video():
         openai_model=request.form.get("openai_model", OPENAI_MODEL) or OPENAI_MODEL,
         gemini_api_key=gemini_api_key,
         gemini_model=request.form.get("gemini_model", GEMINI_MODEL) or GEMINI_MODEL,
+        deepseek_api_key=deepseek_api_key,
+        deepseek_model=request.form.get("deepseek_model", DEEPSEEK_MODEL) or DEEPSEEK_MODEL,
         whisper_model=whisper_model,
         source_language=source_language,
         target_language=target_language,
@@ -353,10 +361,13 @@ def retranslate_segment(job_id: int, seg_id: int):
     body = _json_body()
     # translator_engine cua job co the la "marian" (job tao truoc khi MarianMT
     # bi khoa) — khong con dung duoc nua, rơi ve gemini cho chac.
-    engine = job.translator_engine if job.translator_engine in ("openai", "gemini") else "gemini"
+    engine = job.translator_engine if job.translator_engine in ALLOWED_TRANSLATORS else "gemini"
     if engine == "openai":
         api_key = (body.get("openai_api_key") or "").strip() or OPENAI_API_KEY
         model = OPENAI_MODEL
+    elif engine == "deepseek":
+        api_key = (body.get("deepseek_api_key") or "").strip() or DEEPSEEK_API_KEY
+        model = DEEPSEEK_MODEL
     else:
         api_key = (body.get("gemini_api_key") or "").strip() or GEMINI_API_KEY
         model = GEMINI_MODEL

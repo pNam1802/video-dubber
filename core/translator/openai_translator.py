@@ -1,6 +1,6 @@
 """
 core/translator/openai_translator.py
-Dịch bằng OpenAI GPT, tối ưu cho thuật ngữ AI/ML.
+Dịch bằng OpenAI GPT.
 """
 from __future__ import annotations
 
@@ -23,17 +23,23 @@ from core.transcriber import Segment
 class OpenAITranslator(BaseTranslator):
     """Dịch bằng OpenAI GPT-4o."""
 
+    #: Tên hiển thị/log của nhà cung cấp — lớp con (vd DeepSeek) đổi lại.
+    provider = "OpenAI"
+    #: Tham số riêng của nhà cung cấp gửi kèm mỗi request (extra_body).
+    extra_body: dict | None = None
+
     def __init__(
         self,
         api_key: str = OPENAI_API_KEY,
         model: str = OPENAI_MODEL,
         source_language: str = "en",
         target_language: str = "vi",
+        base_url: str | None = None,
     ):
         super().__init__()
         if not api_key:
-            raise ValueError("OPENAI_API_KEY chưa được thiết lập!")
-        self.client = OpenAI(api_key=api_key)
+            raise ValueError(f"{self.provider.upper()}_API_KEY chưa được thiết lập!")
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
         self.source_language = source_language
         self.target_language = target_language
@@ -41,7 +47,7 @@ class OpenAITranslator(BaseTranslator):
 
     @property
     def name(self) -> str:
-        return f"OpenAI {self.model}"
+        return f"{self.provider} {self.model}"
 
     def _system_prompt(self) -> str:
         return build_system_prompt(self.source_language, self.target_language)
@@ -65,8 +71,9 @@ class OpenAITranslator(BaseTranslator):
                 ],
                 temperature=0.3,
                 max_tokens=500,
+                extra_body=self.extra_body,
             ),
-            what="OpenAI",
+            what=self.provider,
         )
         self._record_response_usage(response)
         translated = response.choices[0].message.content.strip()
@@ -100,8 +107,9 @@ class OpenAITranslator(BaseTranslator):
                     ],
                     temperature=0.3,
                     max_tokens=1000,
+                    extra_body=self.extra_body,
                 ),
-                what=f"OpenAI batch {i // batch_size + 1}",
+                what=f"{self.provider} batch {i // batch_size + 1}",
             )
             self._record_response_usage(response)
 

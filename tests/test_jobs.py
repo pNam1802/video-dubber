@@ -33,10 +33,10 @@ def _upload_and_capture_config(client, monkeypatch, **form_extra):
     monkeypatch.setattr(api_mod, "start_job", fake_start_job)
 
     form = {"video": (io.BytesIO(b"fake"), "video.mp4")}
-    # Mặc định translator_engine giờ là "gemini" (MarianMT đã bị khoá, không
+    # Mặc định translator_engine giờ là "deepseek" (MarianMT đã bị khoá, không
     # cần key), nên các test không quan tâm tới công cụ dịch vẫn cần một key
     # giả để không bị chặn ở bước kiểm tra API key — trừ khi test tự truyền.
-    form["gemini_api_key"] = "test-key"
+    form["deepseek_api_key"] = "test-key"
     form.update(form_extra)
     response = client.post("/api/upload", data=form, content_type="multipart/form-data")
     return response, captured.get("config")
@@ -82,13 +82,12 @@ def test_upload_marian_engine_choice_is_locked_out(app, as_user, monkeypatch):
     """MarianMT đã bị khoá khỏi lựa chọn của người dùng (chỉ dịch được
     EN→VI, và dịch sai trong im lặng khi nguồn khác tiếng Anh). Gửi lên
     "marian" — form cũ, hay client bị chỉnh sửa tay — phải âm thầm rơi về
-    mặc định "gemini", không được thực sự dùng marian."""
+    mặc định "deepseek", không được thực sự dùng marian."""
     response, config = _upload_and_capture_config(
         as_user, monkeypatch, target_language="ja", translator_engine="marian",
-        gemini_api_key="test-key",
     )
     assert response.status_code == 202
-    assert config.translator_engine == "gemini"
+    assert config.translator_engine == "deepseek"
     assert config.target_language == "ja"
 
 
@@ -97,10 +96,9 @@ def test_upload_marian_engine_choice_locked_out_for_vietnamese_target_too(app, a
     toàn, kể cả với tổ hợp từng "hợp lệ" trước đây (marian + vi)."""
     response, config = _upload_and_capture_config(
         as_user, monkeypatch, target_language="vi", translator_engine="marian",
-        gemini_api_key="test-key",
     )
     assert response.status_code == 202
-    assert config.translator_engine == "gemini"
+    assert config.translator_engine == "deepseek"
     assert config.target_language == "vi"
 
 
@@ -353,7 +351,7 @@ def test_awaiting_review_job_page_shows_review_panel(app, as_user, user):
     assert "hidden" not in _section_classes(body, "reviewCard")
     assert "hidden" in _section_classes(body, "liveCard")
     # Placeholder API key phải theo đúng engine của job, không hardcode Gemini.
-    assert '(ENGINE === "openai" ? "OpenAI" : "Gemini")' in body
+    assert '({ openai: "OpenAI", deepseek: "DeepSeek" }[ENGINE] || "Gemini")' in body
     # Đang chờ duyệt thì không được tự bắn polling — chỉ chờ người dùng thao tác.
     assert "if (FINISHED || AWAITING_REVIEW) return;" in body
 

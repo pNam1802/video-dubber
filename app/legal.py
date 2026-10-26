@@ -35,7 +35,7 @@ PRIVACY = [
         "bullets": [
             "Nhận dạng giọng nói chạy bằng Whisper ngay trên máy chủ GPU của chúng tôi. "
             "Âm thanh không gửi đi đâu cả.",
-            "Việc dịch dùng Google Gemini hoặc OpenAI tuỳ bạn chọn, nên phần lời thoại đã "
+            "Việc dịch dùng DeepSeek, Google Gemini hoặc OpenAI tuỳ bạn chọn, nên phần lời thoại đã "
             "nhận dạng được gửi tới dịch vụ đó để dịch.",
             "Việc tổng hợp giọng nói tiếng Việt dùng dịch vụ của Microsoft (edge-tts) hoặc "
             "Google (gTTS), nên câu tiếng Việt đã dịch được gửi tới đó để tạo giọng đọc.",

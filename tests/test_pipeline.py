@@ -316,3 +316,12 @@ def test_auto_source_language_becomes_none_for_whisper():
 
 def test_manual_source_language_passed_through_unchanged():
     assert DubbingPipeline._whisper_language_arg("ja") == "ja"
+
+
+def test_deepseek_failure_falls_back_to_first_engine_with_key(fake_translators):
+    """DeepSeek lỗi thì lùi theo FALLBACK_ORDER, bỏ qua nhà cung cấp không có
+    key (ở đây Gemini) — tới thẳng OpenAI."""
+    config = DubbingConfig(translator_engine="deepseek", deepseek_api_key="d", openai_api_key="y")
+    _, used, fell_from, _ = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
+    assert (used, fell_from) == ("openai", "deepseek")
+    assert fake_translators == ["deepseek", "openai"]

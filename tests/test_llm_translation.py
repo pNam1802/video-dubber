@@ -300,3 +300,41 @@ def test_estimate_llm_cost_unknown_model_returns_none_not_zero():
 
 def test_estimate_llm_cost_zero_tokens_is_zero_not_none():
     assert estimate_llm_cost("gpt-4o-mini", 0, 0) == 0.0
+
+
+# ── DeepSeekTranslator: dùng lại OpenAITranslator, tắt thinking ──
+class _RecordingCompletions:
+    def __init__(self, text):
+        self.text = text
+        self.kwargs: list[dict] = []
+
+    def create(self, **kwargs):
+        self.kwargs.append(kwargs)
+        return _FakeResponse(self.text)
+
+
+def test_deepseek_points_at_deepseek_api_and_disables_thinking():
+    from core.translator.deepseek_translator import DeepSeekTranslator
+
+    translator = DeepSeekTranslator(api_key="test-key")
+    assert str(translator.client.base_url).startswith("https://api.deepseek.com")
+    assert translator.name == "DeepSeek deepseek-flash"
+
+    completions = _RecordingCompletions("Xin chào.")
+    translator.client = type("C", (), {"chat": type("Chat", (), {"completions": completions})()})()
+    assert translator.translate_text("Hello.") == "Xin chào."
+    assert completions.kwargs[0]["model"] == "deepseek-flash"
+    assert completions.kwargs[0]["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_openai_sends_no_extra_body():
+    translator = OpenAITranslator(api_key="test-key")
+    completions = _RecordingCompletions("Xin chào.")
+    translator.client = type("C", (), {"chat": type("Chat", (), {"completions": completions})()})()
+    translator.translate_text("Hello.")
+    assert completions.kwargs[0]["extra_body"] is None
+
+
+def test_estimate_llm_cost_deepseek_uses_peak_price():
+    cost = estimate_llm_cost("deepseek-flash", prompt_tokens=1_000_000, completion_tokens=1_000_000)
+    assert cost == 1.5

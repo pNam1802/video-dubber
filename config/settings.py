@@ -66,6 +66,11 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
+# DeepSeek dung API tuong thich OpenAI — xem core/translator/deepseek_translator.py.
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
+
 # ── Email (thong bao khi job can duyet / xong / loi) ────────
 # Mac dinh Gmail SMTP + app password — khong can dang ky dich vu ngoai.
 # Thieu SMTP_USER/SMTP_PASSWORD thi MAIL_ENABLED=False, app.mailer.send_email()
@@ -92,30 +97,6 @@ SQLALCHEMY_DATABASE_URI = _raw_db_url or f"sqlite:///{DATA_DIR / 'database.db'}"
 
 MARIAN_MODEL_EN_VI = os.getenv("MARIAN_MODEL_EN_VI", "pNam1802/marian-finetuned-en-vi-datn")
 HF_TOKEN = os.getenv("HF_TOKEN", os.getenv("HUGGINGFACE_TOKEN", "")).strip()
-
-AI_PRESERVE_TERMS = [
-	"AI",
-	"ML",
-	"Deep Learning",
-	"Machine Learning",
-	"Neural Network",
-	"Transformer",
-	"LLM",
-	"GPU",
-	"CPU",
-	"Prompt",
-	"Fine-tuning",
-	"RAG",
-	"Embeddings",
-	"Token",
-	"Inference",
-	"Dataset",
-	"OpenAI",
-	"Google",
-	"Microsoft",
-	"PyTorch",
-	"TensorFlow",
-]
 
 # Runner cho job: "thread" (chay trong tien trinh web) | "modal" (spawn GPU function)
 JOB_RUNNER = os.getenv("JOB_RUNNER", "thread").strip().lower()
@@ -151,6 +132,9 @@ GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))
 # Gemini/OpenAI). Chot tu trang gia chinh thuc luc 08/09/2026, bac Standard:
 #   Gemini: https://ai.google.dev/gemini-api/docs/pricing
 #   OpenAI: https://developers.openai.com/api/docs/pricing
+#   DeepSeek (chot 26/10/2026): https://api-docs.deepseek.com/quick_start/pricing/
+#     DeepSeek co gia gio cao diem / thap diem (thap diem = 1/2) — bang nay
+#     ghi gia CAO DIEM, cache miss: chi phi that chi co the bang hoac thap hon.
 # Gia doi theo thoi gian va theo tung model — sua o day khi nha cung cap
 # cong bo gia moi (vd gemini-3.6-flash tang gap doi tu 01/01/2027 theo
 # trang gia hien tai). Model khong co trong bang nay thi KHONG tinh duoc
@@ -159,6 +143,7 @@ GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))
 LLM_PRICING_PER_MILLION_TOKENS: dict[str, dict[str, float]] = {
 	"gemini-3.6-flash": {"input": 0.75, "output": 3.75},
 	"gpt-4o-mini": {"input": 0.15, "output": 0.60},
+	"deepseek-flash": {"input": 0.30, "output": 1.20},
 }
 
 # Rate limit. Bo nho trong tien trinh: moi container web dem rieng, nen day la

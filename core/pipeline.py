@@ -21,16 +21,22 @@ import uuid
 import shutil
 
 
+#: Thứ tự thử nhà cung cấp dự phòng khi engine chính lỗi — rẻ nhất trước.
+FALLBACK_ORDER = ("deepseek", "gemini", "openai")
+
+
 @dataclass
 class DubbingConfig:
     """Toàn bộ cấu hình cho một lần chạy pipeline.
     tts_engine: "edge-tts" | "gtts"
     """
-    translator_engine: str = "gemini"       # "openai" | "gemini"
+    translator_engine: str = "deepseek"     # "deepseek" | "gemini" | "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-flash"
     whisper_model: str = "base"
     # "auto" = Whisper tu nhan dang tu am thanh; hoac ma ISO cu the ("en",
     # "vi", "ja", "zh", "ko"...) khi nguoi dung tu chon vi tu nhan dang doan.
@@ -114,35 +120,34 @@ class DubbingPipeline:
         model đó đã bị khoá khỏi lựa chọn của người dùng (fine-tune riêng
         EN→VI, dịch sai trong im lặng khi nguồn không phải tiếng Anh hoặc
         đích không phải tiếng Việt). Giờ dự án dùng đầy đủ API key nên
-        phương án dự phòng là nhà cung cấp CÒN LẠI: Gemini lỗi thì thử
-        OpenAI, và ngược lại — vẫn giữ đúng tinh thần ban đầu (một lần
-        rate limit hay đổi model không nên làm hỏng cả job), chỉ đổi nơi
-        lùi về.
+        phương án dự phòng là nhà cung cấp KHÁC đầu tiên có key, theo thứ
+        tự FALLBACK_ORDER — vẫn giữ đúng tinh thần ban đầu (một lần rate
+        limit hay đổi model không nên làm hỏng cả job), chỉ đổi nơi lùi về.
         """
         target = cfg.target_language
+        creds = {
+            "deepseek": (cfg.deepseek_api_key, cfg.deepseek_model),
+            "gemini": (cfg.gemini_api_key, cfg.gemini_model),
+            "openai": (cfg.openai_api_key, cfg.openai_model),
+        }
 
         def build(engine: str):
-            if engine == "openai":
-                return get_translator(
-                    "openai", api_key=cfg.openai_api_key, model=cfg.openai_model,
-                    source_language=source_language, target_language=target,
-                )
+            api_key, model = creds[engine]
             return get_translator(
-                "gemini", api_key=cfg.gemini_api_key, model=cfg.gemini_model,
+                engine, api_key=api_key, model=model,
                 source_language=source_language, target_language=target,
             )
 
-        engine = cfg.translator_engine
-        other = "openai" if engine == "gemini" else "gemini"
-        other_key = cfg.openai_api_key if other == "openai" else cfg.gemini_api_key
+        engine = cfg.translator_engine if cfg.translator_engine in creds else "deepseek"
+        other = next((e for e in FALLBACK_ORDER if e != engine and creds[e][0]), None)
 
         try:
             translator = build(engine)
             return translator.translate_segments(segments), engine, "", translator
         except Exception as exc:
-            # Không có key cho nhà cung cấp còn lại thì không có gì để lùi
+            # Không có key cho nhà cung cấp nào khác thì không có gì để lùi
             # về — để lỗi thật hiện ra còn hơn thử một engine chắc chắn hỏng.
-            if not cfg.translator_fallback or not other_key:
+            if not cfg.translator_fallback or other is None:
                 raise
             print(f"[Pipeline] {engine} lỗi ({exc}). Chuyển sang {other}.")
             progress(50, f"{engine} gặp lỗi, đang chuyển sang {other}...")

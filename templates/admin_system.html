@@ -79,10 +79,11 @@
     // tiếng Việt, và không dịch được sang Nhật/Trung/Hàn. config_status()
     // không còn trả về nó nữa nên vòng lặp bên dưới tự bỏ qua, không cần xử lý riêng.
     const ENGINE_NOTES = {
-      gemini: "Dịch bằng API của Google, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng khi OpenAI hỏng.",
-      openai: "Dịch bằng API của OpenAI, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng khi Gemini hỏng."
+      deepseek: "Dịch bằng API của DeepSeek, rẻ nhất, hỗ trợ cả 4 ngôn ngữ đích. Engine mặc định.",
+      gemini: "Dịch bằng API của Google, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng khi DeepSeek hỏng.",
+      openai: "Dịch bằng API của OpenAI, hỗ trợ cả 4 ngôn ngữ đích. Là phương án dự phòng cuối cùng."
     };
-    const ENGINE_NAMES = { gemini: "Gemini", openai: "OpenAI" };
+    const ENGINE_NAMES = { deepseek: "DeepSeek", gemini: "Gemini", openai: "OpenAI" };
 
     function escapeHtml(value) {
       const div = document.createElement("div");

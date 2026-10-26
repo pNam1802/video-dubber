@@ -6,6 +6,10 @@ def get_translator(engine: str, **kwargs):
         from core.translator.openai_translator import OpenAITranslator
 
         return OpenAITranslator(**kwargs)
+    if engine_key == "deepseek":
+        from core.translator.deepseek_translator import DeepSeekTranslator
+
+        return DeepSeekTranslator(**kwargs)
     if engine_key == "gemini":
         from core.translator.gemini_translator import GeminiTranslator
 
