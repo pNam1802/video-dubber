@@ -260,7 +260,7 @@ def test_google_locked_account_refused(app, client, google):
         make_user("bikhoa", google=True, google_sub="g-333", is_active=False)
     google.info = {"sub": "g-333", "email": "khoa@truong.edu.vn", "email_verified": True}
     client.get("/auth/google/callback")
-    assert client.get("/").status_code == 302
+    assert client.get("/lich-su").status_code == 302
 
 
 def test_google_failure_returns_to_login(client, google):

@@ -15,7 +15,9 @@ module.exports = {
   // Tailwind quét đúng những file này để biết class nào được dùng thật. Class
   // ghép chuỗi trong <script> vẫn bắt được vì nó quét văn bản thô, miễn là tên
   // class xuất hiện nguyên vẹn (ví dụ "bg-error" trong classList.replace).
-  content: ["./templates/**/*.html"],
+  // landing.html có CSS riêng (xem đầu file đó), bỏ qua để chữ trong trang
+  // không vô tình sinh thêm class vào app.css.
+  content: ["./templates/**/*.html", "!./templates/landing.html"],
 
   theme: {
     extend: {

@@ -97,3 +97,30 @@ def test_history_page_already_has_its_own_skeleton(as_user):
     đúng kiểu đã có, không phải bịa ra một kiểu mới."""
     html = as_user.get("/lich-su").get_data(as_text=True)
     assert "animate-pulse" in html
+
+
+# ── Trang giới thiệu ─────────────────────────────────────────
+def test_guest_sees_landing_page_at_root(client):
+    """Khách chưa đăng nhập thấy trang giới thiệu, không bị đẩy sang form đăng nhập."""
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Dùng thử" in html
+    assert "/demo/1_Gemini_Leda_nu.mp4" in html
+    assert 'id="sidebar"' not in html
+
+
+def test_signed_in_user_gets_app_at_root_and_landing_at_gioi_thieu(as_user):
+    assert 'id="sidebar"' in as_user.get("/").get_data(as_text=True)
+    html = as_user.get("/gioi-thieu").get_data(as_text=True)
+    assert "Mở ứng dụng" in html
+    assert "Đăng nhập</a>" not in html
+
+
+def test_demo_media_is_public_and_confined(client):
+    response = client.get("/demo/0_Goc_tieng_Anh.mp4", headers={"Range": "bytes=0-99"})
+    assert response.status_code == 206
+    assert response.mimetype == "video/mp4"
+    response.close()
+    assert client.get("/demo/../app/main.py").status_code == 404
+    assert client.get("/demo/khong-co.mp4").status_code == 404

@@ -38,7 +38,7 @@ SOURCE_IGNORE = [
     "**/__pycache__/**",
     "**/*.pyc",
     "*.mp4",
-    "demo/**",          # video demo trong README, khong can trong image
+    "!demo/voices/*.mp4",  # video demo cua landing page (/demo/...)
     "*.wav",
     ".venv/**",
     "venv/**",

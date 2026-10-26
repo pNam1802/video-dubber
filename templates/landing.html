@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="utf-8">
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <title>Nora · Lồng tiếng Việt cho video</title>
+  <meta name="description"
+    content="Nora lồng tiếng Việt cho video tiếng Anh: nhận dạng giọng nói, dịch, cho bạn duyệt bản dịch rồi đọc liền mạch bằng giọng tự nhiên.">
+
+  <link rel="icon" href="{{ asset('img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="icon" href="{{ asset('img/favicon-32.png') }}" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="{{ asset('img/apple-touch-icon.png') }}">
+
+  <link href="https://fonts.googleapis.com" rel="preconnect">
+  <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  {# Cùng bảng màu với công cụ (tailwind.config.js: nền #101416, nhấn xanh
+     lá #bdfd5d, viền #424937) nhưng bố cục trang giới thiệu khác hẳn, nên CSS
+     viết thẳng ở đây, không đi qua Tailwind/app.css. Đổi màu bên đó thì sửa
+     cả các biến :root dưới đây. #}
+  <style>
+    :root {
+      --bg: #101416;            /* background */
+      --bg-alt: #181c1e;        /* surface-container-low */
+      --card: #1c2022;          /* surface-container */
+      --card-hi: #272b2d;       /* surface-container-high */
+      --ink: #e0e3e5;           /* on-surface */
+      --ink-soft: #c2c9b1;      /* on-surface-variant */
+      --line: #424937;          /* outline-variant */
+      --accent: #bdfd5d;        /* primary */
+      --accent-hover: #a2e043;  /* primary-container */
+      --accent-ink: #213600;    /* on-primary */
+      --dark: #0b0f11;          /* surface-container-lowest */
+      --sans: "Be Vietnam Pro", system-ui, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, monospace;
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 17px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; }
+    ::selection { background: var(--accent); color: var(--accent-ink); }
+    img, video { display: block; max-width: 100%; }
+
+    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+    section { padding: 96px 0; }
+    .eyebrow {
+      font-size: 13px; font-weight: 500; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--accent); margin: 0 0 16px;
+    }
+    h1, h2, h3 { font-family: var(--sans); font-weight: 600; margin: 0; letter-spacing: -0.02em; }
+    h1 { font-weight: 700; }
+    h1 { font-size: clamp(40px, 6.2vw, 76px); line-height: 1.05; }
+    h2 { font-size: clamp(30px, 4vw, 46px); line-height: 1.12; max-width: 20ch; }
+    h3 { font-size: 22px; line-height: 1.3; }
+    .lead { font-size: 20px; color: var(--ink-soft); max-width: 46ch; }
+    .muted { color: var(--ink-soft); }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 22px; border-radius: 10px; font-weight: 500; font-size: 16px;
+      text-decoration: none; border: 1px solid transparent; transition: background .15s, border-color .15s;
+    }
+    .btn-dark { background: var(--ink); color: var(--bg); }
+    .btn-dark:hover { background: #ffffff; }
+    .btn-line { border-color: var(--line); }
+    .btn-line:hover { border-color: var(--ink-soft); background: var(--card); }
+    .btn-accent { background: var(--accent); color: var(--accent-ink); }
+    .btn-accent:hover { background: var(--accent-hover); }
+
+    /* ── Thanh điều hướng ── */
+    .nav { position: sticky; top: 0; z-index: 10; background: rgba(16, 20, 22, .88); backdrop-filter: blur(8px); border-bottom: 1px solid transparent; }
+    .nav.scrolled { border-bottom-color: var(--line); }
+    .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-size: 24px; font-weight: 700; letter-spacing: -0.03em; color: var(--accent); }
+    .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; }
+    .nav-links { display: flex; gap: 28px; font-size: 15px; }
+    .nav-links a { text-decoration: none; color: var(--ink-soft); }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-cta { display: flex; gap: 10px; }
+    .nav-cta .btn { padding: 9px 16px; font-size: 15px; }
+
+    /* ── Hero ── */
+    .hero { padding: 104px 0 72px; }
+    .hero h1 { max-width: 18ch; }
+    .hero .lead { margin: 28px 0 36px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+    /* ── Trước / sau ── */
+    .compare { padding-top: 0; }
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .clip { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; transition: border-color .15s; }
+    .clip:hover { border-color: #5a6349; }
+    .clip video { width: 100%; aspect-ratio: 16 / 9; background: #000; object-fit: contain; }
+    .clip-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 20px; }
+    .clip-meta strong { font-weight: 500; }
+    .tag { font-size: 13px; padding: 3px 10px; border-radius: 99px; background: var(--card-hi); color: var(--ink-soft); white-space: nowrap; font-family: var(--mono); }
+    .tag.accent { background: rgba(189, 253, 93, .12); color: var(--accent); }
+    .credit { font-size: 14px; color: var(--ink-soft); margin-top: 18px; }
+
+    /* ── Các bước ── */
+    .alt { background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 32px; margin-bottom: 56px; flex-wrap: wrap; }
+    .section-head p { max-width: 42ch; margin: 0; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--accent); }
+    .step { padding: 28px 24px 8px 0; }
+    .step + .step { padding-left: 24px; border-left: 1px solid var(--line); }
+    .step-num { font-family: var(--mono); font-size: 14px; color: var(--accent); margin-bottom: 40px; }
+    .step h3 { margin-bottom: 10px; }
+    .step p { margin: 0; color: var(--ink-soft); font-size: 16px; }
+
+    /* ── Vì sao tự nhiên ── */
+    .why { display: grid; grid-template-columns: 5fr 7fr; gap: 64px; align-items: start; }
+    .stat { font-family: var(--mono); font-size: clamp(56px, 8vw, 96px); line-height: 1; letter-spacing: -0.04em; margin: 32px 0 12px; }
+    .stat span { color: var(--accent); }
+    .points { display: grid; gap: 0; }
+    .point { padding: 28px 0; border-top: 1px solid var(--line); }
+    .point:last-child { border-bottom: 1px solid var(--line); }
+    .point h3 { margin-bottom: 8px; }
+    .point p { margin: 0; color: var(--ink-soft); }
+
+    /* ── Giọng đọc ── */
+    .voices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+    .voice .clip-meta { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .voice .row { display: flex; justify-content: space-between; width: 100%; gap: 12px; align-items: baseline; }
+    .voice p { margin: 0; font-size: 15px; color: var(--ink-soft); }
+
+    /* ── Chi phí ── */
+    .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .price { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 32px 28px; display: flex; flex-direction: column; }
+    .price.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+    .price-value { font-family: var(--mono); font-size: 44px; line-height: 1; margin: 20px 0 6px; letter-spacing: -0.02em; }
+    .price ul { list-style: none; padding: 0; margin: 24px 0 0; font-size: 15px; display: grid; gap: 10px; }
+    .price li::before { content: "—"; color: var(--accent); margin-right: 10px; }
+    .footnote { font-size: 14px; color: var(--ink-soft); margin-top: 24px; max-width: 80ch; }
+
+    /* ── Lời kêu gọi ── */
+    .cta { background: var(--dark); text-align: center; border-top: 1px solid var(--line); }
+    .cta h2 { margin: 0 auto 20px; max-width: 22ch; }
+    .cta p { color: var(--ink-soft); margin: 0 auto 36px; max-width: 48ch; }
+    .cta .hero-actions { justify-content: center; }
+
+    /* ── Chân trang ── */
+    footer { padding: 56px 0 40px; font-size: 15px; background: var(--dark); border-top: 1px solid var(--line); }
+    .foot { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 40px; }
+    .foot h4 { font-size: 13px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 14px; }
+    .foot ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .foot a { text-decoration: none; }
+    .foot a:hover { text-decoration: underline; }
+    .foot-bottom { border-top: 1px solid var(--line); margin-top: 40px; padding-top: 20px; color: var(--ink-soft); font-size: 14px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+    /* Hiện dần khi cuộn tới. Không có JS thì nội dung vẫn hiện (class .js do script gắn). */
+    .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
+    .js .reveal.in { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .js .reveal { opacity: 1; transform: none; transition: none; }
+    }
+
+    @media (max-width: 900px) {
+      section { padding: 72px 0; }
+      .nav-links { display: none; }
+      .steps { grid-template-columns: 1fr 1fr; }
+      .step:nth-child(3) { border-left: 0; padding-left: 0; }
+      .why { grid-template-columns: 1fr; gap: 32px; }
+      .prices { grid-template-columns: 1fr; }
+      .foot { grid-template-columns: 1fr 1fr; }
+      .foot > :first-child { grid-column: 1 / -1; }
+    }
+    @media (max-width: 640px) {
+      .wrap { padding: 0 16px; }
+      body { font-size: 16px; }
+      .hero { padding: 64px 0 48px; }
+      .lead { font-size: 18px; }
+      .compare-grid, .voices { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .step, .step + .step { border-left: 0; padding-left: 0; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
+      .step-num { margin-bottom: 16px; }
+      .nav-cta .btn-line { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+  {% set app_url = url_for('main.index') %}
+  {% set start_url = app_url if current_user.is_authenticated else url_for('auth.register') %}
+  {% set start_label = 'Mở ứng dụng' if current_user.is_authenticated else 'Dùng thử miễn phí' %}
+  {% set poster = asset('img/landing/compare.jpg') %}
+
+  <header class="nav" id="nav">
+    <div class="wrap">
+      <a class="brand" href="{{ url_for('main.landing') }}" aria-label="Nora">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+            <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
+            <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
+            <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
+          </svg>
+        </span>
+        Nora
+      </a>
+      <nav class="nav-links" aria-label="Mục lục">
+        <a href="#cach-hoat-dong">Cách hoạt động</a>
+        <a href="#giong-doc">Giọng đọc</a>
+        <a href="#chi-phi">Chi phí</a>
+        <a href="https://github.com/pNam1802/video-dubber" rel="noopener">GitHub</a>
+      </nav>
+      <div class="nav-cta">
+        {% if current_user.is_authenticated %}
+        <a class="btn btn-dark" href="{{ app_url }}">Mở ứng dụng</a>
+        {% else %}
+        <a class="btn btn-line" href="{{ url_for('auth.login') }}">Đăng nhập</a>
+        <a class="btn btn-dark" href="{{ url_for('auth.register') }}">Dùng thử</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Lồng tiếng tự động · Anh → Việt</p>
+        <h1>Video tiếng Anh, giọng Việt liền mạch như người đọc thật.</h1>
+        <p class="lead">Nora nghe, dịch và lồng tiếng Việt cho video của bạn. Bạn duyệt bản dịch trước khi
+          giọng đọc được tạo, nên kết quả luôn đúng ý.</p>
+        <div class="hero-actions">
+          <a class="btn btn-accent" href="{{ start_url }}">{{ start_label }}</a>
+          <a class="btn btn-line" href="#nghe-thu">Nghe thử bản lồng tiếng</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="compare" id="nghe-thu">
+      <div class="wrap">
+        <div class="compare-grid">
+          <figure class="clip reveal" style="margin:0">
+            <video controls preload="none" playsinline poster="{{ poster }}"
+              src="{{ url_for('main.demo_media', filename='0_Goc_tieng_Anh.mp4') }}"></video>
+            <figcaption class="clip-meta"><strong>Bản gốc</strong><span class="tag">Tiếng Anh</span></figcaption>
+          </figure>
+          <figure class="clip reveal" style="margin:0">
+            <video controls preload="none" playsinline poster="{{ poster }}"
+              src="{{ url_for('main.demo_media', filename='1_Gemini_Leda_nu.mp4') }}"></video>
+            <figcaption class="clip-meta"><strong>Nora lồng tiếng</strong><span class="tag accent">Giọng Leda</span></figcaption>
+          </figure>
+        </div>
+        <p class="credit">Trích đoạn 7:30–10:00 của video “Chap 6 — The Apocalypse Has Come”, kênh
+          <strong>Manhwa Academy</strong>. Bản quyền nội dung gốc thuộc về kênh và tác giả truyện; chỉ dùng
+          để minh hoạ cho đồ án, không dùng thương mại.</p>
+      </div>
+    </section>
+
+    <section class="alt" id="cach-hoat-dong">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Cách hoạt động</p>
+            <h2>Bốn bước, và bạn có tiếng nói ở bước quan trọng nhất.</h2>
+          </div>
+          <p class="muted">Tải video lên rồi để Nora làm việc. Bạn chỉ cần quay lại ở bước duyệt bản dịch.</p>
+        </div>
+        <div class="steps">
+          <div class="step reveal">
+            <div class="step-num">01</div>
+            <h3>Nghe</h3>
+            <p>Whisper chép lời kèm mốc thời gian của từng từ, rồi tách thành câu trọn vẹn.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">02</div>
+            <h3>Dịch</h3>
+            <p>DeepSeek dịch theo ngữ cảnh, giữ xưng hô nhất quán. Gemini và OpenAI làm dự phòng.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">03</div>
+            <h3>Bạn duyệt</h3>
+            <p>Đọc lại, sửa câu chưa ưng ý. Chưa có giọng nào được tạo cho tới khi bạn đồng ý.</p>
+          </div>
+          <div class="step reveal">
+            <div class="step-num">04</div>
+            <h3>Lồng tiếng</h3>
+            <p>Giọng đọc được xếp liền mạch lên video, kèm file phụ đề SRT để tải về.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap why">
+        <div class="reveal">
+          <p class="eyebrow">Vì sao nghe tự nhiên</p>
+          <h2>Đọc trọn câu, không ngắt quãng.</h2>
+          <div class="stat">57 <span>→</span> 8</div>
+          <p class="muted">Số khoảng lặng dài hơn 0,8 giây trong một video 11 phút, trước và sau khi xếp giọng
+            liền mạch.</p>
+        </div>
+        <div class="points">
+          <div class="point reveal">
+            <h3>Cắt câu đúng chỗ</h3>
+            <p>Câu được cắt tại dấu chấm theo từng từ, không theo đoạn âm thanh. Giọng đọc không còn hạ giọng như
+              hết câu ngay giữa ý.</p>
+          </div>
+          <div class="point reveal">
+            <h3>Nối tiếp liền mạch</h3>
+            <p>Câu sau vào ngay khi câu trước đọc xong. Một tốc độ chung cho cả video, không bao giờ chồng giọng.
+            </p>
+          </div>
+          <div class="point reveal">
+            <h3>Đổi tốc độ không méo giọng</h3>
+            <p>Khi cần đọc nhanh hoặc chậm hơn, giọng được tạo lại hoặc co giãn nhẹ, không bị méo như tua băng.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="alt" id="giong-doc">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Giọng đọc</p>
+            <h2>Chọn giọng hợp với video của bạn.</h2>
+          </div>
+          <p class="muted">Cùng một đoạn 2,5 phút, chỉ khác giọng đọc. Giọng Gemini có cảm xúc; giọng edge-tts
+            miễn phí.</p>
+        </div>
+        <div class="voices">
+          {% for file, name, kind, note, cost in [
+            ('1_Gemini_Leda_nu.mp4', 'Leda', 'Gemini · nữ', 'Kể chuyện có cảm xúc, liền mạch nhất.', '≈ $0,035'),
+            ('2_Gemini_Charon_nam.mp4', 'Charon', 'Gemini · nam', 'Giọng trầm, hợp phim và truyện hành động.', '≈ $0,033'),
+            ('3_Edge_HoaiMy_nu.mp4', 'Hoài My', 'edge-tts · nữ', 'Rõ ràng, chuẩn giọng Bắc.', 'Miễn phí'),
+            ('4_Edge_Florian_nam.mp4', 'Florian', 'edge-tts · nam', 'Giọng đa ngôn ngữ, đọc được tiếng Việt.', 'Miễn phí'),
+          ] %}
+          <figure class="clip voice reveal" style="margin:0">
+            <video controls preload="none" playsinline poster="{{ poster }}"
+              src="{{ url_for('main.demo_media', filename=file) }}"></video>
+            <figcaption class="clip-meta">
+              <div class="row"><h3>{{ name }}</h3><span class="tag{{ ' accent' if cost == 'Miễn phí' else '' }}">{{ cost }}</span></div>
+              <p>{{ kind }} — {{ note }}</p>
+            </figcaption>
+          </figure>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+    <section id="chi-phi">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Chi phí</p>
+            <h2>Rẻ hơn một cốc trà đá.</h2>
+          </div>
+          <p class="muted">Chi phí thật cho một video 11 phút, tính theo giá API công bố.</p>
+        </div>
+        <div class="prices">
+          <div class="price reveal">
+            <h3>Tiết kiệm</h3>
+            <p class="muted" style="margin:6px 0 0">DeepSeek + edge-tts</p>
+            <div class="price-value">$0,004</div>
+            <p class="muted" style="margin:0">mỗi video, chưa tính máy chủ</p>
+            <ul>
+              <li>Giọng Hoài My, Florian và 3 giọng khác</li>
+              <li>Dịch theo ngữ cảnh, duyệt trước khi lồng</li>
+            </ul>
+          </div>
+          <div class="price featured reveal">
+            <h3>Có cảm xúc</h3>
+            <p class="muted" style="margin:6px 0 0">DeepSeek + Gemini TTS</p>
+            <div class="price-value">≈ $0,10</div>
+            <p class="muted" style="margin:0">mỗi video, chưa tính máy chủ</p>
+            <ul>
+              <li>Giọng Leda và Charon biểu cảm</li>
+              <li>Tự rơi về edge-tts nếu Gemini lỗi</li>
+            </ul>
+          </div>
+          <div class="price reveal">
+            <h3>Máy chủ</h3>
+            <p class="muted" style="margin:6px 0 0">GPU nhận dạng + CPU ghép video</p>
+            <div class="price-value">≈ $0,015</div>
+            <p class="muted" style="margin:0">mỗi video, cộng thêm</p>
+            <ul>
+              <li>Chỉ dùng GPU ở bước nhận dạng</li>
+              <li>Tắt máy khi không có việc</li>
+            </ul>
+          </div>
+        </div>
+        <p class="footnote">Ước tính theo bảng giá năm 2026. Giá giọng Gemini dự kiến tăng gấp đôi từ năm 2027.</p>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="wrap">
+        <h2>Lồng tiếng video đầu tiên của bạn ngay hôm nay.</h2>
+        <p>Tải video lên, duyệt bản dịch, nhận video tiếng Việt kèm phụ đề.</p>
+        <div class="hero-actions">
+          <a class="btn btn-accent" href="{{ start_url }}">{{ start_label }}</a>
+          <a class="btn btn-line" href="https://github.com/pNam1802/video-dubber" rel="noopener">Xem mã nguồn</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="foot">
+        <div>
+          <a class="brand" href="{{ url_for('main.landing') }}">Nora</a>
+          <p class="muted" style="max-width:36ch">Đồ án lồng tiếng Việt tự động cho video tiếng Anh.</p>
+        </div>
+        <div>
+          <h4>Sản phẩm</h4>
+          <ul>
+            <li><a href="#cach-hoat-dong">Cách hoạt động</a></li>
+            <li><a href="#giong-doc">Giọng đọc</a></li>
+            <li><a href="#chi-phi">Chi phí</a></li>
+            <li><a href="{{ start_url }}">{{ start_label }}</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>Thông tin</h4>
+          <ul>
+            <li><a href="https://github.com/pNam1802/video-dubber" rel="noopener">GitHub</a></li>
+            <li><a href="{{ url_for('main.privacy') }}">Chính sách bảo mật</a></li>
+            <li><a href="{{ url_for('main.terms') }}">Điều khoản sử dụng</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="foot-bottom">
+        <span>© 2026 Nora</span>
+        <span>Video minh hoạ trích từ kênh Manhwa Academy.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      document.documentElement.classList.add("js");
+
+      // Viền dưới thanh điều hướng chỉ hiện khi đã cuộn.
+      var nav = document.getElementById("nav");
+      var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 8); };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+
+      // Mỗi lúc chỉ phát một video, để hai giọng không đè lên nhau.
+      var videos = Array.prototype.slice.call(document.querySelectorAll("video"));
+      videos.forEach(function (v) {
+        v.addEventListener("play", function () {
+          videos.forEach(function (o) { if (o !== v) o.pause(); });
+        });
+      });
+
+      var items = document.querySelectorAll(".reveal");
+      if (!("IntersectionObserver" in window)) {
+        items.forEach(function (el) { el.classList.add("in"); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+        });
+      }, { rootMargin: "0px 0px -8% 0px" });
+      items.forEach(function (el) { io.observe(el); });
+    })();
+  </script>
+</body>
+
+</html>

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import shutil
 from datetime import timezone
+from pathlib import Path
 
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from flask_login import current_user, login_required
@@ -65,9 +66,16 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
     ]
 
 
+# Video mẫu cho landing page — cũng là video nhúng trong README.
+DEMO_DIR = Path(__file__).resolve().parent.parent / "demo" / "voices"
+
+
 @bp.get("/")
-@login_required
 def index():
+    # Khách chưa đăng nhập thấy trang giới thiệu thay vì bị đẩy thẳng sang
+    # form đăng nhập; đã đăng nhập thì vào thẳng công cụ như trước.
+    if not current_user.is_authenticated:
+        return render_template("landing.html")
     return render_template(
         "index.html",
         outputs=_recent_outputs(),
@@ -81,6 +89,18 @@ def index():
         usage=get_usage(current_user).as_dict(),
         max_upload_mb=MAX_UPLOAD_MB,
     )
+
+
+@bp.get("/gioi-thieu")
+def landing():
+    return render_template("landing.html")
+
+
+@bp.get("/demo/<path:filename>")
+def demo_media(filename: str):
+    # Công khai, chỉ đọc trong demo/voices; send_from_directory chặn "../".
+    # Cache một ngày: video demo hầu như không đổi.
+    return send_from_directory(DEMO_DIR, filename, max_age=86400)
 
 
 @bp.get("/lich-su")
