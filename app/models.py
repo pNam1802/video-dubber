@@ -129,6 +129,9 @@ class Job(db.Model):
     # toan khac, rat lau sau — khong con DubbingConfig cua giai doan 1 nao
     # trong scope de doc lai, phai dung dung lua chon nguoi dung da chon.
     tts_voice = db.Column(db.String(20), nullable=True)
+    # Tua nhanh hinh o khoang lang toi da bay nhieu lan (core/video_retime.py).
+    # None/<=1 = tat — job cu truoc khi co tinh nang nay giu cach ghep cu.
+    max_video_speed = db.Column(db.Float, nullable=True)
     original_volume = db.Column(db.Float, nullable=True)
     subtitle_mode = db.Column(db.String(20), nullable=True)
 

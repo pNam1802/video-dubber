@@ -16,6 +16,7 @@ from core.transcriber import Transcriber, Segment
 from core.translator import get_translator
 from core.tts_engine import TTSEngine
 from core.video_composer import VideoComposer
+from core.video_retime import map_time, plan_retime
 from utils.subtitle_utils import segments_to_srt
 import uuid
 import shutil
@@ -51,6 +52,9 @@ class DubbingConfig:
     tts_voice: str = "female"               # khoá giọng trong engine đó
     # Giọng mẫu để VieNeu clone (giọng "mine"), đường dẫn trên volume dữ liệu.
     tts_ref_audio: Optional[str] = None
+    # Tua nhanh hình ở khoảng lặng cho khớp giọng đọc, tối đa bấy nhiêu lần
+    # (core/video_retime.py). <= 1 là tắt: hình giữ nguyên, giọng xếp theo hình.
+    max_video_speed: float = 0.0
     original_volume: float = 0.1            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -278,7 +282,20 @@ class DubbingPipeline:
             step_started = time.time()
             tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
                             ref_audio=cfg.tts_ref_audio)
-            tts_results, start_times = tts.place_on_timeline(tts.synthesize_all(segments))
+            synthesized = tts.synthesize_all(segments)
+            retime = None
+            if cfg.max_video_speed > 1.0 and video_duration:
+                retime = plan_retime(
+                    [(seg.start, seg.end) for seg, _ in synthesized],
+                    [tts._duration(path) for _, path in synthesized],
+                    video_duration,
+                    max_speed=cfg.max_video_speed,
+                )
+                new_slots = [(map_time(retime, seg.start), map_time(retime, seg.end)) for seg, _ in synthesized]
+                tts_results, start_times = tts.place_on_timeline(synthesized, slots=new_slots)
+                print(f"[Retime] Video {video_duration:.1f}s -> {retime[-1].out_end:.1f}s")
+            else:
+                tts_results, start_times = tts.place_on_timeline(synthesized)
             tts_segments = [seg for seg, _ in tts_results]
             tts_paths = [path for _, path in tts_results]
             result.timings["tts"] = round(time.time() - step_started, 2)
@@ -295,6 +312,7 @@ class DubbingPipeline:
                 original_volume=cfg.original_volume,
                 video_duration=video_duration,
                 start_times=start_times,
+                retime=retime,
             )
 
             result.timings["compose"] = round(time.time() - step_started, 2)
@@ -304,7 +322,14 @@ class DubbingPipeline:
             if cfg.subtitle_mode != "none":
                 _progress(95, "Tạo file phụ đề...")
                 srt_path = output_video.with_suffix(".srt")
-                segments_to_srt(segments, mode=cfg.subtitle_mode, output_path=srt_path)
+                srt_segments = segments
+                if retime:
+                    # Hình đã tua: phụ đề theo đúng lúc giọng đọc câu đó.
+                    srt_segments = [
+                        Segment(start, start + tts._duration(path), seg.text, seg.translated)
+                        for (seg, path), start in zip(tts_results, start_times)
+                    ]
+                segments_to_srt(srt_segments, mode=cfg.subtitle_mode, output_path=srt_path)
 
             # ── Hoàn thành ─────────────────────────────────────────────
             _progress(100, "✅ Hoàn tất!")

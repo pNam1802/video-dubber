@@ -15,14 +15,28 @@ mạch kiểu video review trên TikTok, có thể chọn giọng miễn phí ho
 - **Duyệt transcript trước khi tạo giọng:** sửa câu nghe nhầm/dịch chưa ưng, hoặc bấm dịch lại
   từng câu — giọng đọc và video được tạo đúng theo bản đã duyệt.
 - **Nhiều giọng đọc:**
+  - Mặc định (VieNeu-TTS, mã nguồn mở): giọng **Nora** và 6 giọng Việt có sẵn; hoặc
+    **clone giọng của bạn** từ 3–15 giây ghi âm.
   - Miễn phí (edge-tts): HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam).
   - Có cảm xúc (Gemini TTS): Leda (nữ), Charon (nam) — đọc hồi hộp, nhấn nhá theo nội dung.
 - **Đọc liền mạch:** đọc trọn câu, nghỉ ngắn và đều giữa các câu, không có khoảng lặng dài.
+- **Tua nhanh hình ở khoảng lặng** (bật sẵn, tối đa 2×): giọng Việt thường ngắn hơn lời gốc, nên
+  thay vì để khoảng nghỉ, hình được tua cho khớp giọng — giọng vẫn đọc ở tốc độ tự nhiên.
 - **Phụ đề** song ngữ, chỉ tiếng Việt, chỉ tiếng Anh hoặc không phụ đề; tải về dạng `.srt`.
 - **Tài khoản & tiện ích:** đăng nhập (kể cả Google), lịch sử job, email báo khi job cần duyệt /
   xong / lỗi, hạn mức theo người dùng, trang thống kê cho quản trị viên.
 
 ## Demo
+
+### Giọng mặc định Nora + tua nhanh hình
+
+Đoạn 2,5 phút bên dưới (cùng đoạn với phần so sánh giọng), giọng **Nora** (VieNeu-TTS), tua
+nhanh hình ở khoảng lặng: video còn **2:01**, **0/26** chỗ nghỉ ≥ 0,5 giây, giọng đọc tốc độ tự
+nhiên (không câu nào bị kéo giãn). Không tua hình thì cùng đoạn này có 21/26 chỗ nghỉ ≥ 0,5 giây.
+
+https://github.com/user-attachments/assets/567150fb-4758-4072-bada-550afae19ce2
+
+File: [5_VieNeu_Nora_tua_hinh.mp4](demo/voices/5_VieNeu_Nora_tua_hinh.mp4)
 
 ### So sánh giọng đọc
 
@@ -104,8 +118,8 @@ Chỉ tính tiền gọi API (dịch + giọng đọc), cho video 11 phút (~14.
 3. Dịch theo lô bằng DeepSeek (mặc định), lỗi thì lùi sang Gemini rồi OpenAI; mỗi lô kèm các câu
    đã dịch ngay trước làm ngữ cảnh.
 4. Dừng chờ người dùng duyệt transcript.
-5. Tạo giọng đọc (edge-tts / Gemini TTS / gTTS) và xếp liền mạch lên dòng thời gian.
-6. Trộn giọng vào video bằng ffmpeg, xuất video + SRT.
+5. Tạo giọng đọc (VieNeu / edge-tts / Gemini TTS / gTTS) và xếp liền mạch lên dòng thời gian.
+6. Tua nhanh hình ở khoảng lặng (nếu bật), trộn giọng vào video bằng ffmpeg, xuất video + SRT.
 
 Bước 1–3 chạy trên container GPU (T4), bước 5–6 chạy trên container CPU — xem "Triển khai Modal".
 
@@ -120,8 +134,16 @@ Hai thứ quyết định bản lồng tiếng nghe có "TikTok" hay không: đ�
   ngay khi câu trước đọc xong (+0,25 giây), được vào sớm tối đa 2 giây; một tốc độ chung cho cả
   video để tổng giọng Việt khớp thời gian nói gốc, câu còn hở thì đọc chậm thêm tối đa 10%.
   Không bao giờ chồng giọng. Đo trên video 11 phút: khoảng lặng ≥ 0,8 giây từ 57 còn 8.
-- **Đổi tốc độ không làm méo giọng**: edge-tts tổng hợp lại với tham số `rate`; Gemini/gTTS
-  dùng `atempo` của ffmpeg trên bản đã có (không gọi API lần nữa).
+- **Đổi tốc độ không làm méo giọng**: edge-tts tổng hợp lại với tham số `rate`; VieNeu/Gemini/gTTS
+  dùng `atempo` của ffmpeg trên bản đã có (không gọi API lần nữa). Riêng VieNeu **không bao giờ
+  bị làm chậm** (atempo giãn chậm tới ~0,79× nghe lê), chỉ tăng tốc khi câu dài quá khung hình.
+- **Tua nhanh hình ở khoảng lặng** ([`core/video_retime.py`](core/video_retime.py), bật sẵn): mỗi
+  câu ứng với một đoạn hình — từ lúc câu đó bắt đầu tới lúc câu sau bắt đầu — đoạn đó được tua
+  nhanh vừa đủ cho câu tiếng Việt + 0,25 giây nghỉ, tối đa 2×. Không bao giờ làm chậm hình; đoạn
+  intro trước câu đầu giữ nguyên. Hình đổi tốc độ bằng **một** bộ lọc `setpts` theo hàm từng khúc
+  (giải mã một lần, giữ fps gốc); âm thanh gốc cắt từng khúc + `atempo` (giữ cao độ) rồi nối lại;
+  phụ đề SRT theo đúng lúc giọng đọc. Đoạn Chap 6 (2:30): còn 2:01, chỗ nghỉ ≥ 0,5 giây từ 21/26
+  còn 0/26, ghép video lâu thêm chưa tới 1 giây. Video ra có `+faststart` (phát ngay khi đang tải).
 - **Chặn âm thanh hỏng**: file TTS ngắn bất thường so với số âm tiết bị tạo lại (edge-tts đôi khi
   trả file có dung lượng nhưng không có tiếng).
 
@@ -164,6 +186,7 @@ chính VieNeu tạo ra ([`core/voices/nora.wav`](core/voices/nora.wav)), không 
 	  translator/       DeepSeek, Gemini, OpenAI (dùng chung llm_common.py)
 	  tts_engine.py     VieNeu, edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
 	  vieneu_client.py  gọi VieNeu-TTS (container GPU VoiceCloner trên Modal)
+	  video_retime.py   tua nhanh hình ở khoảng lặng cho khớp giọng đọc
 	  voice_timeline.py xếp giọng đọc liền mạch lên dòng thời gian
 	  video_composer.py trộn giọng vào video bằng ffmpeg
 	demo/               video demo (xem mục Demo)

@@ -121,6 +121,10 @@ VOICE_SAMPLE_MIN_SEC = 3.0
 VOICE_SAMPLE_MAX_SEC = 15.0   # VieNeu chi can 3-8 giay; dai hon thi cat bot
 VOICE_SAMPLE_MAX_MB = 10
 
+# Tua nhanh hinh o khoang lang cho khop giong doc (core/video_retime.py):
+# bat mac dinh, toi da bay nhieu lan.
+MAX_VIDEO_SPEED = 2.0
+
 # DeepSeek dung API tuong thich OpenAI — xem core/translator/deepseek_translator.py.
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")

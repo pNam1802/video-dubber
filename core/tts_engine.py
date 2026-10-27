@@ -178,7 +178,9 @@ class TTSEngine:
 		if duration < max(0.3, syllables / 12.0):
 			raise RuntimeError(f"Âm thanh TTS bất thường: {duration:.2f}s cho {syllables} âm tiết")
 
-	def place_on_timeline(self, results: List[tuple]) -> tuple[List[tuple], List[float]]:
+	def place_on_timeline(
+		self, results: List[tuple], slots: List[tuple[float, float]] | None = None,
+	) -> tuple[List[tuple], List[float]]:
 		"""Xếp các câu đã tổng hợp lên dòng thời gian cho nghe liền mạch (xem
 		core/voice_timeline.py). Đổi tốc độ bằng cách TỔNG HỢP LẠI với tham số
 		rate của edge-tts — giọng vẫn tự nhiên — thay vì cắt ghép mẫu âm thanh
@@ -190,7 +192,8 @@ class TTSEngine:
 		thật: -10% cho 1.11 lần).
 
 		Trả về (results, thời điểm bắt đầu của từng câu)."""
-		slots = [(seg.start, seg.end) for seg, _ in results]
+		# slots khác mốc câu gốc khi hình đã được tua (core/video_retime.py).
+		slots = slots or [(seg.start, seg.end) for seg, _ in results]
 		durations = [self._duration(path) for _, path in results]
 
 		# VieNeu đổi tốc độ bằng atempo (kéo giãn âm thanh có sẵn), không đọc

@@ -23,6 +23,7 @@ from config.settings import (
     DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    MAX_VIDEO_SPEED,
     TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -94,6 +95,9 @@ def upload_video():
     if tts_voice == "mine" and not current_user.has_voice_sample:
         return jsonify({"error": "Bạn chưa tải giọng mẫu — vào Cài đặt để thêm giọng của bạn."}), 400
     subtitle_mode = _pick("subtitle_mode", ALLOWED_SUBTITLE_MODES, "bilingual")
+    # Checkbox: form không gửi gì nghĩa là đã bỏ chọn. Client cũ không biết
+    # trường này thì gửi retime_video vắng mặt -> tắt, giữ cách ghép cũ.
+    max_video_speed = MAX_VIDEO_SPEED if request.form.get("retime_video") == "on" else 0.0
 
     try:
         original_volume = float(request.form.get("original_volume", "10"))
@@ -133,6 +137,7 @@ def upload_video():
         # luu tu day vi /continue khong con DubbingConfig nao cua request
         # nay de doc lai.
         tts_voice=tts_voice,
+        max_video_speed=max_video_speed,
         original_volume=original_volume,
         subtitle_mode=subtitle_mode,
     )
@@ -153,6 +158,7 @@ def upload_video():
         compute_device=compute_device,
         tts_engine=tts_engine,
         tts_voice=tts_voice,
+        max_video_speed=max_video_speed,
         original_volume=original_volume,
         subtitle_mode=subtitle_mode,
     )
@@ -444,6 +450,7 @@ def continue_after_review(job_id: int):
         tts_engine=job.tts_engine or "edge-tts",
         tts_voice=job.tts_voice or "female",
         tts_ref_audio=ref_audio,
+        max_video_speed=job.max_video_speed or 0.0,
         original_volume=job.original_volume if job.original_volume is not None else 0.1,
         subtitle_mode=job.subtitle_mode or "bilingual",
         target_language=job.target_language,
