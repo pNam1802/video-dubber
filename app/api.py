@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, request, url_for
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
@@ -16,6 +16,7 @@ from app.jobs import cancel_job, continue_job, start_job
 from app.models import Job, JobStatus, TranscriptSegment
 from app.quota import check_quota
 from app.storage import commit_uploads, commit_volume
+from app.voices import VoiceSampleError, accept_voice_upload
 from config.settings import (
     OUTPUT_DIR,
     RATELIMIT_UPLOAD,
@@ -54,6 +55,21 @@ ALLOWED_SUBTITLE_MODES = {"bilingual", "target", "source", "none"}
 def _pick(field: str, allowed: set[str], default: str) -> str:
     value = request.form.get(field, default)
     return value if value in allowed else default
+
+
+@bp.post("/voice-sample")
+@login_required
+def upload_voice_sample():
+    """Tải giọng mẫu ngay trong form tạo job (trang Cài đặt dùng form thường)."""
+    try:
+        seconds = accept_voice_upload(current_user, request)
+    except VoiceSampleError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({
+        "seconds": round(seconds, 1),
+        # ?v= để trình duyệt không phát lại bản cũ đã cache.
+        "url": url_for("main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp())),
+    })
 
 
 @bp.post("/upload")

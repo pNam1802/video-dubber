@@ -18,7 +18,7 @@ from app.models import Job, JobStatus
 from app.permissions import require_admin_page
 from app.quota import get_usage
 from app.storage import refresh_outputs
-from app.voices import VoiceSampleError, delete_voice_sample, save_voice_sample
+from app.voices import VoiceSampleError, accept_voice_upload, delete_voice_sample
 from config.settings import (
     FFMPEG_BIN,
     MAX_UPLOAD_MB,
@@ -35,6 +35,7 @@ from config.settings import (
     VOICE_SAMPLE_MAX_SEC,
     VOICE_SAMPLE_MIN_SEC,
 )
+from core.voice_previews import PREVIEW_DIR, preview_name, preview_voices
 
 bp = Blueprint("main", __name__)
 
@@ -71,12 +72,24 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
 
 
 def _tts_voice_keys() -> dict[str, list[str]]:
-    """Giọng chọn được theo từng engine. "Giọng của bạn" chỉ hiện khi người
-    dùng đã tải giọng mẫu lên ở trang cài đặt."""
-    keys = {engine: list(voices) for engine, voices in TTS_VOICES.items()}
-    if not current_user.has_voice_sample:
-        keys["vieneu"] = [k for k in keys["vieneu"] if k != "mine"]
-    return keys
+    """Giọng chọn được theo từng engine. "Giọng của bạn" luôn có: chưa có
+    giọng mẫu thì chọn nó sẽ mở ô tải giọng mẫu ngay trong form."""
+    return {engine: list(voices) for engine, voices in TTS_VOICES.items()}
+
+
+def _voice_preview_urls() -> dict[str, dict[str, str]]:
+    """File nghe thử của từng giọng (core/voice_previews.py) — giọng nào chưa
+    có file thì không hiện nút. "Giọng của bạn" phát lại chính file mẫu."""
+    urls: dict[str, dict[str, str]] = {}
+    for engine, key in preview_voices():
+        name = preview_name(engine, key)
+        if (PREVIEW_DIR / name).is_file():
+            urls.setdefault(engine, {})[key] = url_for("static", filename=f"voices/{name}")
+    if current_user.has_voice_sample:
+        urls.setdefault("vieneu", {})["mine"] = url_for(
+            "main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp())
+        )
+    return urls
 
 
 # Video mẫu cho landing page — cũng là video nhúng trong README.
@@ -98,6 +111,10 @@ def index():
         default_deepseek_model=DEEPSEEK_MODEL,
         gemini_key_exists=bool(GEMINI_API_KEY),
         tts_voice_keys=_tts_voice_keys(),
+        voice_preview_urls=_voice_preview_urls(),
+        voice_min_sec=VOICE_SAMPLE_MIN_SEC,
+        voice_max_sec=VOICE_SAMPLE_MAX_SEC,
+        voice_max_mb=VOICE_SAMPLE_MAX_MB,
         default_gemini_model=GEMINI_MODEL,
         usage=get_usage(current_user).as_dict(),
         max_upload_mb=MAX_UPLOAD_MB,
@@ -158,21 +175,9 @@ def _render_settings():
 @bp.post("/cai-dat/giong")
 @login_required
 def upload_voice_sample():
-    """Tải giọng mẫu để clone. Bắt buộc xác nhận quyền dùng giọng: VieNeu
-    (Apache 2.0) để trách nhiệm clone cho người dùng, và không được clone
-    giọng người khác khi chưa có sự đồng ý."""
-    if (request.content_length or 0) > VOICE_SAMPLE_MAX_MB * 1024 * 1024:
-        flash(f"File quá lớn — tối đa {VOICE_SAMPLE_MAX_MB} MB.", "danger")
-        return redirect(url_for("main.account_settings"))
-    if "voice_consent" not in request.form:
-        flash("Bạn cần xác nhận đây là giọng của bạn hoặc đã được chủ giọng đồng ý.", "danger")
-        return redirect(url_for("main.account_settings"))
-    upload = request.files.get("voice_sample")
-    if not upload or not upload.filename:
-        flash("Vui lòng chọn file giọng mẫu.", "danger")
-        return redirect(url_for("main.account_settings"))
+    """Tải giọng mẫu để clone (xem app/voices.accept_voice_upload)."""
     try:
-        seconds = save_voice_sample(current_user, upload)
+        seconds = accept_voice_upload(current_user, request)
     except VoiceSampleError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("main.account_settings"))

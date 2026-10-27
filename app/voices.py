@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+from flask import Request
 from werkzeug.datastructures import FileStorage
 
 from app.extensions import db
@@ -20,6 +21,7 @@ from config.settings import (
     FFMPEG_BIN,
     FFPROBE_BIN,
     TEMP_DIR,
+    VOICE_SAMPLE_MAX_MB,
     VOICE_SAMPLE_MAX_SEC,
     VOICE_SAMPLE_MIN_SEC,
 )
@@ -42,6 +44,21 @@ def _duration(path: Path) -> float:
         return float(result.stdout.strip())
     except ValueError as exc:
         raise VoiceSampleError("Không đọc được độ dài file âm thanh.") from exc
+
+
+def accept_voice_upload(user: User, req: Request) -> float:
+    """Kiểm tra request tải giọng mẫu rồi lưu — dùng chung cho trang Cài đặt
+    và nút tải ngay trong form tạo job. Bắt buộc xác nhận quyền dùng giọng:
+    VieNeu (Apache 2.0) để trách nhiệm clone cho người dùng, và không được
+    clone giọng người khác khi chưa có sự đồng ý."""
+    if (req.content_length or 0) > VOICE_SAMPLE_MAX_MB * 1024 * 1024:
+        raise VoiceSampleError(f"File quá lớn — tối đa {VOICE_SAMPLE_MAX_MB} MB.")
+    if "voice_consent" not in req.form:
+        raise VoiceSampleError("Bạn cần xác nhận đây là giọng của bạn hoặc đã được chủ giọng đồng ý.")
+    upload = req.files.get("voice_sample")
+    if not upload or not upload.filename:
+        raise VoiceSampleError("Vui lòng chọn file giọng mẫu.")
+    return save_voice_sample(user, upload)
 
 
 def save_voice_sample(user: User, upload: FileStorage) -> float:

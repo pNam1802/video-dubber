@@ -122,8 +122,8 @@ def test_voice_sample_saved_trimmed_and_deletable(app, as_user, user):
     assert path.exists() and _duration(path) <= 15.05
 
     assert as_user.get("/cai-dat/giong.wav").status_code == 200
-    # Giọng của bạn giờ hiện trong danh sách chọn giọng.
-    assert '"mine"' in as_user.get("/").get_data(as_text=True)
+    # Nghe thử "Giọng của bạn" bằng chính file mẫu.
+    assert '"mine": "/cai-dat/giong.wav?v=' in as_user.get("/").get_data(as_text=True)
 
     as_user.post("/cai-dat/giong/xoa")
     with app.app_context():
@@ -136,8 +136,39 @@ def test_voice_sample_rejects_non_audio_extension(app, as_user):
     assert "Định dạng không hỗ trợ" in _post_sample(as_user, name="me.exe").get_data(as_text=True)
 
 
-def test_mine_voice_hidden_without_sample(as_user):
-    assert '"mine"' not in as_user.get("/").get_data(as_text=True)
+def test_mine_voice_offered_with_inline_upload_without_sample(as_user):
+    # Luôn chọn được "Giọng của bạn"; chưa có mẫu thì tải ngay trong form.
+    html = as_user.get("/").get_data(as_text=True)
+    assert '"mine"' in html and 'id="voiceSamplePanel"' in html
+    assert '"mine": "/cai-dat/giong.wav' not in html  # chưa có gì để nghe thử
+    # Ô tải giọng mẫu không có name: không được lọt vào form tạo job.
+    assert 'name="voice_sample"' not in html
+
+
+# ── Tải giọng mẫu ngay trong form tạo job ────────────────────────
+def _post_sample_api(client, seconds: float = 5.0, consent: bool = True):
+    data = {"voice_sample": (io.BytesIO(_tone(seconds)), "me.wav")}
+    if consent:
+        data["voice_consent"] = "on"
+    return client.post("/api/voice-sample", data=data, content_type="multipart/form-data")
+
+
+def test_api_voice_sample_saves_and_returns_preview_url(app, as_user, user):
+    response = _post_sample_api(as_user)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["seconds"] == pytest.approx(5.0, abs=0.2)
+    assert body["url"].startswith("/cai-dat/giong.wav?v=")
+    with app.app_context():
+        assert db.session.get(User, user).has_voice_sample
+
+
+def test_api_voice_sample_errors_are_json(app, as_user, user):
+    assert _post_sample_api(as_user, consent=False).get_json()["error"].startswith("Bạn cần xác nhận")
+    response = _post_sample_api(as_user, seconds=1.0)
+    assert response.status_code == 400 and "quá ngắn" in response.get_json()["error"]
+    with app.app_context():
+        assert db.session.get(User, user).voice_sample_at is None
 
 
 def test_other_user_cannot_hear_my_sample(app, as_user, as_other, user):

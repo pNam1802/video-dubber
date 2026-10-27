@@ -280,6 +280,16 @@ def migrate() -> None:
     subprocess.run(["flask", "--app", "wsgi", "db", "upgrade"], check=True, cwd="/root")
 
 
+@app.function(region="us", secrets=secrets, env=RUNTIME_ENV, timeout=900)
+def voice_previews() -> dict:
+    """Đọc VOICE_PREVIEW_TEXT bằng mọi giọng có sẵn (trừ giọng clone của người
+    dùng). Chạy ở đây vì Gemini cần key trong secret, VieNeu cần VoiceCloner.
+    Gọi qua `python scripts/make_voice_previews.py`, file ghi về static/voices/."""
+    from core.voice_previews import render_all
+
+    return render_all()
+
+
 @app.local_entrypoint()
 def main():
     """`modal run modal_app.py` — kiểm tra container GPU khởi động được."""

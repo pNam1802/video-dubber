@@ -201,14 +201,44 @@
 
         <div>
           <label class="{{ label_class }}" for="tts_voice">Chất giọng</label>
-          <select name="tts_voice" id="tts_voice" class="{{ field_class }}"></select>
+          <div class="flex gap-2">
+            <select name="tts_voice" id="tts_voice" class="{{ field_class }} flex-1 min-w-0"></select>
+            <button type="button" id="voicePreviewBtn" title="Nghe thử giọng này"
+                    class="hidden flex-shrink-0 inline-flex items-center gap-1 px-3 rounded-lg border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+              <span id="voicePreviewPlay" class="flex"><span class="material-symbols-outlined text-[20px]">play_arrow</span></span>
+              <span id="voicePreviewStop" class="flex hidden"><span class="material-symbols-outlined text-[20px]">stop</span></span>
+              <span class="font-label-sm text-label-sm">Nghe thử</span>
+            </button>
+          </div>
           <p id="voiceCloneHint" class="font-label-sm text-label-sm text-on-surface-variant mt-1 hidden">
-            {% if tts_voice_keys.vieneu and 'mine' in tts_voice_keys.vieneu %}
-            Giọng của bạn lấy từ giọng mẫu ở <a href="{{ url_for('main.account_settings') }}#giong-cua-ban" class="text-primary hover:underline">Cài đặt</a>.
-            {% else %}
-            Muốn đọc bằng giọng của bạn? Tải giọng mẫu ở <a href="{{ url_for('main.account_settings') }}#giong-cua-ban" class="text-primary hover:underline">Cài đặt</a>.
-            {% endif %}
+            Muốn Nora đọc bằng giọng của bạn? Chọn "Giọng của bạn (clone)" ở trên.
           </p>
+
+          {# Tải giọng mẫu ngay tại đây khi chọn "Giọng của bạn". Các ô KHÔNG có
+             name: không được đi kèm form tạo job, gửi riêng qua /api/voice-sample. #}
+          <div id="voiceSamplePanel" class="hidden mt-2 rounded-lg border border-outline-variant p-3 flex flex-col gap-2">
+            <p id="voiceSampleStatus" class="font-label-sm text-label-sm text-on-surface-variant">
+              {% if current_user.has_voice_sample %}
+              Đang dùng giọng mẫu bạn đã lưu — bấm "Nghe thử" để nghe lại, hoặc tải file khác để thay.
+              {% else %}
+              Tải lên một đoạn ghi âm {{ voice_min_sec|int }}–{{ voice_max_sec|int }} giây giọng bạn muốn dùng:
+              đọc rõ, không nhạc nền, không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.
+              {% endif %}
+            </p>
+            <input id="voiceSampleFile" type="file"
+                   accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
+                   class="w-full font-label-sm text-label-sm text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-3 file:py-1.5 file:text-on-surface">
+            <label class="flex items-start gap-2 font-label-sm text-label-sm text-on-surface cursor-pointer">
+              <input id="voiceSampleConsent" type="checkbox" class="w-4 h-4 mt-0.5 accent-primary">
+              <span>Tôi xác nhận đây là giọng của tôi, hoặc đã được chủ giọng đồng ý cho dùng, và sẽ không dùng để mạo danh hay lừa đảo.</span>
+            </label>
+            <button type="button" id="voiceSampleUpload"
+                    class="self-start inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm font-bold disabled:opacity-50">
+              <span class="material-symbols-outlined text-[18px]">upload_file</span>
+              <span id="voiceSampleUploadLabel">Lưu giọng mẫu</span>
+            </button>
+            <p id="voiceSampleError" class="hidden font-label-sm text-label-sm text-error"></p>
+          </div>
         </div>
 
         <div>
@@ -640,9 +670,77 @@
         option.textContent = (VOICE_LABELS[engine] || {})[key] || key;
         ttsVoiceSelect.appendChild(option);
       });
-      document.getElementById("voiceCloneHint").classList.toggle("hidden", engine !== "vieneu");
+      syncPreview();
     }
     ttsEngineSelect.addEventListener("change", syncVoices);
+
+    // ── Nghe thử: mọi giọng đọc cùng một câu (core/voice_previews.py) ──
+    const PREVIEW_URLS = {{ voice_preview_urls | tojson }};
+    const previewBtn = document.getElementById("voicePreviewBtn");
+    const previewAudio = new Audio();
+    function paintPreview(playing) {
+      document.getElementById("voicePreviewPlay").classList.toggle("hidden", playing);
+      document.getElementById("voicePreviewStop").classList.toggle("hidden", !playing);
+    }
+    function previewUrl() {
+      return (PREVIEW_URLS[ttsEngineSelect.value] || {})[ttsVoiceSelect.value] || "";
+    }
+    function syncPreview() {
+      previewAudio.pause();
+      previewBtn.classList.toggle("hidden", !previewUrl());
+      const mine = ttsEngineSelect.value === "vieneu" && ttsVoiceSelect.value === "mine";
+      document.getElementById("voiceSamplePanel").classList.toggle("hidden", !mine);
+      document.getElementById("voiceCloneHint").classList.toggle("hidden", ttsEngineSelect.value !== "vieneu" || mine);
+    }
+
+    // ── Tải giọng mẫu ngay trong form (giọng "Giọng của bạn") ──
+    const sampleBtn = document.getElementById("voiceSampleUpload");
+    const sampleError = document.getElementById("voiceSampleError");
+    sampleBtn.addEventListener("click", async function () {
+      const file = document.getElementById("voiceSampleFile").files[0];
+      const consent = document.getElementById("voiceSampleConsent").checked;
+      sampleError.classList.add("hidden");
+      if (!file) { sampleError.textContent = "Vui lòng chọn file giọng mẫu."; sampleError.classList.remove("hidden"); return; }
+      if (!consent) { sampleError.textContent = "Bạn cần đánh dấu ô xác nhận quyền dùng giọng."; sampleError.classList.remove("hidden"); return; }
+
+      const data = new FormData();
+      data.append("voice_sample", file);
+      data.append("voice_consent", "on");
+      sampleBtn.disabled = true;
+      document.getElementById("voiceSampleUploadLabel").textContent = "Đang lưu...";
+      try {
+        const res = await fetch("/api/voice-sample", {
+          method: "POST",
+          headers: { "X-CSRFToken": form.querySelector('[name="csrf_token"]').value },
+          body: data,
+        });
+        const body = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(body.error || "Không lưu được giọng mẫu.");
+        PREVIEW_URLS.vieneu = PREVIEW_URLS.vieneu || {};
+        PREVIEW_URLS.vieneu.mine = body.url;
+        document.getElementById("voiceSampleStatus").textContent =
+          "Đã lưu giọng mẫu (" + body.seconds + " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
+        document.getElementById("voiceSampleFile").value = "";
+        syncPreview();
+      } catch (err) {
+        sampleError.textContent = err.message;
+        sampleError.classList.remove("hidden");
+      } finally {
+        sampleBtn.disabled = false;
+        document.getElementById("voiceSampleUploadLabel").textContent = "Lưu giọng mẫu";
+      }
+    });
+    previewAudio.addEventListener("play", function () { paintPreview(true); });
+    previewAudio.addEventListener("pause", function () { paintPreview(false); });
+    previewAudio.addEventListener("ended", function () { paintPreview(false); });
+    previewBtn.addEventListener("click", function () {
+      if (!previewAudio.paused) { previewAudio.pause(); return; }
+      const url = previewUrl();
+      if (previewAudio.getAttribute("src") !== url) previewAudio.src = url;
+      previewAudio.currentTime = 0;
+      previewAudio.play().catch(function () {});
+    });
+    ttsVoiceSelect.addEventListener("change", syncPreview);
 
     // Thời điểm tạo job: máy chủ gửi ISO UTC, hiển thị theo giờ của người xem.
     document.querySelectorAll("[data-local-time]").forEach(function (el) {
