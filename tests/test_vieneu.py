@@ -193,3 +193,34 @@ def test_continue_preset_voices_need_no_sample(app, as_user, user, monkeypatch, 
     job_id, _, _ = _awaiting_review_job(app, user, tmp_path, tts_engine="vieneu", tts_voice=voice)
     assert as_user.post(f"/api/jobs/{job_id}/continue").status_code == 200
     assert captured["config"].tts_ref_audio is None
+
+
+def test_vieneu_never_slows_down_only_speeds_up(monkeypatch, tmp_path):
+    """atempo chậm tới ~0,79 lần nghe lê (job #40): VieNeu chỉ được TĂNG tốc."""
+    engine = TTSEngine(engine="vieneu", voice="female", tts_dir=tmp_path)
+    paths = []
+    for i in range(3):
+        p = tmp_path / f"seg_{i}.mp3"
+        p.write_bytes(b"a")
+        paths.append(p)
+    # Câu 0, 1 ngắn hơn hẳn khe gốc (edge-tts sẽ bị làm chậm); câu 2 dài quá khe.
+    segs = [Segment(0, 5, "x", "Câu một."), Segment(5, 10, "x", "Câu hai."), Segment(10, 12, "x", "Câu ba.")]
+    lengths = {paths[0]: 2.0, paths[1]: 2.0, paths[2]: 6.0}
+    monkeypatch.setattr(TTSEngine, "_duration", staticmethod(lambda p: lengths.get(p, 6.0 / 1.35)))
+    speeds: list[float] = []
+    monkeypatch.setattr(engine, "_resynthesize", lambda pair, speed: speeds.append(speed))
+    engine.place_on_timeline(list(zip(segs, paths)))
+    assert speeds and all(s > 1.0 for s in speeds)
+
+
+def test_edge_still_slows_down_to_fill_gaps(monkeypatch, tmp_path):
+    engine = TTSEngine(engine="edge-tts", voice="female", tts_dir=tmp_path)
+    paths = [tmp_path / f"seg_{i}.mp3" for i in range(2)]
+    for p in paths:
+        p.write_bytes(b"a")
+    segs = [Segment(0, 5, "x", "Câu một."), Segment(5, 10, "x", "Câu hai.")]
+    monkeypatch.setattr(TTSEngine, "_duration", staticmethod(lambda p: 2.0))
+    speeds: list[float] = []
+    monkeypatch.setattr(engine, "_resynthesize", lambda pair, speed: speeds.append(speed))
+    engine.place_on_timeline(list(zip(segs, paths)))
+    assert speeds and min(speeds) < 1.0

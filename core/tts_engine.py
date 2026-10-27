@@ -193,10 +193,15 @@ class TTSEngine:
 		slots = [(seg.start, seg.end) for seg, _ in results]
 		durations = [self._duration(path) for _, path in results]
 
-		base = base_speed(slots, durations)
+		# VieNeu đổi tốc độ bằng atempo (kéo giãn âm thanh có sẵn), không đọc
+		# lại như edge-tts: giãn chậm tới ~0,79 lần nghe rõ là lê (job #40,
+		# 39/40 câu). Nên với VieNeu KHÔNG làm chậm — chấp nhận khoảng nghỉ —
+		# chỉ còn tăng tốc khi câu dài quá khung hình.
+		slow_down = self.engine != "vieneu"
+		base = base_speed(slots, durations) if slow_down else 1.0
 		estimated = [d / base for d in durations]
 		plan = plan_timeline(slots, estimated)
-		factors = fill_gaps(estimated, plan)
+		factors = fill_gaps(estimated, plan) if slow_down else [1.0] * len(plan)
 		speeds = [base * (p.speed if p.speed > 1.0 else f) for p, f in zip(plan, factors)]
 
 		redo = [(i, s) for i, s in enumerate(speeds) if abs(s - 1.0) > 0.02]
