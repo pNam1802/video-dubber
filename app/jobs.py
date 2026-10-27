@@ -334,6 +334,10 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
             job.video_url = f"/media/output/{quote(output_name)}"
             job.srt_name = srt_name
             job.srt_url = f"/media/output/{quote(srt_name)}" if srt_name else None
+            # Chỉ ghi mốc trong video mới, không đụng nội dung câu (xem ghi chú cuối hàm).
+            for row, (play_start, play_end) in zip(rows, result.play_timings):
+                row.play_start_sec = float(play_start)
+                row.play_end_sec = float(play_end)
         else:
             job.status = JobStatus.FAILED
             job.progress = 0

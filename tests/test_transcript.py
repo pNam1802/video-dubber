@@ -93,7 +93,12 @@ def test_endpoint_returns_segments_in_order(app, as_user, user):
     assert payload["available"] is True
     assert [s["idx"] for s in payload["segments"]] == [0, 1, 2]
     assert payload["segments"][0]["start"] == 0.0
-    assert set(payload["segments"][0]) == {"id", "idx", "start", "end", "source", "target", "edited"}
+    assert set(payload["segments"][0]) == {
+        "id", "idx", "start", "end", "play_start", "play_end", "source", "target", "edited",
+    }
+    # Chưa ghép video: mốc trong video mới = mốc gốc.
+    first = payload["segments"][0]
+    assert (first["play_start"], first["play_end"]) == (first["start"], first["end"])
 
 
 def test_job_without_transcript_returns_empty_not_404(app, as_user, user):

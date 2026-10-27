@@ -76,6 +76,9 @@ class DubbingResult:
     error: str = ""
     #: Thoi gian tung buoc, giay. Dung de biet nut that nam o dau.
     timings: dict = field(default_factory=dict)
+    #: (bat dau, ket thuc) cua tung cau trong VIDEO DA LONG TIENG, cung thu tu
+    #: voi segments — khac moc cau goc khi giong bi doi cho hoac hinh bi tua.
+    play_timings: List[tuple] = field(default_factory=list)
     #: Engine da dung that su — khac translator_engine khi phai fallback.
     translator_used: str = ""
     #: Engine ban dau, chi set khi da fallback.
@@ -316,6 +319,17 @@ class DubbingPipeline:
             )
 
             result.timings["compose"] = round(time.time() - step_started, 2)
+
+            # Mốc từng câu trong video MỚI: lúc giọng đọc câu đó, hoặc mốc gốc
+            # (đã quy đổi qua tua hình) với câu không tổng hợp được giọng.
+            voiced = {
+                id(seg): (start, start + tts._duration(path))
+                for (seg, path), start in zip(tts_results, start_times)
+            }
+            to_out = (lambda t: map_time(retime, t)) if retime else (lambda t: t)
+            result.play_timings = [
+                voiced.get(id(seg), (to_out(seg.start), to_out(seg.end))) for seg in segments
+            ]
 
             # ── Bước 6: Tạo phụ đề ────────────────────────────────────
             srt_path = None

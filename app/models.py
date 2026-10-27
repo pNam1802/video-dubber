@@ -279,6 +279,11 @@ class TranscriptSegment(db.Model):
     idx = db.Column(db.Integer, nullable=False)
     start_sec = db.Column(db.Float, nullable=False)
     end_sec = db.Column(db.Float, nullable=False)
+    #: Moc cau trong VIDEO DA LONG TIENG (giai doan 2 ghi). Khac start/end_sec
+    #: khi hinh bi tua nhanh — start/end_sec van la moc goc, giai doan 2 can.
+    #: NULL = chua ghep video, hoac job cu: dung moc goc.
+    play_start_sec = db.Column(db.Float, nullable=True)
+    play_end_sec = db.Column(db.Float, nullable=True)
 
     text_source = db.Column(db.Text, nullable=False, default="", server_default="")
     text_target = db.Column(db.Text, nullable=False, default="", server_default="")
@@ -312,6 +317,8 @@ class TranscriptSegment(db.Model):
             "idx": self.idx,
             "start": round(self.start_sec, 3),
             "end": round(self.end_sec, 3),
+            "play_start": round(self.play_start_sec if self.play_start_sec is not None else self.start_sec, 3),
+            "play_end": round(self.play_end_sec if self.play_end_sec is not None else self.end_sec, 3),
             "source": self.text_source,
             "target": self.text_target,
             "edited": self.edited,

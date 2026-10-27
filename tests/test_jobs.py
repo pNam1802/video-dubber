@@ -511,7 +511,7 @@ def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypa
 
         def synthesize_and_compose(self, video_path, segments, progress_cb=None):
             captured["segments"] = list(segments)
-            return DubbingResult(success=True, output_video=tmp_path / "out.mp4")
+            return DubbingResult(success=True, output_video=tmp_path / "out.mp4", play_timings=[(0.5, 1.25)])
 
     monkeypatch.setattr(jobs_mod, "DubbingPipeline", FakePipeline)
     notified = []
@@ -535,6 +535,10 @@ def test_run_job_phase2_uses_segments_from_db_not_translator(app, user, monkeypa
         job = db.session.get(Job, job_id)
         assert job.status == JobStatus.DONE
         assert captured["segments"][0].translated == "Câu đã được người dùng sửa tay."
+        # Mốc trong video mới được ghi riêng, mốc gốc giữ nguyên.
+        row = job.segments.first()
+        assert (row.start_sec, row.end_sec) == (0.0, 1.0)
+        assert row.to_dict()["play_start"] == 0.5 and row.to_dict()["play_end"] == 1.25
         # Thời gian giai đoạn 2 phải CỘNG DỒN với giai đoạn 1, không ghi đè.
         assert job.elapsed_sec >= 10.0
 

@@ -127,8 +127,12 @@ class FakeTTS:
         out.write_bytes(b"fake-audio")
         return [(segs[0], out)]
 
-    def place_on_timeline(self, results):
-        return results, [seg.start for seg, _ in results]
+    def place_on_timeline(self, results, slots=None):
+        slots = slots or [(seg.start, seg.end) for seg, _ in results]
+        return results, [start for start, _ in slots]
+
+    def _duration(self, path):
+        return 1.0
 
 
 class FakeComposer:
@@ -198,6 +202,23 @@ def test_synthesize_and_compose_does_not_retranslate(fake_collaborators, tmp_pat
     assert result.output_video is not None
     assert result.segments[0].translated == "Bản đã người dùng sửa tay."
     assert fake_collaborators == []  # get_translator() chưa từng được gọi
+
+
+def test_play_timings_follow_retimed_video(fake_collaborators, tmp_path):
+    """Hình tua nhanh thì khung Lời thoại phải theo mốc trong video MỚI:
+    câu có giọng theo lúc giọng đọc, câu không có giọng quy đổi qua tua hình."""
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    config = DubbingConfig(translator_engine="openai", openai_api_key="x", max_video_speed=2.0)
+    segs = [Segment(start=0, end=1, text="Hello.", translated="Xin chào."),
+            Segment(start=8, end=9, text="Bye.", translated="Tạm biệt.")]
+
+    result = DubbingPipeline(config).synthesize_and_compose(video_path, segs)
+
+    assert result.success
+    # Câu 0: giọng 1s trong khe 0-8s -> tua 2×, câu 1 (FakeTTS bỏ qua) từ 8s gốc thành 4s.
+    assert result.play_timings[0] == pytest.approx((0.0, 1.0))
+    assert result.play_timings[1][0] == pytest.approx(4.0)
 
 
 def test_run_combines_both_phases(fake_collaborators, tmp_path):

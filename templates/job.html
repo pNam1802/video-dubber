@@ -286,7 +286,7 @@
           return '<button type="button" data-i="' + i + '" ' +
             'class="transcript-row w-full text-left px-3 py-2 rounded-lg hover:bg-surface-container-high/60 transition-colors flex flex-col gap-0.5">' +
             '<span class="flex items-center gap-2">' +
-            '<span class="tabular font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">' + formatTime(seg.start) + "</span>" +
+            '<span class="tabular font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">' + formatTime(seg.play_start) + "</span>" +
             '<span class="font-body-md text-body-md text-on-surface flex-1">' + escapeHtml(mainText) + "</span>" +
             badge +
             "</span>" + secondLine + "</button>";
@@ -318,13 +318,15 @@
         if (!row) return;
         const seg = segments[Number(row.dataset.i)];
         if (!seg) return;
-        video.currentTime = seg.start;
+        video.currentTime = seg.play_start;
         video.play();
       });
 
       video.addEventListener("timeupdate", function () {
         const t = video.currentTime;
-        const idx = segments.findIndex(function (seg) { return t >= seg.start && t < seg.end; });
+        // Mốc trong video ĐÃ lồng tiếng (play_*), không phải mốc câu gốc:
+        // hình được tua nhanh thì hai mốc lệch nhau ngày càng xa.
+        const idx = segments.findIndex(function (seg) { return t >= seg.play_start && t < seg.play_end; });
         if (idx === activeIdx) return;
         activeIdx = idx;
         paintActiveRow();
