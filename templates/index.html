@@ -225,6 +225,27 @@
               đọc rõ, không nhạc nền, không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.
               {% endif %}
             </p>
+            {# Thu bằng mic: đọc to đoạn gợi ý, dừng tự động ở voice_max_sec. #}
+            <div id="voiceRecorder" class="hidden flex flex-col gap-2">
+              <p class="font-label-sm text-label-sm text-on-surface-variant">
+                Bấm <b>Thu bằng mic</b> rồi đọc to, tự nhiên đoạn sau (khoảng 10 giây):
+              </p>
+              <blockquote class="font-body-md text-body-md text-on-surface border-l-2 border-primary pl-3">
+                "Xin chào, mình đang thu giọng mẫu cho Nora. Hôm nay trời đẹp, mình kể cho bạn nghe một câu chuyện
+                thật thú vị nhé — bạn đã sẵn sàng chưa?"
+              </blockquote>
+              <div class="flex items-center gap-3">
+                <button type="button" id="voiceRecordBtn"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface hover:border-primary hover:text-primary font-label-sm text-label-sm transition-colors">
+                  <span id="voiceRecordIconMic" class="flex"><span class="material-symbols-outlined text-[18px]">mic</span></span>
+                  <span id="voiceRecordIconStop" class="flex hidden"><span class="material-symbols-outlined text-[18px] text-error">stop</span></span>
+                  <span id="voiceRecordLabel">Thu bằng mic</span>
+                </button>
+                <span id="voiceRecordTimer" class="hidden tabular font-label-sm text-label-sm text-error">0:00</span>
+              </div>
+              <audio id="voiceRecordPlayback" controls class="hidden w-full"></audio>
+              <p class="font-label-sm text-label-sm text-on-surface-variant">hoặc chọn file ghi âm có sẵn:</p>
+            </div>
             <input id="voiceSampleFile" type="file"
                    accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
                    class="w-full font-label-sm text-label-sm text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-3 file:py-1.5 file:text-on-surface">
@@ -696,12 +717,92 @@
     // ── Tải giọng mẫu ngay trong form (giọng "Giọng của bạn") ──
     const sampleBtn = document.getElementById("voiceSampleUpload");
     const sampleError = document.getElementById("voiceSampleError");
+    const sampleFileInput = document.getElementById("voiceSampleFile");
+    function showSampleError(message) {
+      sampleError.textContent = message;
+      sampleError.classList.remove("hidden");
+    }
+
+    // Thu bằng mic (MediaRecorder): Chrome/Firefox ra webm/ogg, Safari ra mp4 —
+    // máy chủ đều đọc được qua ffmpeg (app/voices.py).
+    const VOICE_MIN_SEC = {{ voice_min_sec|int }};
+    const VOICE_MAX_SEC = {{ voice_max_sec|int }};
+    const recordBtn = document.getElementById("voiceRecordBtn");
+    const recordTimer = document.getElementById("voiceRecordTimer");
+    const recordPlayback = document.getElementById("voiceRecordPlayback");
+    let recorder = null;
+    let recordedFile = null;
+    let recordStarted = 0;
+    let recordTick = null;
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) {
+      document.getElementById("voiceRecorder").classList.remove("hidden");
+    }
+    function paintRecording(on) {
+      document.getElementById("voiceRecordIconMic").classList.toggle("hidden", on);
+      document.getElementById("voiceRecordIconStop").classList.toggle("hidden", !on);
+      document.getElementById("voiceRecordLabel").textContent = on ? "Dừng thu" : (recordedFile ? "Thu lại" : "Thu bằng mic");
+      recordTimer.classList.toggle("hidden", !on);
+    }
+    function recordExtension(mime) {
+      if (mime.indexOf("ogg") !== -1) return ".ogg";
+      if (mime.indexOf("mp4") !== -1 || mime.indexOf("aac") !== -1) return ".m4a";
+      return ".webm";
+    }
+    recordBtn.addEventListener("click", async function () {
+      sampleError.classList.add("hidden");
+      if (recorder && recorder.state === "recording") { recorder.stop(); return; }
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        showSampleError("Không mở được micro — hãy cho phép trình duyệt dùng mic, hoặc chọn file ghi âm có sẵn.");
+        return;
+      }
+      const chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.addEventListener("dataavailable", function (e) { if (e.data.size) chunks.push(e.data); });
+      recorder.addEventListener("stop", function () {
+        clearInterval(recordTick);
+        stream.getTracks().forEach(function (track) { track.stop(); });
+        const seconds = (Date.now() - recordStarted) / 1000;
+        const mime = recorder.mimeType || "audio/webm";
+        if (seconds < VOICE_MIN_SEC) {
+          recordedFile = null;
+          recordPlayback.classList.add("hidden");
+          showSampleError("Bản thu quá ngắn — cần ít nhất " + VOICE_MIN_SEC + " giây, bạn thu lại nhé.");
+        } else {
+          recordedFile = new File(chunks, "ghi-am" + recordExtension(mime), { type: mime });
+          recordPlayback.src = URL.createObjectURL(recordedFile);
+          recordPlayback.classList.remove("hidden");
+          sampleFileInput.value = "";  // dùng bản vừa thu, không phải file đã chọn trước đó
+        }
+        paintRecording(false);
+      });
+      recorder.start();
+      recordStarted = Date.now();
+      recordTimer.textContent = "0:00";
+      recordTick = setInterval(function () {
+        const s = Math.floor((Date.now() - recordStarted) / 1000);
+        recordTimer.textContent = "0:" + String(s).padStart(2, "0") + " / 0:" + VOICE_MAX_SEC;
+        if (s >= VOICE_MAX_SEC && recorder.state === "recording") recorder.stop();
+      }, 250);
+      paintRecording(true);
+    });
+    // Chọn file thì bỏ bản thu bằng mic (nếu có): chỉ gửi một nguồn.
+    sampleFileInput.addEventListener("change", function () {
+      if (!sampleFileInput.files.length) return;
+      recordedFile = null;
+      recordPlayback.classList.add("hidden");
+      paintRecording(false);
+    });
+
     sampleBtn.addEventListener("click", async function () {
-      const file = document.getElementById("voiceSampleFile").files[0];
+      if (recorder && recorder.state === "recording") { showSampleError("Bấm \"Dừng thu\" trước khi lưu."); return; }
+      const file = sampleFileInput.files[0] || recordedFile;
       const consent = document.getElementById("voiceSampleConsent").checked;
       sampleError.classList.add("hidden");
-      if (!file) { sampleError.textContent = "Vui lòng chọn file giọng mẫu."; sampleError.classList.remove("hidden"); return; }
-      if (!consent) { sampleError.textContent = "Bạn cần đánh dấu ô xác nhận quyền dùng giọng."; sampleError.classList.remove("hidden"); return; }
+      if (!file) { showSampleError("Hãy thu bằng mic hoặc chọn file giọng mẫu."); return; }
+      if (!consent) { showSampleError("Bạn cần đánh dấu ô xác nhận quyền dùng giọng."); return; }
 
       const data = new FormData();
       data.append("voice_sample", file);
@@ -720,7 +821,10 @@
         PREVIEW_URLS.vieneu.mine = body.url;
         document.getElementById("voiceSampleStatus").textContent =
           "Đã lưu giọng mẫu (" + body.seconds + " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
-        document.getElementById("voiceSampleFile").value = "";
+        sampleFileInput.value = "";
+        recordedFile = null;
+        recordPlayback.classList.add("hidden");
+        paintRecording(false);
         syncPreview();
       } catch (err) {
         sampleError.textContent = err.message;

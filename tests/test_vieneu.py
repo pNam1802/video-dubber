@@ -163,6 +163,28 @@ def test_api_voice_sample_saves_and_returns_preview_url(app, as_user, user):
         assert db.session.get(User, user).has_voice_sample
 
 
+def test_api_voice_sample_accepts_mic_recording_webm(app, as_user, user, tmp_path):
+    """Nút thu mic gửi webm/opus (Chrome) — loại file trình duyệt tự ghi."""
+    webm = tmp_path / "ghi-am.webm"
+    subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=220:duration=5",
+         "-c:a", "libopus", str(webm)],
+        check=True,
+    )
+    response = as_user.post(
+        "/api/voice-sample",
+        data={"voice_sample": (io.BytesIO(webm.read_bytes()), "ghi-am.webm"), "voice_consent": "on"},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()["seconds"] == pytest.approx(5.0, abs=0.2)
+
+
+def test_index_has_mic_recorder(as_user):
+    html = as_user.get("/").get_data(as_text=True)
+    assert 'id="voiceRecordBtn"' in html and "MediaRecorder" in html
+
+
 def test_api_voice_sample_errors_are_json(app, as_user, user):
     assert _post_sample_api(as_user, consent=False).get_json()["error"].startswith("Bạn cần xác nhận")
     response = _post_sample_api(as_user, seconds=1.0)
