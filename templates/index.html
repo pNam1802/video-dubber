@@ -1,23 +1,18 @@
 {% extends "layout.html" %}
-{% block title %}Tạo bản lồng tiếng · Nora{% endblock %}
+{% block title %}{{ 'Đọc kịch bản' if mode == 'script' else 'Tạo bản lồng tiếng' }} · Nora{% endblock %}
 
 {% block content %}
-<div class="mb-xl flex flex-wrap items-center justify-between gap-md">
+{# Trang này phục vụ hai chế độ dùng chung một form (cùng phần chọn giọng):
+   "/" lồng tiếng video, "/doc-kich-ban" đọc kịch bản. Phần tử chỉ thuộc một
+   chế độ mang data-mode-only; xem setMode(). #}
+<div class="mb-xl flex items-center justify-between">
   <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
-    <span class="material-symbols-outlined text-[32px] text-primary">campaign</span><span id="pageTitle">Tạo bản lồng tiếng</span>
+    {% if mode == 'script' %}
+    <span class="material-symbols-outlined text-[32px] text-primary">record_voice_over</span>Đọc kịch bản
+    {% else %}
+    <span class="material-symbols-outlined text-[32px] text-primary">campaign</span>Tạo bản lồng tiếng
+    {% endif %}
   </h2>
-  {# Hai chế độ dùng chung một form (cùng phần chọn giọng). Phần tử chỉ thuộc
-     một chế độ mang data-mode-only; xem setMode(). #}
-  <div class="inline-flex rounded-full border border-outline-variant p-1 bg-surface-container" role="tablist">
-    <button type="button" class="mode-tab px-4 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1"
-      data-mode="video" role="tab">
-      <span class="material-symbols-outlined text-[18px]">movie</span>Lồng tiếng video
-    </button>
-    <button type="button" class="mode-tab px-4 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1"
-      data-mode="script" role="tab">
-      <span class="material-symbols-outlined text-[18px]">record_voice_over</span>Đọc kịch bản
-    </button>
-  </div>
 </div>
 
 <form id="uploadForm" novalidate class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
@@ -678,13 +673,6 @@
     function setMode(next) {
       mode = next;
       const script = mode === "script";
-      document.querySelectorAll(".mode-tab").forEach(function (tab) {
-        const on = tab.dataset.mode === mode;
-        tab.classList.toggle("bg-primary", on);
-        tab.classList.toggle("text-on-primary", on);
-        tab.classList.toggle("text-on-surface-variant", !on);
-        tab.setAttribute("aria-selected", String(on));
-      });
       document.querySelectorAll("[data-mode-only]").forEach(function (el) {
         const off = el.dataset.modeOnly !== mode;
         el.classList.toggle("hidden", off);
@@ -693,22 +681,15 @@
       // Giọng đọc nằm trong khối "nâng cao" — đọc kịch bản thì luôn mở khối đó.
       if (script) document.getElementById("advanced").classList.remove("hidden");
       if (targetLanguageSelect.selectedOptions[0].disabled) targetLanguageSelect.value = "vi";
-      document.getElementById("pageTitle").textContent = script ? "Đọc kịch bản" : "Tạo bản lồng tiếng";
       document.getElementById("step2Title").textContent = script ? "Giọng đọc" : "Chất lượng";
       document.getElementById("targetLanguageLabel").textContent = script ? "Ngôn ngữ của kịch bản" : "Ngôn ngữ đích";
       document.getElementById("submitLabel").textContent = script ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
       document.getElementById("estTime").textContent = "—";
       document.getElementById("estCost").textContent = "—";
-      if (!script && fileInput.files.length) fileInput.dispatchEvent(new Event("change"));
-      history.replaceState(null, "", script ? "#kich-ban" : location.pathname + location.search);
       syncEngineHint();
       syncEngines();
       syncSubmit();
     }
-    document.querySelectorAll(".mode-tab").forEach(function (tab) {
-      tab.addEventListener("click", function () { setMode(tab.dataset.mode); });
-    });
-
     function showSubmitError(message) {
       uploadStatus.classList.add("hidden");
       document.getElementById("errorMessage").textContent = message;
@@ -1044,7 +1025,7 @@
     });
 
     paintPresets("balanced");
-    setMode(location.hash === "#kich-ban" ? "script" : "video");
+    setMode({{ mode | tojson }});
   })();
 </script>
 {% endblock %}

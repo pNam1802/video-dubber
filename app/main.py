@@ -112,8 +112,21 @@ def index():
     # form đăng nhập; đã đăng nhập thì vào thẳng công cụ như trước.
     if not current_user.is_authenticated:
         return render_template("landing.html")
+    return _render_tool("video")
+
+
+@bp.get("/doc-kich-ban")
+@login_required
+def script_reader():
+    """Đọc kịch bản dán vào thành mp3 + SRT — cùng form với trang lồng tiếng
+    (dùng chung phần chọn giọng), chỉ hiện các ô của chế độ này."""
+    return _render_tool("script")
+
+
+def _render_tool(mode: str):
     return render_template(
         "index.html",
+        mode=mode,
         outputs=_recent_outputs(),
         openai_key_exists=bool(OPENAI_API_KEY),
         default_openai_model=OPENAI_MODEL,

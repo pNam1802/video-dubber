@@ -160,6 +160,16 @@ def test_run_script_job_marks_done_with_audio(app, as_user, monkeypatch, tmp_pat
     assert "<audio" in page and "Tải âm thanh" in page
 
 
-def test_index_has_script_tab(as_user):
-    html = as_user.get("/").get_data(as_text=True)
-    assert 'data-mode="script"' in html and 'name="script"' in html
+def test_script_page_in_sidebar(as_user):
+    html = as_user.get("/doc-kich-ban").get_data(as_text=True)
+    assert 'setMode("script")' in html and 'name="script"' in html
+    assert 'href="/doc-kich-ban"' in as_user.get("/").get_data(as_text=True)
+    assert 'setMode("video")' in as_user.get("/").get_data(as_text=True)
+
+
+def test_script_page_needs_login(client):
+    assert as_login_redirect(client.get("/doc-kich-ban"))
+
+
+def as_login_redirect(response) -> bool:
+    return response.status_code in (301, 302) and "/login" in response.headers["Location"]

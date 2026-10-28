@@ -14,9 +14,9 @@
 
 <div class="flex flex-wrap items-start justify-between gap-md mb-xl">
   <div class="min-w-0">
-    <a href="{{ url_for('main.index') }}"
+    <a href="{{ url_for('main.script_reader') if job.is_script else url_for('main.index') }}"
       class="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider mb-2">
-      <span class="material-symbols-outlined text-[16px]">arrow_back</span>Tạo bản lồng tiếng
+      <span class="material-symbols-outlined text-[16px]">arrow_back</span>{{ 'Đọc kịch bản' if job.is_script else 'Tạo bản lồng tiếng' }}
     </a>
     <h2 class="font-headline-xl text-headline-xl text-on-surface truncate" title="{{ job.source_filename }}">
       {{ job.source_filename or 'Job #' ~ job.id }}
@@ -212,7 +212,7 @@
     <pre class="mt-2 p-3 rounded-xl bg-background border border-outline-variant/50 text-[12px] leading-relaxed text-on-surface-variant overflow-x-auto whitespace-pre-wrap">{{ job.error }}</pre>
   </details>
   {% endif %}
-  <a href="{{ url_for('main.index') }}{{ '#kich-ban' if job.is_script }}"
+  <a href="{{ url_for('main.script_reader') if job.is_script else url_for('main.index') }}"
     class="self-start border border-error/60 text-error font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
     Thử lại
   </a>
