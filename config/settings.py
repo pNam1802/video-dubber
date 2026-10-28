@@ -167,6 +167,12 @@ VOICE_SAMPLE_MAX_MB = 10
 # bat mac dinh, toi da bay nhieu lan.
 MAX_VIDEO_SPEED = 2.0
 
+# "Doc kich ban" (core/script_reader.py): dan van ban, nhan mp3 + SRT.
+# ~20.000 ky tu ~ 20-25 phut giong doc — Chatterbox doc tung cau (~0,9 lan
+# thoi gian thuc tren T4), dai hon nua se cham timeout 1800s cua EnglishCloner.
+SCRIPT_MAX_CHARS = 20_000
+SCRIPT_LANGUAGES = {"vi", "en"}
+
 # DeepSeek dung API tuong thich OpenAI — xem core/translator/deepseek_translator.py.
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")

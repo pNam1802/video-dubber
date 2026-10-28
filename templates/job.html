@@ -49,12 +49,15 @@
     <span id="progressPct" class="tabular text-headline-md font-headline-md text-primary">{{ job.progress }}%</span>
   </div>
 
+  {# Job kịch bản chỉ có một bước (đọc), không có gì để chia giai đoạn. #}
+  {% if not job.is_script %}
   <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
     {% for key, label in [('extract','Tách audio'), ('transcribe','Nhận dạng'), ('translate','Dịch'), ('tts','Tổng hợp giọng'), ('compose','Ghép video')] %}
     <div class="stage rounded-xl px-3 py-2 border border-outline-variant/50 bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm text-center transition-colors"
       data-stage="{{ key }}">{{ label }}</div>
     {% endfor %}
   </div>
+  {% endif %}
 
   <div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
     <div id="progressBar" class="h-full bg-primary transition-all duration-500" style="width: {{ job.progress }}%"></div>
@@ -117,13 +120,20 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-5 gap-lg items-start">
     <div class="lg:col-span-3 flex flex-col gap-md">
+      {# Job kịch bản: video_url là file mp3. Giữ id resultVideo — phần lời
+         thoại bên cạnh tua theo phần tử này, audio hay video đều như nhau. #}
+      {% if job.is_script %}
+      <audio id="resultVideo" controls class="w-full"
+        {% if job.video_url %}src="{{ job.video_url }}"{% endif %}></audio>
+      {% else %}
       <video id="resultVideo" controls class="w-full rounded-2xl bg-background max-h-[460px]"
         {% if job.video_url %}src="{{ job.video_url }}"{% endif %}></video>
+      {% endif %}
 
       <div class="flex flex-wrap gap-3">
         <a id="downloadVideo" href="{{ job.video_url or '#' }}" download="{{ job.download_video_name }}"
           class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full font-bold flex items-center gap-2">
-          <span class="material-symbols-outlined text-[18px]">download</span>Tải video
+          <span class="material-symbols-outlined text-[18px]">download</span>{{ 'Tải âm thanh' if job.is_script else 'Tải video' }}
         </a>
         {% if job.srt_url %}
         <a href="{{ job.srt_url }}" download="{{ job.download_srt_name }}"
@@ -202,7 +212,7 @@
     <pre class="mt-2 p-3 rounded-xl bg-background border border-outline-variant/50 text-[12px] leading-relaxed text-on-surface-variant overflow-x-auto whitespace-pre-wrap">{{ job.error }}</pre>
   </details>
   {% endif %}
-  <a href="{{ url_for('main.index') }}"
+  <a href="{{ url_for('main.index') }}{{ '#kich-ban' if job.is_script }}"
     class="self-start border border-error/60 text-error font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
     Thử lại
   </a>
@@ -212,6 +222,19 @@
 <section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30">
   <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Thông tin</h3>
   <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% if job.is_script %}
+    {% set rows = [
+      ('Loại', 'Đọc kịch bản'),
+      ('Ngôn ngữ', {'vi': 'Tiếng Việt', 'en': 'English'}.get(job.target_language, job.target_language)),
+      ('Giọng đọc', job.tts_engine or '—'),
+      ('Số câu', job.segment_count or '—'),
+      ('Thời lượng', ('%d:%02d' % (job.duration_sec // 60, job.duration_sec % 60)) if job.duration_sec else '—'),
+      ('Thời gian xử lý', ('%.1f giây' % job.elapsed_sec) if job.elapsed_sec else '—'),
+      ('Chi phí máy chủ (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
+      ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
+      ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
+    ] %}
+    {% else %}
     {% set rows = [
       ('Công cụ dịch', job.translator_actual or job.translator_engine or '—'),
       ('Mô hình Whisper', job.whisper_model or '—'),
@@ -224,6 +247,7 @@
       ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
       ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
     ] %}
+    {% endif %}
     {% for label, value in rows %}
     <div class="flex flex-col gap-1">
       <dt class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">{{ label }}</dt>

@@ -74,6 +74,7 @@ def notify_job_status(job, event: str) -> None:
 
     name = job.source_filename or f"Job #{job.id}"
     link = job_url(job.id)
+    what = "Kịch bản" if job.is_script else "Video"
 
     if event == "awaiting_review":
         subject = f"[Nora] \"{name}\" đã dịch xong, cần bạn duyệt"
@@ -84,12 +85,12 @@ def notify_job_status(job, event: str) -> None:
             "Job sẽ đứng yên ở đây cho tới khi bạn xác nhận — không tự chạy tiếp."
         )
     elif event == "done":
-        subject = f"[Nora] \"{name}\" đã lồng tiếng xong"
-        body = f"Video \"{name}\" đã xử lý xong, tải về tại:\n{link}"
+        subject = f"[Nora] \"{name}\" đã {'đọc' if job.is_script else 'lồng tiếng'} xong"
+        body = f"{what} \"{name}\" đã xử lý xong, tải về tại:\n{link}"
     elif event == "failed":
         reason = " ".join((job.error or job.message or "Không rõ nguyên nhân.").split())[:300]
         subject = f"[Nora] \"{name}\" xử lý thất bại"
-        body = f"Video \"{name}\" xử lý thất bại.\n\nLý do: {reason}\n\nChi tiết: {link}"
+        body = f"{what} \"{name}\" xử lý thất bại.\n\nLý do: {reason}\n\nChi tiết: {link}"
     else:
         return
 

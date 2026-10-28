@@ -28,6 +28,7 @@ from app.voices import (
 from config.settings import (
     FFMPEG_BIN,
     MAX_UPLOAD_MB,
+    SCRIPT_MAX_CHARS,
     FFPROBE_BIN,
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
@@ -72,6 +73,7 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
             "display_name": job.display_name,
             "video_url": job.video_url,
             "download_video_name": job.download_video_name,
+            "is_script": job.is_script,
             # ISO có múi giờ (UTC) — trình duyệt tự đổi sang giờ của người xem.
             "created_at": _utc_iso(job.created_at),
             "target_language": job.target_language,
@@ -129,6 +131,7 @@ def index():
         default_gemini_model=GEMINI_MODEL,
         usage=get_usage(current_user).as_dict(),
         max_upload_mb=MAX_UPLOAD_MB,
+        script_max_chars=SCRIPT_MAX_CHARS,
     )
 
 

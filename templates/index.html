@@ -2,10 +2,22 @@
 {% block title %}Tạo bản lồng tiếng · Nora{% endblock %}
 
 {% block content %}
-<div class="mb-xl flex items-center justify-between">
+<div class="mb-xl flex flex-wrap items-center justify-between gap-md">
   <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
-    <span class="material-symbols-outlined text-[32px] text-primary">campaign</span>Tạo bản lồng tiếng
+    <span class="material-symbols-outlined text-[32px] text-primary">campaign</span><span id="pageTitle">Tạo bản lồng tiếng</span>
   </h2>
+  {# Hai chế độ dùng chung một form (cùng phần chọn giọng). Phần tử chỉ thuộc
+     một chế độ mang data-mode-only; xem setMode(). #}
+  <div class="inline-flex rounded-full border border-outline-variant p-1 bg-surface-container" role="tablist">
+    <button type="button" class="mode-tab px-4 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1"
+      data-mode="video" role="tab">
+      <span class="material-symbols-outlined text-[18px]">movie</span>Lồng tiếng video
+    </button>
+    <button type="button" class="mode-tab px-4 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1"
+      data-mode="script" role="tab">
+      <span class="material-symbols-outlined text-[18px]">record_voice_over</span>Đọc kịch bản
+    </button>
+  </div>
 </div>
 
 <form id="uploadForm" novalidate class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
@@ -17,8 +29,26 @@
 
   <div class="lg:col-span-8 flex flex-col gap-lg">
 
+    {# ── Bước 1 (đọc kịch bản): dán văn bản ──────────────── #}
+    <section data-mode-only="script" class="hidden bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
+      <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+        <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
+        Dán kịch bản
+      </h3>
+      <textarea name="script" id="script" rows="12" maxlength="{{ script_max_chars }}"
+        placeholder="Dán nội dung cần đọc vào đây. Mỗi lần xuống dòng là một đoạn — giọng đọc sẽ nghỉ lâu hơn ở chỗ xuống dòng."
+        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary resize-y"></textarea>
+      <p class="font-label-sm text-label-sm text-on-surface-variant tabular">
+        <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
+        <span id="scriptLength"></span>
+      </p>
+      <p class="font-label-sm text-label-sm text-on-surface-variant">
+        Đọc nguyên văn theo ngôn ngữ bạn chọn ở bước 2 (không dịch). Kết quả: một file mp3 và file phụ đề SRT.
+      </p>
+    </section>
+
     {# ── Bước 1: chọn video ───────────────────────────── #}
-    <section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
+    <section data-mode-only="video" class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
       <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
         <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
         Chọn video
@@ -78,7 +108,7 @@
     <section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
       <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
         <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">2</span>
-        Chất lượng
+        <span id="step2Title">Chất lượng</span>
       </h3>
 
       {# Dời lên đây từ khối "nâng cao" phía dưới — dropdown Ngôn ngữ đích ở
@@ -87,17 +117,18 @@
       {% set label_class = "font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" %}
 
       <div class="max-w-xs">
-        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="target_language">Ngôn ngữ đích</label>
+        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="target_language"
+          id="targetLanguageLabel">Ngôn ngữ đích</label>
         <select name="target_language" id="target_language" class="{{ field_class }}">
           <option value="vi" selected>Tiếng Việt</option>
           <option value="en">English</option>
-          <option value="ja">日本語</option>
-          <option value="zh">中文</option>
-          <option value="ko">한국어</option>
+          <option value="ja" data-mode-only="video">日本語</option>
+          <option value="zh" data-mode-only="video">中文</option>
+          <option value="ko" data-mode-only="video">한국어</option>
         </select>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div data-mode-only="video" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {# Cả ba đều dịch bằng DeepSeek — khác nhau ở mô hình Whisper (đánh đổi
            tốc độ/độ chính xác nhận dạng), không còn khác nhau ở công cụ
            dịch như trước (MarianMT đã bị khoá khỏi lựa chọn). #}
@@ -120,14 +151,14 @@
         {% endfor %}
       </div>
 
-      <button type="button" id="toggleAdvanced"
+      <button type="button" id="toggleAdvanced" data-mode-only="video"
         class="mt-2 text-primary flex items-center gap-1 font-label-sm text-label-sm hover:underline decoration-primary/50 underline-offset-4 self-start">
         <span class="material-symbols-outlined text-[16px]">tune</span>Tuỳ chỉnh nâng cao
       </button>
 
       {# ── Tuỳ chọn thô: đúng tên trường backend đang đọc ── #}
       <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/40">
-        <div>
+        <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="source_language">Ngôn ngữ nguồn</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
@@ -150,7 +181,7 @@
           </select>
         </div>
 
-        <div>
+        <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="whisper_model_select">Mô hình Whisper</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
@@ -170,7 +201,7 @@
           </select>
         </div>
 
-        <div>
+        <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="translator_engine_select">Công cụ dịch</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
@@ -255,7 +286,7 @@
           </div>
         </div>
 
-        <div>
+        <div data-mode-only="video">
           <label class="{{ label_class }}" for="subtitle_mode">Phụ đề</label>
           <select name="subtitle_mode" id="subtitle_mode" class="{{ field_class }}">
             <option value="bilingual">Song ngữ (EN + VI)</option>
@@ -265,7 +296,7 @@
           </select>
         </div>
 
-        <div>
+        <div data-mode-only="video">
           <label class="{{ label_class }}" for="compute_device">Thiết bị xử lý</label>
           <select name="compute_device" id="compute_device" class="{{ field_class }}">
             <option value="auto">Tự động</option>
@@ -274,7 +305,7 @@
           </select>
         </div>
 
-        <div class="sm:col-span-2">
+        <div data-mode-only="video" class="sm:col-span-2">
           <label class="{{ label_class }}" for="original_volume">
             Âm lượng gốc — <span id="volumeValue" class="tabular text-primary">10</span>%
           </label>
@@ -282,7 +313,7 @@
             class="w-full accent-primary">
         </div>
 
-        <label class="sm:col-span-2 flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
+        <label data-mode-only="video" class="sm:col-span-2 flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
           <input type="checkbox" name="retime_video" id="retime_video" checked class="w-4 h-4 mt-1 accent-primary">
           <span>Tua nhanh hình ở khoảng lặng (tối đa 2×)
             <span class="block font-label-sm text-label-sm text-on-surface-variant">
@@ -410,7 +441,7 @@
           class="text-primary font-label-sm text-label-sm uppercase tracking-wider">Xem chi tiết</a>
         {% if item.video_url %}
         <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
-          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider">Tải video</a>
+          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider">{{ 'Tải âm thanh' if item.is_script else 'Tải video' }}</a>
         {% endif %}
       </div>
     </div>
@@ -562,7 +593,8 @@
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
       const names = { deepseek: "DeepSeek", gemini: "Gemini", openai: "OpenAI" };
-      const engine = engineField.value;
+      // Đọc kịch bản không dịch: không cần key hay gợi ý về công cụ dịch.
+      const engine = mode === "script" ? "" : engineField.value;
       Object.keys(names).forEach(function (key) {
         document.getElementById(key + "KeyGroup").classList.toggle("hidden", engine !== key);
       });
@@ -615,13 +647,106 @@
       document.getElementById("volumeValue").textContent = e.target.value;
     });
 
-    // ── Tiến trình ───────────────────────────────────────
+    // ── Chế độ: lồng tiếng video / đọc kịch bản ──────────
+    const scriptInput = document.getElementById("script");
+    const SCRIPT_MAX_CHARS = {{ script_max_chars }};
+    let mode = "video";
+
+    function syncSubmit() {
+      if (mode === "script") {
+        const length = scriptInput.value.trim().length;
+        submitBtn.disabled = !length || length > SCRIPT_MAX_CHARS;
+        submitHint.textContent = length ? "" : "Dán kịch bản trước";
+      } else {
+        const file = fileInput.files[0];
+        submitBtn.disabled = !file || Boolean(fileError(file));
+        submitHint.textContent = file ? "" : "Chọn video trước";
+      }
+    }
+
+    // Đọc trung bình ~15 ký tự mỗi giây (cả tiếng Việt lẫn tiếng Anh).
+    function syncScriptCount() {
+      const length = scriptInput.value.trim().length;
+      document.getElementById("scriptCount").textContent = length.toLocaleString("vi-VN");
+      const minutes = length / 15 / 60;
+      document.getElementById("scriptLength").textContent = !length ? "" :
+        "· khoảng " + (minutes < 1 ? Math.max(1, Math.round(minutes * 60)) + " giây" : Math.round(minutes) + " phút") + " giọng đọc";
+      syncSubmit();
+    }
+    scriptInput.addEventListener("input", syncScriptCount);
+
+    function setMode(next) {
+      mode = next;
+      const script = mode === "script";
+      document.querySelectorAll(".mode-tab").forEach(function (tab) {
+        const on = tab.dataset.mode === mode;
+        tab.classList.toggle("bg-primary", on);
+        tab.classList.toggle("text-on-primary", on);
+        tab.classList.toggle("text-on-surface-variant", !on);
+        tab.setAttribute("aria-selected", String(on));
+      });
+      document.querySelectorAll("[data-mode-only]").forEach(function (el) {
+        const off = el.dataset.modeOnly !== mode;
+        el.classList.toggle("hidden", off);
+        if (el.tagName === "OPTION") { el.hidden = off; el.disabled = off; }
+      });
+      // Giọng đọc nằm trong khối "nâng cao" — đọc kịch bản thì luôn mở khối đó.
+      if (script) document.getElementById("advanced").classList.remove("hidden");
+      if (targetLanguageSelect.selectedOptions[0].disabled) targetLanguageSelect.value = "vi";
+      document.getElementById("pageTitle").textContent = script ? "Đọc kịch bản" : "Tạo bản lồng tiếng";
+      document.getElementById("step2Title").textContent = script ? "Giọng đọc" : "Chất lượng";
+      document.getElementById("targetLanguageLabel").textContent = script ? "Ngôn ngữ của kịch bản" : "Ngôn ngữ đích";
+      document.getElementById("submitLabel").textContent = script ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
+      document.getElementById("estTime").textContent = "—";
+      document.getElementById("estCost").textContent = "—";
+      if (!script && fileInput.files.length) fileInput.dispatchEvent(new Event("change"));
+      history.replaceState(null, "", script ? "#kich-ban" : location.pathname + location.search);
+      syncEngineHint();
+      syncEngines();
+      syncSubmit();
+    }
+    document.querySelectorAll(".mode-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () { setMode(tab.dataset.mode); });
+    });
+
+    function showSubmitError(message) {
+      uploadStatus.classList.add("hidden");
+      document.getElementById("errorMessage").textContent = message;
+      errorCard.classList.remove("hidden");
+      submitBtn.disabled = false;
+      document.getElementById("submitLabel").textContent = mode === "script" ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
+    }
+
+    // Chỉ gửi đúng các trường /api/script đọc — không kèm file video đã chọn ở tab kia.
+    async function submitScript() {
+      const data = new FormData();
+      ["csrf_token", "script", "target_language", "tts_engine", "tts_voice"].forEach(function (name) {
+        data.append(name, form.elements[name].value);
+      });
+      try {
+        const res = await fetch("/api/script", { method: "POST", body: data });
+        const body = await res.json().catch(function () { return {}; });
+        if (res.status === 202 && body.job_id) {
+          window.location = "/job/" + body.job_id;
+          return;
+        }
+        showSubmitError(body.error || "Không gửi được kịch bản.");
+      } catch (err) {
+        showSubmitError("Mất kết nối khi gửi kịch bản.");
+      }
+    }
+
     // ── Gửi form ─────────────────────────────────────────
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       submitBtn.disabled = true;
-      document.getElementById("submitLabel").textContent = "Đang tải lên...";
       errorCard.classList.add("hidden");
+      if (mode === "script") {
+        document.getElementById("submitLabel").textContent = "Đang gửi...";
+        submitScript();
+        return;
+      }
+      document.getElementById("submitLabel").textContent = "Đang tải lên...";
       uploadStatus.classList.remove("hidden");
       uploadStatus.textContent = "Đang tải video lên...";
 
@@ -919,8 +1044,7 @@
     });
 
     paintPresets("balanced");
-    syncEngineHint();
-    syncEngines();
+    setMode(location.hash === "#kich-ban" ? "script" : "video");
   })();
 </script>
 {% endblock %}

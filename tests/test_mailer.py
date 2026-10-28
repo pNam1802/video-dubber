@@ -20,6 +20,7 @@ class FakeJob:
         self.source_filename = kwargs.get("source_filename", "video.mp4")
         self.error = kwargs.get("error")
         self.message = kwargs.get("message")
+        self.is_script = kwargs.get("is_script", False)
 
 
 def test_send_email_skips_silently_without_smtp_config(monkeypatch):

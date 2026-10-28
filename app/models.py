@@ -5,6 +5,7 @@ không còn dict trong RAM, nên restart server không làm mất job.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any
@@ -38,6 +39,13 @@ class JobStatus:
     #: Chưa tới trạng thái cuối cùng — còn huỷ được, còn chặn xoá, và trang
     #: job vẫn cần tiếp tục poll để biết khi nào chuyển trạng thái.
     OPEN = (QUEUED, PROCESSING, AWAITING_REVIEW)
+
+
+class JobKind:
+    #: Lồng tiếng video: nhận dạng → dịch → duyệt → đọc → ghép video.
+    VIDEO = "video"
+    #: Đọc kịch bản dán vào: chỉ đọc, kết quả là mp3 + SRT (core/script_reader.py).
+    SCRIPT = "script"
 
 
 class Role:
@@ -128,6 +136,8 @@ class Job(db.Model):
     message = db.Column(db.String(500), nullable=False, default="", server_default="")
     error = db.Column(db.Text, nullable=True)
 
+    kind = db.Column(db.String(10), nullable=False, default=JobKind.VIDEO, server_default=JobKind.VIDEO)
+
     # ── Đầu vào ───────────────────────────────────────────────
     source_filename = db.Column(db.String(255), nullable=True)
     file_size = db.Column(db.BigInteger, nullable=True)
@@ -207,11 +217,23 @@ class Job(db.Model):
 
     @property
     def _download_stem(self) -> str:
-        stem = PurePath(self.source_filename or "").stem.strip()
+        if self.is_script:
+            # Tên job kịch bản là đầu câu đầu tiên, không phải tên file: có thể
+            # chứa dấu chấm, gạch chéo — PurePath sẽ cắt mất một phần.
+            stem = re.sub(r'[\\/:*?"<>|]+', " ", self.source_filename or "").strip(" .")
+        else:
+            stem = PurePath(self.source_filename or "").stem.strip()
         return stem or f"job-{self.id}"
 
     @property
+    def is_script(self) -> bool:
+        return self.kind == JobKind.SCRIPT
+
+    @property
     def download_video_name(self) -> str:
+        # Job kịch bản: video_name/video_url giữ file mp3 kết quả.
+        if self.is_script:
+            return f"{self._download_stem} (giọng đọc).mp3"
         return f"{self._download_stem} (lồng tiếng).mp4"
 
     @property
@@ -224,8 +246,10 @@ class Job(db.Model):
             "id": self.id,
             "status": self.status,
             "progress": self.progress,
+            "kind": self.kind,
             "source_filename": self.source_filename,
-            "engine": self.translator_actual or self.translator_engine,
+            # Job kịch bản không dịch — hiện công cụ đọc thay vào cột này.
+            "engine": self.tts_engine if self.is_script else self.translator_actual or self.translator_engine,
             "fallback_used": bool(
                 self.translator_actual and self.translator_actual != self.translator_engine
             ),

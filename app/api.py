@@ -12,14 +12,16 @@ from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
 from app.extensions import db, limiter
-from app.jobs import cancel_job, continue_job, start_job
-from app.models import Job, JobStatus, TranscriptSegment
+from app.jobs import cancel_job, continue_job, save_segments, start_job, start_script_job
+from app.models import Job, JobKind, JobStatus, TranscriptSegment, utcnow
 from app.quota import check_quota
 from app.storage import commit_uploads, commit_volume
 from app.voices import VoiceSampleError, accept_voice_upload, voice_sample_url
 from config.settings import (
     OUTPUT_DIR,
     RATELIMIT_UPLOAD,
+    SCRIPT_LANGUAGES,
+    SCRIPT_MAX_CHARS,
     CLONE_SAMPLE_LANGUAGE,
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
@@ -34,6 +36,8 @@ from config.settings import (
     tts_engine_supports,
 )
 from core.pipeline import DubbingConfig
+from core.script_reader import split_script
+from core.transcriber import Segment
 from core.translator import get_translator
 from core.translator.llm_common import estimate_llm_cost
 
@@ -188,6 +192,86 @@ def upload_video():
     )
 
     start_job(current_app._get_current_object(), job.id, upload_path, config)
+    return jsonify({"job_id": job.id}), 202
+
+
+def _script_title(text: str, limit: int = 60) -> str:
+    """Tên job kịch bản: đầu dòng đầu tiên, cắt ở ranh giới từ."""
+    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    if len(first) <= limit:
+        return first
+    return first[:limit].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+
+
+@bp.post("/script")
+@login_required
+@limiter.limit(RATELIMIT_UPLOAD)
+def create_script_job():
+    """"Đọc kịch bản": dán văn bản, nhận mp3 + SRT. Đọc nguyên văn, không dịch."""
+    text = (request.form.get("script") or "").strip()
+    if not text:
+        return jsonify({"error": "Hãy dán kịch bản cần đọc."}), 400
+    if len(text) > SCRIPT_MAX_CHARS:
+        def count(n: int) -> str:
+            return f"{n:,}".replace(",", ".")
+
+        return jsonify({"error": f"Kịch bản dài {count(len(text))} ký tự, vượt giới hạn {count(SCRIPT_MAX_CHARS)} — "
+                                 "hãy chia thành nhiều phần."}), 400
+    sentences = split_script(text)
+    if not sentences:
+        return jsonify({"error": "Kịch bản không có câu nào để đọc."}), 400
+
+    language = _pick("target_language", SCRIPT_LANGUAGES, "vi")
+    tts_engine = _pick("tts_engine", ALLOWED_TTS_ENGINES, "edge-tts")
+    tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
+    if not tts_engine_supports(tts_engine, language):
+        return jsonify({"error": "Công cụ đọc này không đọc được ngôn ngữ đã chọn — "
+                                 "VieNeu chỉ đọc tiếng Việt, Chatterbox chỉ đọc tiếng Anh."}), 400
+    if tts_engine == "gemini" and not GEMINI_API_KEY:
+        return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
+    ref_audio = None
+    if tts_voice == "mine":
+        sample_lang = CLONE_SAMPLE_LANGUAGE.get(tts_engine, "vi")
+        if not current_user.has_voice_sample_in(sample_lang):
+            return jsonify({"error": f"Bạn chưa tải giọng mẫu {VOICE_SAMPLE_LANGUAGES[sample_lang]} — "
+                                     "vào Cài đặt để thêm giọng của bạn."}), 400
+        ref_audio = str(current_user.voice_sample_file(sample_lang))
+
+    allowed, reason = check_quota(current_user)
+    if not allowed:
+        return jsonify({"error": reason, "code": 429}), 429
+
+    job = Job(
+        user_id=current_user.id,
+        kind=JobKind.SCRIPT,
+        status=JobStatus.QUEUED,
+        progress=1,
+        message="Đã nhận kịch bản, đang khởi tạo tác vụ...",
+        source_filename=_script_title(text) or "Kịch bản",
+        tts_engine=tts_engine,
+        tts_voice=tts_voice,
+        source_language=language,
+        target_language=language,
+        subtitle_mode="target",
+        segment_count=len(sentences),
+    )
+    db.session.add(job)
+    db.session.commit()
+    # chưa đọc thì chưa có mốc thời gian — start/end giữ số thứ tự đoạn văn
+    # để core/script_reader.assemble() biết chỗ nào nghỉ dài.
+    saved = save_segments(current_app._get_current_object(), job.id,
+                          [Segment(start=para, end=para, text=sentence, translated=sentence)
+                           for para, sentence in sentences])
+    if not saved:
+        job.status = JobStatus.FAILED
+        job.error = job.message = "Không lưu được kịch bản."
+        job.finished_at = utcnow()
+        db.session.commit()
+        return jsonify({"error": "Không lưu được kịch bản, hãy thử lại.", "code": 500}), 500
+
+    config = DubbingConfig(tts_engine=tts_engine, tts_voice=tts_voice, tts_ref_audio=ref_audio,
+                           target_language=language, subtitle_mode="target")
+    start_script_job(current_app._get_current_object(), job.id, config)
     return jsonify({"job_id": job.id}), 202
 
 

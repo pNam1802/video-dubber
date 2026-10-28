@@ -96,6 +96,28 @@ def _spawn_phase2_on_modal(flask_app: Flask, job_id: int, video_path: Path, conf
     flask_app.logger.info("Job %s -> Modal call %s (giai đoạn 2)", job_id, call.object_id)
 
 
+def start_script_job(flask_app: Flask, job_id: int, config: DubbingConfig) -> None:
+    """Khởi chạy job "đọc kịch bản" — kịch bản đã nằm trong DB dưới dạng
+    transcript, không có file nào phải chuyển đi."""
+    if JOB_RUNNER == "modal":
+        import modal
+
+        # Container CPU như giai đoạn 2: VieNeu/Chatterbox tự gọi sang GPU riêng.
+        composer = modal.Cls.from_name(MODAL_APP_NAME, "Composer")()
+        call = composer.run_script.spawn(job_id, config.__dict__)
+        job = db.session.get(Job, job_id)
+        if job is not None:
+            job.modal_call_id = call.object_id
+            job.message = "Đang chuẩn bị đọc kịch bản..."
+            db.session.commit()
+        flask_app.logger.info("Job %s -> Modal call %s (kịch bản)", job_id, call.object_id)
+        return
+
+    threading.Thread(
+        target=run_script_job, args=(flask_app, job_id, config), daemon=True, name=f"script-job-{job_id}",
+    ).start()
+
+
 def _cleanup_upload(flask_app: Flask, video_path: Path) -> None:
     try:
         video_path.unlink(missing_ok=True)
@@ -353,6 +375,73 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
         # bản đã đọc TRƯỚC KHI chạy TTS có thể xoá mất một sửa đổi khác vừa
         # xảy ra song song (dù hiếm).
         _cleanup_upload(flask_app, Path(video_path))
+
+
+def run_script_job(flask_app: Flask, job_id: int, config: DubbingConfig) -> None:
+    """Đọc kịch bản (đã lưu thành transcript lúc tạo job) thành mp3 + SRT."""
+    with flask_app.app_context():
+        job = db.session.get(Job, job_id)
+        if job is None or job.status == JobStatus.CANCELLED:
+            return
+
+        job.status = JobStatus.PROCESSING
+        job.started_at = utcnow()
+        job.message = "Đang đọc kịch bản..."
+        db.session.commit()
+
+        def on_progress(percent: int, message: str) -> None:
+            current = db.session.get(Job, job_id)
+            if current is None or current.status == JobStatus.CANCELLED:
+                return
+            current.progress = percent
+            current.message = message[:500]
+            db.session.commit()
+
+        rows = TranscriptSegment.query.filter_by(job_id=job_id).order_by(TranscriptSegment.idx).all()
+        # start/end_sec của job kịch bản giữ số thứ tự đoạn văn (app/api.py::create_script_job).
+        segments = [
+            Segment(start=row.start_sec, end=row.end_sec, text=row.text_source, translated=row.text_target)
+            for row in rows
+        ]
+        result = DubbingPipeline(config).synthesize_script(segments, progress_cb=on_progress)
+
+        job = db.session.get(Job, job_id)
+        if job is None or job.status == JobStatus.CANCELLED:
+            for path in (result.output_video, result.srt_path):
+                if path is not None:
+                    path.unlink(missing_ok=True)
+            return
+
+        job.elapsed_sec = result.elapsed_seconds
+        job.estimated_cost_usd = estimate_cpu_cost(result.elapsed_seconds)
+        job.tts_sec = result.timings.get("tts")
+        job.finished_at = utcnow()
+
+        if result.success and result.output_video:
+            audio_name = result.output_video.name
+            srt_name = result.srt_path.name
+            job.status = JobStatus.DONE
+            job.progress = 100
+            job.message = "Đã đọc xong kịch bản."
+            job.video_name = audio_name
+            job.video_url = f"/media/output/{quote(audio_name)}"
+            job.srt_name = srt_name
+            job.srt_url = f"/media/output/{quote(srt_name)}"
+            job.file_size = result.output_video.stat().st_size + result.srt_path.stat().st_size
+            timings = [t for t in result.play_timings if t is not None]
+            job.duration_sec = timings[-1][1] if timings else None
+            for row, timing in zip(rows, result.play_timings):
+                if timing is not None:
+                    row.play_start_sec, row.play_end_sec = float(timing[0]), float(timing[1])
+        else:
+            job.status = JobStatus.FAILED
+            job.progress = 0
+            job.error = result.error or "Không rõ nguyên nhân."
+            reason = " ".join(job.error.split())[:200]
+            job.message = f"Xử lý thất bại: {reason}"[:500]
+
+        db.session.commit()
+        notify_job_status(job, "done" if job.status == JobStatus.DONE else "failed")
 
 
 def mark_interrupted_jobs(flask_app: Flask) -> int:

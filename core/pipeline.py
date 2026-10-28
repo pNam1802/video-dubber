@@ -364,6 +364,63 @@ class DubbingPipeline:
 
         return result
 
+    def synthesize_script(
+        self,
+        segments: List[Segment],
+        progress_cb: Optional[ProgressCallback] = None,
+    ) -> DubbingResult:
+        """"Đọc kịch bản": đọc từng câu rồi nối thành một mp3 kèm SRT, không
+        có video. `output_video` của kết quả là file mp3 đó."""
+        from core.script_reader import assemble
+
+        result = DubbingResult()
+        t0 = time.time()
+        _progress = self._progress_fn(progress_cb)
+
+        job_temp_dir = None
+        try:
+            cfg = self.config
+            job_temp_dir = TEMP_DIR / uuid.uuid4().hex
+            job_temp_dir.mkdir(parents=True, exist_ok=True)
+
+            _progress(10, f"Đang đọc {len(segments)} câu...")
+            tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
+                            ref_audio=cfg.tts_ref_audio, language=cfg.target_language)
+            synthesized = tts.synthesize_all(segments)
+
+            _progress(90, "Ghép các câu thành một file âm thanh...")
+            output_audio = cfg.output_dir / f"{uuid.uuid4().hex}_script.mp3"
+            timings = assemble(synthesized, output_audio)
+            voiced = {id(seg): timing for (seg, _), timing in zip(synthesized, timings)}
+            # Câu không đọc được (kể cả qua giọng dự phòng) không có trong file.
+            result.play_timings = [voiced.get(id(seg)) for seg in segments]
+
+            srt_path = output_audio.with_suffix(".srt")
+            segments_to_srt(
+                [Segment(start, end, seg.text, seg.translated)
+                 for (seg, _), (start, end) in zip(synthesized, timings)],
+                mode="target", output_path=srt_path,
+            )
+            result.timings["tts"] = round(time.time() - t0, 2)
+
+            _progress(100, "✅ Hoàn tất!")
+            result.output_video = output_audio
+            result.srt_path = srt_path
+            result.segments = segments
+            result.success = True
+
+        except Exception as e:
+            result.error = str(e)
+            result.success = False
+            _progress(0, f"❌ Lỗi: {e}")
+
+        finally:
+            result.elapsed_seconds = time.time() - t0
+            if job_temp_dir is not None and job_temp_dir.exists():
+                shutil.rmtree(job_temp_dir, ignore_errors=True)
+
+        return result
+
     def run(
         self,
         video_path: str | Path,

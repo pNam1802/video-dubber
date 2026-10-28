@@ -237,6 +237,22 @@ class Composer:
         finally:
             data_volume.commit()
 
+    @modal.method()
+    def run_script(self, job_id: int, config_dict: dict) -> None:
+        """"Đọc kịch bản": kịch bản nằm trong Postgres, kết quả mp3 + SRT
+        ghi lên volume cho web phục vụ."""
+        from app import create_app
+        from app.jobs import run_script_job
+        from core.pipeline import DubbingConfig
+
+        data_volume.reload()  # giọng mẫu clone vừa tải lên từ web
+        config_dict.pop("output_dir", None)
+        flask_app = create_app()
+        try:
+            run_script_job(flask_app, job_id, DubbingConfig(**config_dict))
+        finally:
+            data_volume.commit()
+
 
 # Giong VieNeu (mac dinh "Nora" va giong clone). Composer goi .remote() mot
 # lan cho ca video: do that tren T4 (26/10/2026) ~25 giay cho 103 cau / 9,5
