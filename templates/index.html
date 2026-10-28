@@ -194,6 +194,7 @@
           <label class="{{ label_class }}" for="tts_engine">Giọng đọc</label>
           <select name="tts_engine" id="tts_engine" class="{{ field_class }}">
             <option value="vieneu" selected>VieNeu — tự nhiên, clone giọng (miễn phí)</option>
+            <option value="chatterbox">Chatterbox — clone giọng tiếng Anh (miễn phí)</option>
             <option value="edge-tts">Edge-TTS — miễn phí</option>
             {% if gemini_key_exists %}<option value="gemini">Gemini — có cảm xúc (tính phí)</option>{% endif %}
             <option value="gtts">gTTS — đơn giản</option>
@@ -679,14 +680,17 @@
         female: "Nora — nữ (mặc định)", ngochuyen: "Ngọc Huyền — nữ", quynhanh: "Quỳnh Anh — nữ, đọc truyện",
         myduyen: "Mỹ Duyên — nữ miền Nam", kimthanh: "Kim Thanh — nữ miền Nam", male: "Thiện Minh — nam, kể chuyện",
         ductri: "Đức Trí — nam miền Nam", mine: "Giọng của bạn (clone)"
-      }
+      },
+      chatterbox: { female: "Giọng có sẵn (Chatterbox)", mine: "Giọng của bạn (clone)" }
     };
     // Đích là tiếng Anh: HoaiMy/NamMinh đổi sang giọng bản xứ cùng khoá
     // (config.settings.TTS_VOICES_BY_LANGUAGE) — file nghe thử là giọng Việt nên ẩn.
     const VOICE_LABELS_BY_LANGUAGE = {
       en: { "edge-tts": { female: "Aria — nữ (Mỹ)", male: "Guy — nam (Mỹ)" }, gtts: { female: "Mặc định (English)" } }
     };
-    const VIETNAMESE_ONLY_ENGINES = {{ tts_vietnamese_only | tojson }};
+    // Engine chỉ đọc được vài ngôn ngữ (config.settings.TTS_ENGINE_LANGUAGES).
+    const ENGINE_LANGUAGES = {{ tts_engine_languages | tojson }};
+    const CLONE_ENGINES = ["vieneu", "chatterbox"];
     const targetLanguageSelect = document.getElementById("target_language");
     const ttsEngineSelect = document.getElementById("tts_engine");
     const ttsVoiceSelect = document.getElementById("tts_voice");
@@ -694,14 +698,19 @@
       return (VOICE_LABELS_BY_LANGUAGE[targetLanguageSelect.value] || {})[ttsEngineSelect.value] || {};
     }
     function syncEngines() {
-      const vietnamese = targetLanguageSelect.value === "vi";
+      const language = targetLanguageSelect.value;
       Array.from(ttsEngineSelect.options).forEach(function (option) {
-        const blocked = !vietnamese && VIETNAMESE_ONLY_ENGINES.indexOf(option.value) !== -1;
+        const langs = ENGINE_LANGUAGES[option.value];
+        const blocked = Boolean(langs) && langs.indexOf(language) === -1;
         option.disabled = blocked;
         option.hidden = blocked;
       });
       if (ttsEngineSelect.selectedOptions[0] && ttsEngineSelect.selectedOptions[0].disabled) {
-        ttsEngineSelect.value = "edge-tts";
+        // Mặc định của từng ngôn ngữ là engine clone đọc được nó, không có thì edge-tts.
+        const native = CLONE_ENGINES.filter(function (engine) {
+          return (ENGINE_LANGUAGES[engine] || []).indexOf(language) !== -1;
+        })[0];
+        ttsEngineSelect.value = native || "edge-tts";
       }
       syncVoices();
     }
@@ -735,7 +744,7 @@
     function syncPreview() {
       previewAudio.pause();
       previewBtn.classList.toggle("hidden", !previewUrl());
-      const mine = ttsEngineSelect.value === "vieneu" && ttsVoiceSelect.value === "mine";
+      const mine = CLONE_ENGINES.indexOf(ttsEngineSelect.value) !== -1 && ttsVoiceSelect.value === "mine";
       document.getElementById("voiceSamplePanel").classList.toggle("hidden", !mine);
       document.getElementById("voiceCloneHint").classList.toggle("hidden", ttsEngineSelect.value !== "vieneu" || mine);
     }
@@ -843,8 +852,10 @@
         });
         const body = await res.json().catch(function () { return {}; });
         if (!res.ok) throw new Error(body.error || "Không lưu được giọng mẫu.");
-        PREVIEW_URLS.vieneu = PREVIEW_URLS.vieneu || {};
-        PREVIEW_URLS.vieneu.mine = body.url;
+        CLONE_ENGINES.forEach(function (engine) {
+          PREVIEW_URLS[engine] = PREVIEW_URLS[engine] || {};
+          PREVIEW_URLS[engine].mine = body.url;
+        });
         document.getElementById("voiceSampleStatus").textContent =
           "Đã lưu giọng mẫu (" + body.seconds + " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
         sampleFileInput.value = "";

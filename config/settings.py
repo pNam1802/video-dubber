@@ -116,19 +116,35 @@ TTS_VOICES: dict[str, dict[str, str]] = {
 		"ductri": "Đức Trí",
 		"mine": "@user",            # giong nguoi dung tu tai len (VOICE_SAMPLE_DIR)
 	},
+	# Chatterbox-Turbo (Resemble AI, MIT — github.com/resemble-ai/chatterbox):
+	# clone giong TIENG ANH tu file mau, chay tren GPU rieng
+	# (modal_app.py::EnglishCloner). "@builtin" la giong co san cua model.
+	"chatterbox": {
+		"female": "@builtin",
+		"mine": "@user",
+	},
 }
 
 # Ngon ngu dich KHAC tieng Viet: giong vi-VN (HoaiMy/NamMinh) va gTTS "vi"
 # doc chu nuoc ngoai theo kieu tieng Viet, nen doi sang giong ban xu cung
 # khoa. Giong *Multilingual* va giong Gemini tu doc dung theo van ban, giu
-# nguyen. VieNeu chi doc tieng Viet — khong cho chon (xem TTS_VIETNAMESE_ONLY).
+# nguyen.
 TTS_VOICES_BY_LANGUAGE: dict[str, dict[str, dict[str, str]]] = {
 	"en": {
 		"edge-tts": {"female": "en-US-AriaNeural", "male": "en-US-GuyNeural"},
 		"gtts": {"female": "en"},
 	},
 }
-TTS_VIETNAMESE_ONLY = {"vieneu"}
+# Engine chi doc duoc mot so ngon ngu: VieNeu chi tieng Viet, Chatterbox-Turbo
+# chi tieng Anh. Engine khong co ten o day doc duoc moi ngon ngu dich.
+TTS_ENGINE_LANGUAGES: dict[str, set[str]] = {
+	"vieneu": {"vi"},
+	"chatterbox": {"en"},
+}
+
+
+def tts_engine_supports(engine: str, language: str) -> bool:
+	return language in TTS_ENGINE_LANGUAGES.get(engine, {language})
 
 # File mau cua giong mac dinh "Nora": VieNeu clone tu mot doan giong do chinh
 # VieNeu tao ra (khong phai giong nguoi that).
@@ -138,6 +154,8 @@ NORA_VOICE_REF = ROOT_DIR / "core" / "voices" / "nora.wav"
 VOICE_SAMPLE_DIR = DATA_DIR / "voices"
 VOICE_SAMPLE_MIN_SEC = 3.0
 VOICE_SAMPLE_MAX_SEC = 15.0   # VieNeu chi can 3-8 giay; dai hon thi cat bot
+# Chatterbox-Turbo bat buoc mau > 5 giay: mau ngan hon thi core/chatterbox_client.py
+# lap lai cho du, nen van dung chung VOICE_SAMPLE_MIN_SEC voi VieNeu.
 VOICE_SAMPLE_MAX_MB = 10
 
 # Tua nhanh hinh o khoang lang cho khop giong doc (core/video_retime.py):

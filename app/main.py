@@ -27,7 +27,7 @@ from config.settings import (
     DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
-    TTS_VIETNAMESE_ONLY,
+    TTS_ENGINE_LANGUAGES,
     TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -87,9 +87,9 @@ def _voice_preview_urls() -> dict[str, dict[str, str]]:
         if (PREVIEW_DIR / name).is_file():
             urls.setdefault(engine, {})[key] = url_for("static", filename=f"voices/{name}")
     if current_user.has_voice_sample:
-        urls.setdefault("vieneu", {})["mine"] = url_for(
-            "main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp())
-        )
+        sample_url = url_for("main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp()))
+        for engine in (e for e, voices in TTS_VOICES.items() if "mine" in voices):
+            urls.setdefault(engine, {})["mine"] = sample_url
     return urls
 
 
@@ -112,7 +112,7 @@ def index():
         default_deepseek_model=DEEPSEEK_MODEL,
         gemini_key_exists=bool(GEMINI_API_KEY),
         tts_voice_keys=_tts_voice_keys(),
-        tts_vietnamese_only=sorted(TTS_VIETNAMESE_ONLY),
+        tts_engine_languages={engine: sorted(langs) for engine, langs in TTS_ENGINE_LANGUAGES.items()},
         voice_preview_urls=_voice_preview_urls(),
         voice_min_sec=VOICE_SAMPLE_MIN_SEC,
         voice_max_sec=VOICE_SAMPLE_MAX_SEC,

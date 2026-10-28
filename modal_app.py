@@ -15,6 +15,7 @@ Kiến trúc:
   web (CPU)  --spawn()-->  Dubber (GPU, giai đoạn 1)    --ghi-->  Postgres + Volume
              --spawn()-->  Composer (CPU, giai đoạn 2)  --ghi-->  Postgres + Volume
                              --remote()-->  VoiceCloner (GPU, giọng VieNeu)
+                             --remote()-->  EnglishCloner (GPU, giọng Chatterbox)
 Web và GPU dùng chung một Volume cho file upload/kết quả, và chung một Postgres
 để trao đổi tiến trình — nên web không cần chờ GPU, và request HTTP không bao giờ
 chạm giới hạn 150 giây của Modal.
@@ -88,6 +89,15 @@ vieneu_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")
     .pip_install("vieneu[cuda,watermark]==3.8.3", "transformers==4.57.6", "soundfile==0.13.1")
+    .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
+)
+
+# Anh RIENG cho Chatterbox-Turbo (giong clone tieng Anh): ghim torch 2.6, khac
+# ca anh chinh lan anh VieNeu. Chi chay core/chatterbox_client.py.
+chatterbox_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
+    .pip_install("chatterbox-tts==0.1.7", "soundfile==0.13.1")
     .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
 )
 
@@ -272,6 +282,41 @@ class VoiceCloner:
         return synthesize_with(self.tts, texts, voice, ref_wav)
 
 
+# Giong clone tieng Anh (Chatterbox-Turbo). Cung cach goi voi VoiceCloner: mot
+# lan .remote() cho ca video; Turbo khong doc theo lo nen cham hon VieNeu.
+@app.cls(
+    image=chatterbox_image,
+    gpu="T4",
+    volumes={"/models": model_volume},
+    env={"HF_HOME": "/models/huggingface", "XDG_CACHE_HOME": "/models/cache"},
+    timeout=1800,
+    scaledown_window=60,
+    max_containers=1,
+)
+class EnglishCloner:
+    """Container GPU: Chatterbox-Turbo đọc tiếng Anh bằng giọng có sẵn hoặc giọng clone."""
+
+    @modal.enter()
+    def load(self):
+        import os
+
+        from core.chatterbox_client import load_model
+
+        # Như VoiceCloner: đã có bản cache thì nạp OFFLINE, chỉ lần đầu mới tải.
+        cached = os.path.isdir("/models/huggingface/hub/models--ResembleAI--chatterbox-turbo")
+        if cached:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+        self.tts = load_model()
+        if not cached:
+            model_volume.commit()
+
+    @modal.method()
+    def synthesize(self, texts: list, ref_wav: bytes | None = None) -> list:
+        from core.chatterbox_client import synthesize_with
+
+        return synthesize_with(self.tts, texts, ref_wav)
+
+
 @app.function(volumes=VOLUMES, secrets=secrets, env=RUNTIME_ENV, timeout=600)
 def migrate() -> None:
     """Chạy `flask db upgrade` trên Postgres trước mỗi lần deploy."""
@@ -281,13 +326,13 @@ def migrate() -> None:
 
 
 @app.function(region="us", secrets=secrets, env=RUNTIME_ENV, timeout=900)
-def voice_previews() -> dict:
+def voice_previews(engines: list | None = None) -> dict:
     """Đọc VOICE_PREVIEW_TEXT bằng mọi giọng có sẵn (trừ giọng clone của người
-    dùng). Chạy ở đây vì Gemini cần key trong secret, VieNeu cần VoiceCloner.
+    dùng). Chạy ở đây vì Gemini cần key trong secret, VieNeu cần VoiceCloner, Chatterbox cần EnglishCloner.
     Gọi qua `python scripts/make_voice_previews.py`, file ghi về static/voices/."""
     from core.voice_previews import render_all
 
-    return render_all()
+    return render_all(engines)
 
 
 @app.local_entrypoint()

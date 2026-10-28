@@ -43,9 +43,14 @@ from utils.proc import run_command
 _EDGE_ATTEMPTS = 6
 _EDGE_BACKOFF = 1.0
 
+# Engine chạy trên GPU riêng, đọc cả video trong một lần gọi rồi lấy từng câu
+# ra từ cache (xem TTSEngine._prefetch_clone). Đổi tốc độ bằng atempo.
+_CLONE_ENGINES = {"vieneu": "VieNeu", "chatterbox": "Chatterbox"}
+
 
 class TTSEngine:
-	"""Text-to-speech wrapper (Vietnamese by default) for edge-tts, Gemini TTS, VieNeu-TTS and gTTS."""
+	"""Text-to-speech wrapper (Vietnamese by default) for edge-tts, Gemini TTS, VieNeu-TTS,
+	Chatterbox-Turbo (English) and gTTS."""
 
 	def __init__(
 		self,
@@ -79,12 +84,12 @@ class TTSEngine:
 		self._gemini_lock = threading.Lock()
 		#: Token âm thanh Gemini đã dùng — để ghi log chi phí thật.
 		self.gemini_audio_tokens = 0
-		#: Giọng mẫu người dùng tải lên (giọng "mine" của VieNeu).
+		#: Giọng mẫu người dùng tải lên (giọng "mine" của VieNeu/Chatterbox).
 		self.ref_audio = Path(ref_audio) if ref_audio else None
-		# VieNeu đọc cả lô một lần (xem _prefetch_vieneu); mỗi câu lấy kết quả
-		# ra khỏi đây đúng một lần, lần thử lại thì gọi riêng câu đó.
-		self._vieneu_cache: dict[str, list[bytes]] = {}
-		self._vieneu_down = False
+		# VieNeu/Chatterbox đọc cả lô một lần (xem _prefetch_clone); mỗi câu lấy
+		# kết quả ra khỏi đây đúng một lần, lần thử lại thì gọi riêng câu đó.
+		self._clone_cache: dict[str, list[bytes]] = {}
+		self._clone_down = False
 
 	def synthesize_all(self, segments: List[Segment]) -> List[tuple]:
 		"""Return list of (segment, path) pairs — only for successfully synthesized segments.
@@ -102,8 +107,8 @@ class TTSEngine:
 		valid_segments = len(tasks)
 		results: List[tuple] = []
 		error_samples: list[str] = []
-		if self.engine == "vieneu" and tasks:
-			self._prefetch_vieneu([text for _, _, text in tasks])
+		if self.engine in _CLONE_ENGINES and tasks:
+			self._prefetch_clone([text for _, _, text in tasks])
 
 		if tasks:
 			workers = min(self.concurrency, len(tasks))
@@ -142,8 +147,8 @@ class TTSEngine:
 		except Exception as exc:
 			# Fallback to gTTS for non-gTTS engines
 			if self.engine != "gtts":
-				# Gemini/VieNeu lỗi thì thử edge-tts trước (giọng tốt hơn gTTS nhiều).
-				fallbacks = (["edge-tts"] if self.engine in ("gemini", "vieneu") else []) + ["gtts"]
+				# Gemini/VieNeu/Chatterbox lỗi thì thử edge-tts trước (giọng tốt hơn gTTS nhiều).
+				fallbacks = (["edge-tts"] if self.engine == "gemini" or self.engine in _CLONE_ENGINES else []) + ["gtts"]
 				err_msg = f"segment {idx}: {exc}"
 				for fallback in fallbacks:
 					try:
@@ -208,8 +213,8 @@ class TTSEngine:
 		# VieNeu đổi tốc độ bằng atempo (kéo giãn âm thanh có sẵn), không đọc
 		# lại như edge-tts: giãn chậm tới ~0,79 lần nghe rõ là lê (job #40,
 		# 39/40 câu). Nên với VieNeu KHÔNG làm chậm — chấp nhận khoảng nghỉ —
-		# chỉ còn tăng tốc khi câu dài quá khung hình.
-		slow_down = self.engine != "vieneu"
+		# chỉ còn tăng tốc khi câu dài quá khung hình. Chatterbox cũng vậy.
+		slow_down = self.engine not in _CLONE_ENGINES
 		base = base_speed(slots, durations) if slow_down else 1.0
 		estimated = [d / base for d in durations]
 		plan = plan_timeline(slots, estimated)
@@ -307,11 +312,11 @@ class TTSEngine:
 		if self.engine == "edge-tts":
 			self._synthesize_edge(text, output_path, speed=speed)
 			return output_path
-		if self.engine in ("gtts", "gemini", "vieneu"):
+		if self.engine in ("gtts", "gemini") or self.engine in _CLONE_ENGINES:
 			if self.engine == "gtts":
 				self._synthesize_gtts(text, output_path)
-			elif self.engine == "vieneu":
-				self._synthesize_vieneu(text, output_path)
+			elif self.engine in _CLONE_ENGINES:
+				self._synthesize_clone(text, output_path)
 			else:
 				self._synthesize_gemini(text, output_path)
 			if abs(speed - 1.0) > 1e-3:
@@ -371,38 +376,50 @@ class TTSEngine:
 			raise RuntimeError("Không tìm thấy file giọng mẫu để clone.")
 		return None, Path(ref).read_bytes()
 
-	def _prefetch_vieneu(self, texts: List[str]) -> None:
-		"""Đọc mọi câu trong MỘT lần gọi: GPU chỉ nhanh khi xử lý theo lô
-		(~25 giây cho 10 phút giọng đọc). Lỗi thì đánh dấu VieNeu hỏng để các
-		câu rơi thẳng về edge-tts, không chờ gọi lại từng câu."""
+	def _chatterbox_ref(self) -> bytes | None:
+		"""None = giọng có sẵn của Chatterbox, còn lại là file mẫu để clone."""
+		if self.voice_name != "@user":
+			return None
+		if self.ref_audio is None or not self.ref_audio.is_file():
+			raise RuntimeError("Không tìm thấy file giọng mẫu để clone.")
+		return self.ref_audio.read_bytes()
+
+	def _clone_call(self, texts: List[str]) -> List[bytes]:
+		if self.engine == "chatterbox":
+			from core import chatterbox_client
+
+			return chatterbox_client.synthesize(texts, ref_wav=self._chatterbox_ref())
 		from core import vieneu_client
 
+		voice, ref = self._vieneu_args()
+		return vieneu_client.synthesize(texts, voice=voice, ref_wav=ref)
+
+	def _prefetch_clone(self, texts: List[str]) -> None:
+		"""Đọc mọi câu trong MỘT lần gọi: GPU chỉ nhanh khi xử lý theo lô
+		(~25 giây cho 10 phút giọng đọc với VieNeu), và mỗi lần gọi Modal
+		còn tốn thời gian khởi động container. Lỗi thì đánh dấu engine hỏng để
+		các câu rơi thẳng về edge-tts, không chờ gọi lại từng câu."""
+		name = _CLONE_ENGINES[self.engine]
 		started = time.time()
 		try:
-			voice, ref = self._vieneu_args()
-			audios = vieneu_client.synthesize(texts, voice=voice, ref_wav=ref)
+			audios = self._clone_call(texts)
 		except Exception as exc:
-			print(f"[TTS] VieNeu lỗi, chuyển sang giọng dự phòng: {exc}")
-			self._vieneu_down = True
+			print(f"[TTS] {name} lỗi, chuyển sang giọng dự phòng: {exc}")
+			self._clone_down = True
 			return
 		for text, audio in zip(texts, audios):
-			self._vieneu_cache.setdefault(text, []).append(audio)
-		print(f"[TTS] VieNeu: {len(texts)} câu trong {time.time() - started:.1f}s")
+			self._clone_cache.setdefault(text, []).append(audio)
+		print(f"[TTS] {name}: {len(texts)} câu trong {time.time() - started:.1f}s")
 
-	def _synthesize_vieneu(self, text: str, output_path: Path) -> None:
-		if self._vieneu_down:
-			raise RuntimeError("VieNeu không khả dụng")
-		cached = self._vieneu_cache.get(text)
-		if cached:
-			audio = cached.pop()
-		else:
-			from core import vieneu_client
-
-			voice, ref = self._vieneu_args()
-			audio = vieneu_client.synthesize([text], voice=voice, ref_wav=ref)[0]
+	def _synthesize_clone(self, text: str, output_path: Path) -> None:
+		name = _CLONE_ENGINES[self.engine]
+		if self._clone_down:
+			raise RuntimeError(f"{name} không khả dụng")
+		cached = self._clone_cache.get(text)
+		audio = cached.pop() if cached else self._clone_call([text])[0]
 		output_path.write_bytes(audio)
 		if not audio:
-			raise RuntimeError("VieNeu trả về âm thanh rỗng")
+			raise RuntimeError(f"{name} trả về âm thanh rỗng")
 
 	def _synthesize_gtts(self, text: str, output_path: Path) -> None:
 		"""Synthesize speech using Google TTS (gTTS)."""

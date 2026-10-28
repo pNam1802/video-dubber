@@ -25,11 +25,11 @@ from config.settings import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
     MAX_VIDEO_SPEED,
-    TTS_VIETNAMESE_ONLY,
     TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
     UPLOAD_DIR,
+    tts_engine_supports,
 )
 from core.pipeline import DubbingConfig
 from core.translator import get_translator
@@ -107,8 +107,9 @@ def upload_video():
     # Mỗi engine có bộ giọng riêng — giọng không thuộc engine đã chọn (form
     # cũ, client sửa tay) thì rơi về giọng mặc định của engine đó.
     tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
-    if tts_engine in TTS_VIETNAMESE_ONLY and target_language != "vi":
-        return jsonify({"error": "VieNeu chỉ đọc được tiếng Việt — hãy chọn Edge-TTS, Gemini hoặc gTTS."}), 400
+    if not tts_engine_supports(tts_engine, target_language):
+        return jsonify({"error": "Công cụ đọc này không đọc được ngôn ngữ đích đã chọn — "
+                                 "VieNeu chỉ đọc tiếng Việt, Chatterbox chỉ đọc tiếng Anh."}), 400
     if tts_engine == "gemini" and not GEMINI_API_KEY:
         return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
     if tts_voice == "mine" and not current_user.has_voice_sample:
@@ -447,7 +448,7 @@ def continue_after_review(job_id: int):
     # Giọng clone đọc file mẫu ở THỜI ĐIỂM tạo giọng — người dùng đã xoá nó
     # sau khi tạo job thì báo ngay, đừng để giai đoạn 2 lặng lẽ đọc giọng khác.
     ref_audio = None
-    if job.tts_engine == "vieneu" and job.tts_voice == "mine":
+    if job.tts_voice == "mine":
         if not current_user.has_voice_sample:
             return jsonify({
                 "error": "Giọng mẫu của bạn đã bị xoá — tải lại ở Cài đặt rồi xác nhận lại.",
