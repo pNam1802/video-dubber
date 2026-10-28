@@ -25,6 +25,7 @@ from config.settings import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
     MAX_VIDEO_SPEED,
+    TTS_VIETNAMESE_ONLY,
     TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -46,7 +47,7 @@ ALLOWED_WHISPER_MODELS = {"tiny", "base", "small", "medium", "large"}
 # "auto" = Whisper tu nhan dang; con lai la khi nguoi dung tu chon vi tu nhan
 # dang doan sai (video co nhac nen dai, giong khong ro o dau video...).
 ALLOWED_SOURCE_LANGUAGES = {"auto", "en", "vi", "ja", "zh", "ko"}
-ALLOWED_TARGET_LANGUAGES = {"vi", "ja", "zh", "ko"}
+ALLOWED_TARGET_LANGUAGES = {"vi", "en", "ja", "zh", "ko"}
 ALLOWED_DEVICES = {"auto", "cuda", "cpu"}
 ALLOWED_TTS_ENGINES = set(TTS_VOICES)
 ALLOWED_SUBTITLE_MODES = {"bilingual", "target", "source", "none"}
@@ -106,6 +107,8 @@ def upload_video():
     # Mỗi engine có bộ giọng riêng — giọng không thuộc engine đã chọn (form
     # cũ, client sửa tay) thì rơi về giọng mặc định của engine đó.
     tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
+    if tts_engine in TTS_VIETNAMESE_ONLY and target_language != "vi":
+        return jsonify({"error": "VieNeu chỉ đọc được tiếng Việt — hãy chọn Edge-TTS, Gemini hoặc gTTS."}), 400
     if tts_engine == "gemini" and not GEMINI_API_KEY:
         return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
     if tts_voice == "mine" and not current_user.has_voice_sample:

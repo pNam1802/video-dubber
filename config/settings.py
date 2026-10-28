@@ -76,6 +76,13 @@ GEMINI_TTS_STYLE = os.getenv(
 	"Giọng người kể chuyện review phim, truyện trên TikTok bằng tiếng Việt chuẩn: cuốn hút, "
 	"nhấn nhá tự nhiên theo nội dung, tốc độ vừa phải, không đọc như đọc tin tức.",
 )
+# Chi dan giong dieu khi ngon ngu dich KHONG phai tieng Viet (GEMINI_TTS_STYLE
+# o tren ep "tieng Viet chuan" — dung cho ban tieng Anh thi Gemini doc lo lo).
+GEMINI_TTS_STYLES: dict[str, str] = {
+	"vi": GEMINI_TTS_STYLE,
+	"en": "An engaging TikTok movie/story recap narrator speaking natural American English: "
+	"expressive, varied intonation that follows the content, moderate pace, not like a news anchor.",
+}
 
 # Danh muc giong theo tung engine: khoa luu trong Job.tts_voice -> ten giong
 # that cua nha cung cap. "female"/"male" giu nguyen nghia cu cho job da co.
@@ -110,6 +117,18 @@ TTS_VOICES: dict[str, dict[str, str]] = {
 		"mine": "@user",            # giong nguoi dung tu tai len (VOICE_SAMPLE_DIR)
 	},
 }
+
+# Ngon ngu dich KHAC tieng Viet: giong vi-VN (HoaiMy/NamMinh) va gTTS "vi"
+# doc chu nuoc ngoai theo kieu tieng Viet, nen doi sang giong ban xu cung
+# khoa. Giong *Multilingual* va giong Gemini tu doc dung theo van ban, giu
+# nguyen. VieNeu chi doc tieng Viet — khong cho chon (xem TTS_VIETNAMESE_ONLY).
+TTS_VOICES_BY_LANGUAGE: dict[str, dict[str, dict[str, str]]] = {
+	"en": {
+		"edge-tts": {"female": "en-US-AriaNeural", "male": "en-US-GuyNeural"},
+		"gtts": {"female": "en"},
+	},
+}
+TTS_VIETNAMESE_ONLY = {"vieneu"}
 
 # File mau cua giong mac dinh "Nora": VieNeu clone tu mot doan giong do chinh
 # VieNeu tao ra (khong phai giong nguoi that).

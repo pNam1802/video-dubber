@@ -284,7 +284,7 @@ class DubbingPipeline:
             _progress(70, "Tổng hợp giọng đọc...")
             step_started = time.time()
             tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
-                            ref_audio=cfg.tts_ref_audio)
+                            ref_audio=cfg.tts_ref_audio, language=cfg.target_language)
             synthesized = tts.synthesize_all(segments)
             retime = None
             if cfg.max_video_speed > 1.0 and video_duration:

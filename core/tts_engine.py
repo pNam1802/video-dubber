@@ -26,11 +26,12 @@ from config.settings import (
 	FFMPEG_TIMEOUT,
 	GEMINI_API_KEY,
 	GEMINI_TTS_MODEL,
-	GEMINI_TTS_STYLE,
+	GEMINI_TTS_STYLES,
 	NORA_VOICE_REF,
 	TEMP_DIR,
 	TTS_CONCURRENCY,
 	TTS_VOICES,
+	TTS_VOICES_BY_LANGUAGE,
 )
 from core.transcriber import Segment
 from core.voice_timeline import base_speed, fill_gaps, plan_timeline
@@ -44,7 +45,7 @@ _EDGE_BACKOFF = 1.0
 
 
 class TTSEngine:
-	"""Vietnamese text-to-speech wrapper for edge-tts, Gemini TTS, VieNeu-TTS and gTTS."""
+	"""Text-to-speech wrapper (Vietnamese by default) for edge-tts, Gemini TTS, VieNeu-TTS and gTTS."""
 
 	def __init__(
 		self,
@@ -53,19 +54,27 @@ class TTSEngine:
 		tts_dir: str | Path | None = None,
 		concurrency: int | None = None,
 		ref_audio: str | Path | None = None,
+		language: str = "vi",
 	):
 		self.engine = (engine or "edge-tts").strip().lower()
+		#: Ngôn ngữ của văn bản cần đọc (ngôn ngữ đích của job).
+		self.language = (language or "vi").strip().lower()
 		self.voice = voice
 		self.tts_dir = Path(tts_dir) if tts_dir else TEMP_DIR / "tts"
 		self.tts_dir.mkdir(parents=True, exist_ok=True)
 		self.concurrency = max(1, int(concurrency or TTS_CONCURRENCY))
 
-		voices = TTS_VOICES.get(self.engine, {})
+		overrides = TTS_VOICES_BY_LANGUAGE.get(self.language, {})
+		voices = {**TTS_VOICES.get(self.engine, {}), **overrides.get(self.engine, {})}
 		#: Tên giọng thật của nhà cung cấp (vd "Leda", "vi-VN-HoaiMyNeural").
 		self.voice_name = voices.get(voice) or voices.get("female", "")
 		# edge-tts còn là phương án dự phòng khi Gemini lỗi — khi đó đọc bằng
 		# HoaiMy, gần giọng Việt tự nhiên nhất trong các giọng miễn phí.
-		self.edge_voice = self.voice_name if self.engine == "edge-tts" else TTS_VOICES["edge-tts"]["female"]
+		# Ngôn ngữ khác tiếng Việt thì dự phòng bằng giọng nữ bản xứ tương ứng.
+		edge_voices = {**TTS_VOICES["edge-tts"], **overrides.get("edge-tts", {})}
+		self.edge_voice = self.voice_name if self.engine == "edge-tts" else edge_voices["female"]
+		self.gtts_lang = {**TTS_VOICES["gtts"], **overrides.get("gtts", {})}["female"]
+		self.gemini_style = GEMINI_TTS_STYLES.get(self.language, GEMINI_TTS_STYLES["vi"])
 		self._gemini_client = None
 		self._gemini_lock = threading.Lock()
 		#: Token âm thanh Gemini đã dùng — để ghi log chi phí thật.
@@ -335,7 +344,7 @@ class TTSEngine:
 					"content": [{
 						"type": "text",
 						"text": text,
-						"annotations": [{"type": "speech_metadata", "style": GEMINI_TTS_STYLE}],
+						"annotations": [{"type": "speech_metadata", "style": self.gemini_style}],
 					}],
 				}],
 				response_format={"type": "audio"},
@@ -401,7 +410,7 @@ class TTSEngine:
 			from gtts import gTTS
 		except ImportError as exc:
 			raise RuntimeError("Missing package gTTS. Install with: pip install gTTS") from exc
-		tts_obj = gTTS(text=text, lang="vi", slow=False)
+		tts_obj = gTTS(text=text, lang=self.gtts_lang, slow=False)
 		tts_obj.save(str(output_path))
 		if not output_path.exists() or output_path.stat().st_size == 0:
 			raise RuntimeError("gTTS produced no valid audio file.")

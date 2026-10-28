@@ -42,6 +42,21 @@ def _upload_and_capture_config(client, monkeypatch, **form_extra):
     return response, captured.get("config")
 
 
+def test_upload_accepts_english_target(app, as_user, monkeypatch):
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, source_language="vi", target_language="en", tts_engine="edge-tts"
+    )
+    assert response.status_code == 202
+    assert config.target_language == "en"
+
+
+def test_upload_rejects_vieneu_for_non_vietnamese_target(app, as_user, monkeypatch):
+    # VieNeu chỉ đọc tiếng Việt — đọc bản dịch tiếng Anh thì ra giọng lơ lớ.
+    response, config = _upload_and_capture_config(as_user, monkeypatch, target_language="en", tts_engine="vieneu")
+    assert response.status_code == 400
+    assert config is None
+
+
 def test_upload_passes_chosen_source_language_to_config(app, as_user, monkeypatch):
     response, config = _upload_and_capture_config(as_user, monkeypatch, source_language="ja")
     assert response.status_code == 202

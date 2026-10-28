@@ -90,6 +90,7 @@
         <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="target_language">Ngôn ngữ đích</label>
         <select name="target_language" id="target_language" class="{{ field_class }}">
           <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">English</option>
           <option value="ja">日本語</option>
           <option value="zh">中文</option>
           <option value="ko">한국어</option>
@@ -680,20 +681,44 @@
         ductri: "Đức Trí — nam miền Nam", mine: "Giọng của bạn (clone)"
       }
     };
+    // Đích là tiếng Anh: HoaiMy/NamMinh đổi sang giọng bản xứ cùng khoá
+    // (config.settings.TTS_VOICES_BY_LANGUAGE) — file nghe thử là giọng Việt nên ẩn.
+    const VOICE_LABELS_BY_LANGUAGE = {
+      en: { "edge-tts": { female: "Aria — nữ (Mỹ)", male: "Guy — nam (Mỹ)" }, gtts: { female: "Mặc định (English)" } }
+    };
+    const VIETNAMESE_ONLY_ENGINES = {{ tts_vietnamese_only | tojson }};
+    const targetLanguageSelect = document.getElementById("target_language");
     const ttsEngineSelect = document.getElementById("tts_engine");
     const ttsVoiceSelect = document.getElementById("tts_voice");
+    function languageVoiceLabels() {
+      return (VOICE_LABELS_BY_LANGUAGE[targetLanguageSelect.value] || {})[ttsEngineSelect.value] || {};
+    }
+    function syncEngines() {
+      const vietnamese = targetLanguageSelect.value === "vi";
+      Array.from(ttsEngineSelect.options).forEach(function (option) {
+        const blocked = !vietnamese && VIETNAMESE_ONLY_ENGINES.indexOf(option.value) !== -1;
+        option.disabled = blocked;
+        option.hidden = blocked;
+      });
+      if (ttsEngineSelect.selectedOptions[0] && ttsEngineSelect.selectedOptions[0].disabled) {
+        ttsEngineSelect.value = "edge-tts";
+      }
+      syncVoices();
+    }
     function syncVoices() {
       const engine = ttsEngineSelect.value;
+      const overrides = languageVoiceLabels();
       ttsVoiceSelect.innerHTML = "";
       (VOICE_KEYS[engine] || []).forEach(function (key) {
         const option = document.createElement("option");
         option.value = key;
-        option.textContent = (VOICE_LABELS[engine] || {})[key] || key;
+        option.textContent = overrides[key] || (VOICE_LABELS[engine] || {})[key] || key;
         ttsVoiceSelect.appendChild(option);
       });
       syncPreview();
     }
     ttsEngineSelect.addEventListener("change", syncVoices);
+    targetLanguageSelect.addEventListener("change", syncEngines);
 
     // ── Nghe thử: mọi giọng đọc cùng một câu (core/voice_previews.py) ──
     const PREVIEW_URLS = {{ voice_preview_urls | tojson }};
@@ -704,6 +729,7 @@
       document.getElementById("voicePreviewStop").classList.toggle("hidden", !playing);
     }
     function previewUrl() {
+      if (languageVoiceLabels()[ttsVoiceSelect.value]) return "";
       return (PREVIEW_URLS[ttsEngineSelect.value] || {})[ttsVoiceSelect.value] || "";
     }
     function syncPreview() {
@@ -857,7 +883,7 @@
 
     paintPresets("balanced");
     syncEngineHint();
-    syncVoices();
+    syncEngines();
   })();
 </script>
 {% endblock %}

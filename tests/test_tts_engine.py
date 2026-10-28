@@ -53,6 +53,29 @@ def test_gemini_engine_falls_back_to_hoaimy_on_edge(tmp_path):
     assert TTSEngine(engine="gemini", voice="male", tts_dir=tmp_path).edge_voice == "vi-VN-HoaiMyNeural"
 
 
+# ── Ngôn ngữ đích tiếng Anh ───────────────────────────────────
+def test_english_target_swaps_vietnamese_voices_for_native_ones(tmp_path):
+    assert TTSEngine(engine="edge-tts", voice="female", tts_dir=tmp_path, language="en").edge_voice == "en-US-AriaNeural"
+    assert TTSEngine(engine="edge-tts", voice="male", tts_dir=tmp_path, language="en").edge_voice == "en-US-GuyNeural"
+    assert TTSEngine(engine="gtts", tts_dir=tmp_path, language="en").gtts_lang == "en"
+
+
+def test_english_target_keeps_multilingual_and_gemini_voices(tmp_path):
+    edge = TTSEngine(engine="edge-tts", voice="florian", tts_dir=tmp_path, language="en")
+    assert edge.edge_voice == "de-DE-FlorianMultilingualNeural"
+    gemini = TTSEngine(engine="gemini", voice="male", tts_dir=tmp_path, language="en")
+    assert gemini.voice_name == "Charon"
+    # Dự phòng khi Gemini lỗi cũng phải là giọng tiếng Anh, không phải HoaiMy.
+    assert gemini.edge_voice == "en-US-AriaNeural"
+    assert "English" in gemini.gemini_style
+
+
+def test_vietnamese_target_is_unchanged(tmp_path):
+    engine = TTSEngine(engine="gtts", tts_dir=tmp_path)
+    assert engine.gtts_lang == "vi"
+    assert "tiếng Việt" in engine.gemini_style
+
+
 def test_gemini_speed_change_uses_atempo_not_another_api_call(monkeypatch, tmp_path):
     """Đổi tốc độ giọng Gemini không được gọi API lần nữa — tốn tiền gấp đôi
     và Gemini đọc lại mỗi lần một kiểu."""
