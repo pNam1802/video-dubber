@@ -18,7 +18,13 @@ from app.models import Job, JobStatus
 from app.permissions import require_admin_page
 from app.quota import get_usage
 from app.storage import refresh_outputs
-from app.voices import VoiceSampleError, accept_voice_upload, delete_voice_sample
+from app.voices import (
+    VoiceSampleError,
+    accept_voice_upload,
+    delete_voice_sample,
+    sample_language,
+    voice_sample_url,
+)
 from config.settings import (
     FFMPEG_BIN,
     MAX_UPLOAD_MB,
@@ -27,7 +33,9 @@ from config.settings import (
     DEEPSEEK_MODEL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    CLONE_SAMPLE_LANGUAGE,
     TTS_ENGINE_LANGUAGES,
+    VOICE_SAMPLE_LANGUAGES,
     TTS_VOICES,
     OPENAI_API_KEY,
     OPENAI_MODEL,
@@ -86,10 +94,9 @@ def _voice_preview_urls() -> dict[str, dict[str, str]]:
         name = preview_name(engine, key)
         if (PREVIEW_DIR / name).is_file():
             urls.setdefault(engine, {})[key] = url_for("static", filename=f"voices/{name}")
-    if current_user.has_voice_sample:
-        sample_url = url_for("main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp()))
-        for engine in (e for e, voices in TTS_VOICES.items() if "mine" in voices):
-            urls.setdefault(engine, {})["mine"] = sample_url
+    for engine, language in CLONE_SAMPLE_LANGUAGE.items():
+        if current_user.has_voice_sample_in(language):
+            urls.setdefault(engine, {})["mine"] = voice_sample_url(current_user, language)
     return urls
 
 
@@ -113,6 +120,8 @@ def index():
         gemini_key_exists=bool(GEMINI_API_KEY),
         tts_voice_keys=_tts_voice_keys(),
         tts_engine_languages={engine: sorted(langs) for engine, langs in TTS_ENGINE_LANGUAGES.items()},
+        clone_sample_language=CLONE_SAMPLE_LANGUAGE,
+        voice_samples={lang: current_user.has_voice_sample_in(lang) for lang in VOICE_SAMPLE_LANGUAGES},
         voice_preview_urls=_voice_preview_urls(),
         voice_min_sec=VOICE_SAMPLE_MIN_SEC,
         voice_max_sec=VOICE_SAMPLE_MAX_SEC,
@@ -168,6 +177,8 @@ def account_settings():
 def _render_settings():
     return render_template(
         "account_settings.html",
+        voice_languages=VOICE_SAMPLE_LANGUAGES,
+        voice_sample_url=voice_sample_url,
         voice_min_sec=VOICE_SAMPLE_MIN_SEC,
         voice_max_sec=VOICE_SAMPLE_MAX_SEC,
         voice_max_mb=VOICE_SAMPLE_MAX_MB,
@@ -179,19 +190,21 @@ def _render_settings():
 def upload_voice_sample():
     """Tải giọng mẫu để clone (xem app/voices.accept_voice_upload)."""
     try:
-        seconds = accept_voice_upload(current_user, request)
+        seconds, language = accept_voice_upload(current_user, request)
     except VoiceSampleError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("main.account_settings"))
-    flash(f"Đã lưu giọng mẫu ({seconds:.1f} giây). Chọn \"Giọng của bạn\" khi tạo bản lồng tiếng.", "success")
+    flash(f"Đã lưu giọng mẫu {VOICE_SAMPLE_LANGUAGES[language]} ({seconds:.1f} giây). "
+          "Chọn \"Giọng của bạn\" khi tạo bản lồng tiếng.", "success")
     return redirect(url_for("main.account_settings"))
 
 
 @bp.get("/cai-dat/giong.wav")
 @login_required
 def voice_sample_audio():
-    path = current_user.voice_sample_path
-    if not current_user.has_voice_sample:
+    language = sample_language(request.args.get("lang"))
+    path = current_user.voice_sample_file(language)
+    if not current_user.has_voice_sample_in(language):
         abort(404)
     if not path.exists():
         refresh_outputs()
@@ -203,8 +216,9 @@ def voice_sample_audio():
 @bp.post("/cai-dat/giong/xoa")
 @login_required
 def remove_voice_sample():
-    delete_voice_sample(current_user)
-    flash("Đã xoá giọng mẫu.", "success")
+    language = sample_language(request.form.get("language"))
+    delete_voice_sample(current_user, language)
+    flash(f"Đã xoá giọng mẫu {VOICE_SAMPLE_LANGUAGES[language]}.", "success")
     return redirect(url_for("main.account_settings"))
 
 

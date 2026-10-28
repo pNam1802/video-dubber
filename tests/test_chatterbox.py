@@ -1,13 +1,18 @@
 """Chatterbox-Turbo: giọng clone tiếng Anh (giọng có sẵn + giọng của người dùng)."""
 from __future__ import annotations
 
+import io
+
 import pytest
+
+from app.extensions import db
+from app.models import User, utcnow
 
 from core import chatterbox_client
 from core.transcriber import Segment
 from core.tts_engine import TTSEngine
 from tests.test_jobs import _awaiting_review_job, _upload_and_capture_config
-from tests.test_vieneu import _set_sample
+from tests.test_vieneu import _set_sample, _tone
 
 
 # ── TTSEngine ────────────────────────────────────────────────
@@ -141,13 +146,84 @@ def test_upload_chatterbox_for_vietnamese_rejected(app, as_user, monkeypatch):
     assert config is None
 
 
-def test_continue_passes_user_sample_to_chatterbox(app, as_user, user, monkeypatch, tmp_path):
+def _set_english_sample(app, user_id):
+    with app.app_context():
+        u = db.session.get(User, user_id)
+        u.voice_sample_en_at = utcnow()
+        db.session.commit()
+        return u.voice_sample_file("en")
+
+
+def test_continue_passes_english_sample_to_chatterbox(app, as_user, user, monkeypatch, tmp_path):
     import app.api as api_mod
 
     captured = {}
     monkeypatch.setattr(api_mod, "continue_job", lambda flask_app, job_id, config: captured.update(config=config))
-    path = _set_sample(app, user)
+    _set_sample(app, user)
+    path = _set_english_sample(app, user)
     job_id, _, _ = _awaiting_review_job(app, user, tmp_path, tts_engine="chatterbox", tts_voice="mine",
                                         target_language="en")
     assert as_user.post(f"/api/jobs/{job_id}/continue").status_code == 200
     assert captured["config"].tts_ref_audio == str(path)
+    assert path.name.endswith("_en.wav")
+
+
+# ── Giọng mẫu riêng cho từng ngôn ngữ ────────────────────────
+def test_vietnamese_sample_does_not_unlock_chatterbox_mine(app, as_user, user, monkeypatch):
+    """Clone bắt chước cả ngữ điệu: mẫu tiếng Việt đọc tiếng Anh nghe lơ lớ."""
+    _set_sample(app, user)
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="en", tts_engine="chatterbox", tts_voice="mine"
+    )
+    assert response.status_code == 400 and "English" in response.get_json()["error"]
+    _set_english_sample(app, user)
+    response, config = _upload_and_capture_config(
+        as_user, monkeypatch, target_language="en", tts_engine="chatterbox", tts_voice="mine"
+    )
+    assert response.status_code == 202
+
+
+def test_api_saves_english_sample_separately(app, as_user, user):
+    def post(language):
+        return as_user.post(
+            "/api/voice-sample",
+            data={"voice_sample": (io.BytesIO(_tone(6.0)), "me.wav"), "voice_consent": "on", "language": language},
+            content_type="multipart/form-data",
+        ).get_json()
+
+    body = post("en")
+    assert body["language"] == "en" and body["url"].startswith("/cai-dat/giong.wav?lang=en&v=")
+    with app.app_context():
+        u = db.session.get(User, user)
+        assert u.has_voice_sample_in("en") and not u.has_voice_sample_in("vi")
+        en_path, vi_path = u.voice_sample_file("en"), u.voice_sample_file("vi")
+    assert en_path.exists() and not vi_path.exists()
+
+    post("vi")
+    assert as_user.get("/cai-dat/giong.wav?lang=en").status_code == 200
+    assert as_user.get("/cai-dat/giong.wav?lang=vi").status_code == 200
+    # Nghe thử "Giọng của bạn": mỗi engine phát mẫu đúng ngôn ngữ của nó.
+    html = as_user.get("/").get_data(as_text=True)
+    assert "/cai-dat/giong.wav?lang=en" in html and "/cai-dat/giong.wav?lang=vi" in html
+
+    # Xoá mẫu tiếng Anh không đụng tới mẫu tiếng Việt.
+    as_user.post("/cai-dat/giong/xoa", data={"language": "en"})
+    with app.app_context():
+        u = db.session.get(User, user)
+        assert not u.has_voice_sample_in("en") and u.has_voice_sample_in("vi")
+    assert not en_path.exists() and vi_path.exists()
+
+
+def test_unknown_sample_language_falls_back_to_vietnamese(app, as_user, user):
+    response = as_user.post(
+        "/api/voice-sample",
+        data={"voice_sample": (io.BytesIO(_tone(5.0)), "me.wav"), "voice_consent": "on", "language": "xx"},
+        content_type="multipart/form-data",
+    )
+    assert response.get_json()["language"] == "vi"
+
+
+def test_settings_page_shows_both_samples(as_user):
+    html = as_user.get("/cai-dat").get_data(as_text=True)
+    assert "Giọng mẫu Tiếng Việt" in html and "Giọng mẫu English" in html
+    assert 'name="language" value="en"' in html

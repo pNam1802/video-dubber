@@ -70,6 +70,9 @@ class User(UserMixin, db.Model):
     # da duoc chu giong dong y). None = chua co giong clone. File nam o
     # voice_sample_path.
     voice_sample_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Nhu tren, cho giong mau TIENG ANH (Chatterbox clone) — xem
+    # voice_sample_file("en").
+    voice_sample_en_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     jobs = db.relationship("Job", backref="user", lazy=True, cascade="all, delete-orphan")
 
@@ -83,11 +86,29 @@ class User(UserMixin, db.Model):
 
     @property
     def voice_sample_path(self) -> Path:
-        return VOICE_SAMPLE_DIR / f"user_{self.id}.wav"
+        return self.voice_sample_file("vi")
 
     @property
     def has_voice_sample(self) -> bool:
-        return self.voice_sample_at is not None
+        return self.has_voice_sample_in("vi")
+
+    # Giọng mẫu theo ngôn ngữ (config.settings.VOICE_SAMPLE_LANGUAGES). Mẫu
+    # tiếng Việt giữ tên file cũ để giọng mẫu đã tải lên trước đây còn dùng được.
+    def voice_sample_file(self, language: str = "vi") -> Path:
+        suffix = "" if language == "vi" else f"_{language}"
+        return VOICE_SAMPLE_DIR / f"user_{self.id}{suffix}.wav"
+
+    def voice_sample_time(self, language: str = "vi"):
+        return self.voice_sample_en_at if language == "en" else self.voice_sample_at
+
+    def set_voice_sample_time(self, language: str, value) -> None:
+        if language == "en":
+            self.voice_sample_en_at = value
+        else:
+            self.voice_sample_at = value
+
+    def has_voice_sample_in(self, language: str = "vi") -> bool:
+        return self.voice_sample_time(language) is not None
 
     def __repr__(self) -> str:
         return f"<User {self.username} ({self.role})>"

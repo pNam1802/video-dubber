@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request, url_for
+from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user, login_required
 from werkzeug.utils import secure_filename
 
@@ -16,10 +16,11 @@ from app.jobs import cancel_job, continue_job, start_job
 from app.models import Job, JobStatus, TranscriptSegment
 from app.quota import check_quota
 from app.storage import commit_uploads, commit_volume
-from app.voices import VoiceSampleError, accept_voice_upload
+from app.voices import VoiceSampleError, accept_voice_upload, voice_sample_url
 from config.settings import (
     OUTPUT_DIR,
     RATELIMIT_UPLOAD,
+    CLONE_SAMPLE_LANGUAGE,
     DEEPSEEK_API_KEY,
     DEEPSEEK_MODEL,
     GEMINI_API_KEY,
@@ -29,6 +30,7 @@ from config.settings import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     UPLOAD_DIR,
+    VOICE_SAMPLE_LANGUAGES,
     tts_engine_supports,
 )
 from core.pipeline import DubbingConfig
@@ -63,13 +65,13 @@ def _pick(field: str, allowed: set[str], default: str) -> str:
 def upload_voice_sample():
     """Tải giọng mẫu ngay trong form tạo job (trang Cài đặt dùng form thường)."""
     try:
-        seconds = accept_voice_upload(current_user, request)
+        seconds, language = accept_voice_upload(current_user, request)
     except VoiceSampleError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify({
         "seconds": round(seconds, 1),
-        # ?v= để trình duyệt không phát lại bản cũ đã cache.
-        "url": url_for("main.voice_sample_audio", v=int(current_user.voice_sample_at.timestamp())),
+        "language": language,
+        "url": voice_sample_url(current_user, language),
     })
 
 
@@ -112,8 +114,10 @@ def upload_video():
                                  "VieNeu chỉ đọc tiếng Việt, Chatterbox chỉ đọc tiếng Anh."}), 400
     if tts_engine == "gemini" and not GEMINI_API_KEY:
         return jsonify({"error": "Cần GEMINI API key trên máy chủ để dùng giọng Gemini."}), 400
-    if tts_voice == "mine" and not current_user.has_voice_sample:
-        return jsonify({"error": "Bạn chưa tải giọng mẫu — vào Cài đặt để thêm giọng của bạn."}), 400
+    sample_lang = CLONE_SAMPLE_LANGUAGE.get(tts_engine, "vi")
+    if tts_voice == "mine" and not current_user.has_voice_sample_in(sample_lang):
+        return jsonify({"error": f"Bạn chưa tải giọng mẫu {VOICE_SAMPLE_LANGUAGES[sample_lang]} — "
+                                 "vào Cài đặt để thêm giọng của bạn."}), 400
     subtitle_mode = _pick("subtitle_mode", ALLOWED_SUBTITLE_MODES, "bilingual")
     # Checkbox: form không gửi gì nghĩa là đã bỏ chọn. Client cũ không biết
     # trường này thì gửi retime_video vắng mặt -> tắt, giữ cách ghép cũ.
@@ -448,13 +452,14 @@ def continue_after_review(job_id: int):
     # Giọng clone đọc file mẫu ở THỜI ĐIỂM tạo giọng — người dùng đã xoá nó
     # sau khi tạo job thì báo ngay, đừng để giai đoạn 2 lặng lẽ đọc giọng khác.
     ref_audio = None
+    sample_lang = CLONE_SAMPLE_LANGUAGE.get(job.tts_engine, "vi")
     if job.tts_voice == "mine":
-        if not current_user.has_voice_sample:
+        if not current_user.has_voice_sample_in(sample_lang):
             return jsonify({
                 "error": "Giọng mẫu của bạn đã bị xoá — tải lại ở Cài đặt rồi xác nhận lại.",
                 "code": 409,
             }), 409
-        ref_audio = str(current_user.voice_sample_path)
+        ref_audio = str(current_user.voice_sample_file(sample_lang))
 
     # Chuyển trạng thái NGAY trong request này — tránh bấm "xác nhận" nhiều
     # lần liên tiếp spawn trùng giai đoạn 2 trước khi trạng thái kịp đổi

@@ -62,49 +62,60 @@
     </h3>
     <p class="font-body-md text-body-md text-on-surface-variant mt-1">
       Tải lên một đoạn ghi âm {{ voice_min_sec|int }}–{{ voice_max_sec|int }} giây, Nora sẽ đọc bản lồng tiếng
-      bằng chính giọng đó (VieNeu-TTS cho tiếng Việt, Chatterbox cho tiếng Anh). Đọc rõ, giọng kể chuyện, không nhạc nền, không tiếng ồn — giọng mẫu
-      thế nào thì bản lồng tiếng nghe thế ấy.
+      bằng chính giọng đó. Mỗi ngôn ngữ cần một mẫu riêng, đọc bằng đúng ngôn ngữ đó: giọng clone bắt chước cả
+      ngữ điệu của mẫu, nên mẫu tiếng Việt đọc bản tiếng Anh sẽ nghe lơ lớ. Đọc rõ, giọng kể chuyện, không nhạc nền,
+      không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.
     </p>
   </div>
 
-  {% if current_user.has_voice_sample %}
-  <div class="flex flex-col gap-sm">
-    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Giọng mẫu hiện tại</span>
-    <audio controls preload="none" class="w-full" src="{{ url_for('main.voice_sample_audio') }}?v={{ current_user.voice_sample_at.timestamp()|int }}"></audio>
+  {# Mỗi ngôn ngữ một giọng mẫu (config.settings.VOICE_SAMPLE_LANGUAGES). #}
+  {% for lang, lang_name in voice_languages.items() %}
+  {% set has_sample = current_user.has_voice_sample_in(lang) %}
+  <div class="flex flex-col gap-sm {% if not loop.first %}border-t border-outline-variant/30 pt-md{% endif %}">
+    <h4 class="font-label-sm text-label-sm text-on-surface uppercase tracking-wider font-bold">
+      Giọng mẫu {{ lang_name }}
+      <span class="font-normal normal-case text-on-surface-variant">— {{ 'đọc bằng tiếng Anh, dùng cho bản lồng tiếng Anh (Chatterbox)' if lang == 'en' else 'đọc bằng tiếng Việt, dùng cho bản lồng tiếng Việt (VieNeu)' }}</span>
+    </h4>
+
+    {% if has_sample %}
+    <audio controls preload="none" class="w-full" src="{{ voice_sample_url(current_user, lang) }}"></audio>
     <form method="post" action="{{ url_for('main.remove_voice_sample') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="language" value="{{ lang }}">
       <button type="submit"
         class="flex items-center gap-1 text-error font-label-sm text-label-sm uppercase tracking-wider">
-        <span class="material-symbols-outlined text-[18px]">delete</span>Xoá giọng mẫu
+        <span class="material-symbols-outlined text-[18px]">delete</span>Xoá giọng mẫu {{ lang_name }}
+      </button>
+    </form>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('main.upload_voice_sample') }}" enctype="multipart/form-data" class="flex flex-col gap-md">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="language" value="{{ lang }}">
+      <div>
+        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="voice_sample_{{ lang }}">
+          {{ 'Thay giọng mẫu' if has_sample else 'File ghi âm' }}
+        </label>
+        <input id="voice_sample_{{ lang }}" name="voice_sample" type="file" required
+          accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
+          class="w-full font-body-md text-body-md text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-4 file:py-2 file:text-on-surface">
+        <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
+          WAV, MP3, M4A, OGG, WEBM hoặc FLAC, tối đa {{ voice_max_mb }} MB. Dài hơn {{ voice_max_sec|int }} giây sẽ được cắt bớt.
+        </p>
+      </div>
+
+      <label class="flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
+        <input type="checkbox" name="voice_consent" required class="w-4 h-4 mt-1 accent-primary">
+        <span>Tôi xác nhận đây là giọng của tôi, hoặc tôi đã được chủ giọng đồng ý cho dùng. Tôi sẽ không dùng
+          giọng clone để mạo danh hay lừa đảo.</span>
+      </label>
+
+      <button type="submit"
+        class="self-start flex items-center gap-1 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+        <span class="material-symbols-outlined text-[18px]">upload_file</span>Lưu giọng mẫu {{ lang_name }}
       </button>
     </form>
   </div>
-  {% endif %}
-
-  <form method="post" action="{{ url_for('main.upload_voice_sample') }}" enctype="multipart/form-data" class="flex flex-col gap-md">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div>
-      <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="voice_sample">
-        {{ 'Thay giọng mẫu' if current_user.has_voice_sample else 'File ghi âm' }}
-      </label>
-      <input id="voice_sample" name="voice_sample" type="file" required
-        accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
-        class="w-full font-body-md text-body-md text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-4 file:py-2 file:text-on-surface">
-      <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
-        WAV, MP3, M4A, OGG, WEBM hoặc FLAC, tối đa {{ voice_max_mb }} MB. Dài hơn {{ voice_max_sec|int }} giây sẽ được cắt bớt.
-      </p>
-    </div>
-
-    <label class="flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
-      <input type="checkbox" name="voice_consent" required class="w-4 h-4 mt-1 accent-primary">
-      <span>Tôi xác nhận đây là giọng của tôi, hoặc tôi đã được chủ giọng đồng ý cho dùng. Tôi sẽ không dùng
-        giọng clone để mạo danh hay lừa đảo.</span>
-    </label>
-
-    <button type="submit"
-      class="self-start flex items-center gap-1 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
-      <span class="material-symbols-outlined text-[18px]">upload_file</span>Lưu giọng mẫu
-    </button>
-  </form>
+  {% endfor %}
 </section>
 {% endblock %}

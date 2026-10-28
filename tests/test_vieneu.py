@@ -123,7 +123,7 @@ def test_voice_sample_saved_trimmed_and_deletable(app, as_user, user):
 
     assert as_user.get("/cai-dat/giong.wav").status_code == 200
     # Nghe thử "Giọng của bạn" bằng chính file mẫu.
-    assert '"mine": "/cai-dat/giong.wav?v=' in as_user.get("/").get_data(as_text=True)
+    assert '"mine": "/cai-dat/giong.wav?lang=vi' in as_user.get("/").get_data(as_text=True)
 
     as_user.post("/cai-dat/giong/xoa")
     with app.app_context():
@@ -158,7 +158,8 @@ def test_api_voice_sample_saves_and_returns_preview_url(app, as_user, user):
     assert response.status_code == 200
     body = response.get_json()
     assert body["seconds"] == pytest.approx(5.0, abs=0.2)
-    assert body["url"].startswith("/cai-dat/giong.wav?v=")
+    assert body["url"].startswith("/cai-dat/giong.wav?lang=vi&v=")
+    assert body["language"] == "vi"
     with app.app_context():
         assert db.session.get(User, user).has_voice_sample
 

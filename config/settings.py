@@ -152,6 +152,11 @@ NORA_VOICE_REF = ROOT_DIR / "core" / "voices" / "nora.wav"
 # Giong mau nguoi dung tai len de clone: moi nguoi mot file
 # voices/user_<id>.wav tren volume du lieu.
 VOICE_SAMPLE_DIR = DATA_DIR / "voices"
+# Moi nguoi mot giong mau cho MOI ngon ngu: clone giu ca ngu dieu/khau am cua
+# mau, nen mau tieng Viet doc ban tieng Anh nghe lo lo (va nguoc lai).
+VOICE_SAMPLE_LANGUAGES = {"vi": "Tiếng Việt", "en": "English"}
+# Giong "mine" cua engine nao clone tu mau ngon ngu nao.
+CLONE_SAMPLE_LANGUAGE = {"vieneu": "vi", "chatterbox": "en"}
 VOICE_SAMPLE_MIN_SEC = 3.0
 VOICE_SAMPLE_MAX_SEC = 15.0   # VieNeu chi can 3-8 giay; dai hon thi cat bot
 # Chatterbox-Turbo bat buoc mau > 5 giay: mau ngan hon thi core/chatterbox_client.py

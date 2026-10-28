@@ -219,23 +219,14 @@
           {# Tải giọng mẫu ngay tại đây khi chọn "Giọng của bạn". Các ô KHÔNG có
              name: không được đi kèm form tạo job, gửi riêng qua /api/voice-sample. #}
           <div id="voiceSamplePanel" class="hidden mt-2 rounded-lg border border-outline-variant p-3 flex flex-col gap-2">
-            <p id="voiceSampleStatus" class="font-label-sm text-label-sm text-on-surface-variant">
-              {% if current_user.has_voice_sample %}
-              Đang dùng giọng mẫu bạn đã lưu — bấm "Nghe thử" để nghe lại, hoặc tải file khác để thay.
-              {% else %}
-              Tải lên một đoạn ghi âm {{ voice_min_sec|int }}–{{ voice_max_sec|int }} giây giọng bạn muốn dùng:
-              đọc rõ, không nhạc nền, không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.
-              {% endif %}
-            </p>
+            {# Nội dung theo ngôn ngữ giọng mẫu của engine đang chọn — xem paintSamplePanel(). #}
+            <p id="voiceSampleStatus" class="font-label-sm text-label-sm text-on-surface-variant"></p>
             {# Thu bằng mic: đọc to đoạn gợi ý, dừng tự động ở voice_max_sec. #}
             <div id="voiceRecorder" class="hidden flex flex-col gap-2">
               <p class="font-label-sm text-label-sm text-on-surface-variant">
                 Bấm <b>Thu bằng mic</b> rồi đọc to, tự nhiên đoạn sau (khoảng 10 giây):
               </p>
-              <blockquote class="font-body-md text-body-md text-on-surface border-l-2 border-primary pl-3">
-                "Xin chào, mình đang thu giọng mẫu cho Nora. Hôm nay trời đẹp, mình kể cho bạn nghe một câu chuyện
-                thật thú vị nhé — bạn đã sẵn sàng chưa?"
-              </blockquote>
+              <blockquote id="voiceRecordPrompt" class="font-body-md text-body-md text-on-surface border-l-2 border-primary pl-3"></blockquote>
               <div class="flex items-center gap-3">
                 <button type="button" id="voiceRecordBtn"
                         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface hover:border-primary hover:text-primary font-label-sm text-label-sm transition-colors">
@@ -690,7 +681,11 @@
     };
     // Engine chỉ đọc được vài ngôn ngữ (config.settings.TTS_ENGINE_LANGUAGES).
     const ENGINE_LANGUAGES = {{ tts_engine_languages | tojson }};
-    const CLONE_ENGINES = ["vieneu", "chatterbox"];
+    // Giọng "Giọng của bạn" của mỗi engine clone từ mẫu ngôn ngữ nào, và
+    // người dùng đã có mẫu ngôn ngữ đó chưa.
+    const CLONE_SAMPLE_LANGUAGE = {{ clone_sample_language | tojson }};
+    const VOICE_SAMPLES = {{ voice_samples | tojson }};
+    const CLONE_ENGINES = Object.keys(CLONE_SAMPLE_LANGUAGE);
     const targetLanguageSelect = document.getElementById("target_language");
     const ttsEngineSelect = document.getElementById("tts_engine");
     const ttsVoiceSelect = document.getElementById("tts_voice");
@@ -746,10 +741,35 @@
       previewBtn.classList.toggle("hidden", !previewUrl());
       const mine = CLONE_ENGINES.indexOf(ttsEngineSelect.value) !== -1 && ttsVoiceSelect.value === "mine";
       document.getElementById("voiceSamplePanel").classList.toggle("hidden", !mine);
+      if (mine) paintSamplePanel();
       document.getElementById("voiceCloneHint").classList.toggle("hidden", ttsEngineSelect.value !== "vieneu" || mine);
     }
 
     // ── Tải giọng mẫu ngay trong form (giọng "Giọng của bạn") ──
+    const SAMPLE_TEXT = {
+      vi: {
+        name: "tiếng Việt",
+        prompt: "\"Xin chào, mình đang thu giọng mẫu cho Nora. Hôm nay trời đẹp, mình kể cho bạn nghe một câu chuyện " +
+                "thật thú vị nhé — bạn đã sẵn sàng chưa?\""
+      },
+      en: {
+        name: "tiếng Anh",
+        prompt: "\"Hi there, I'm recording a voice sample for Nora. It's a beautiful day, so let me tell you " +
+                "a really interesting story — are you ready?\""
+      }
+    };
+    function sampleLanguage() {
+      return CLONE_SAMPLE_LANGUAGE[ttsEngineSelect.value] || "vi";
+    }
+    function paintSamplePanel() {
+      const lang = sampleLanguage();
+      const text = SAMPLE_TEXT[lang];
+      document.getElementById("voiceRecordPrompt").textContent = text.prompt;
+      document.getElementById("voiceSampleStatus").textContent = VOICE_SAMPLES[lang]
+        ? "Đang dùng giọng mẫu " + text.name + " bạn đã lưu — bấm \"Nghe thử\" để nghe lại, hoặc tải file khác để thay."
+        : "Tải lên một đoạn ghi âm " + VOICE_MIN_SEC + "–" + VOICE_MAX_SEC + " giây giọng bạn đọc bằng " + text.name +
+          ": đọc rõ, không nhạc nền, không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.";
+    }
     const sampleBtn = document.getElementById("voiceSampleUpload");
     const sampleError = document.getElementById("voiceSampleError");
     const sampleFileInput = document.getElementById("voiceSampleFile");
@@ -842,6 +862,7 @@
       const data = new FormData();
       data.append("voice_sample", file);
       data.append("voice_consent", "on");
+      data.append("language", sampleLanguage());
       sampleBtn.disabled = true;
       document.getElementById("voiceSampleUploadLabel").textContent = "Đang lưu...";
       try {
@@ -852,17 +873,22 @@
         });
         const body = await res.json().catch(function () { return {}; });
         if (!res.ok) throw new Error(body.error || "Không lưu được giọng mẫu.");
+        VOICE_SAMPLES[body.language] = true;
         CLONE_ENGINES.forEach(function (engine) {
+          if (CLONE_SAMPLE_LANGUAGE[engine] !== body.language) return;
           PREVIEW_URLS[engine] = PREVIEW_URLS[engine] || {};
           PREVIEW_URLS[engine].mine = body.url;
         });
-        document.getElementById("voiceSampleStatus").textContent =
-          "Đã lưu giọng mẫu (" + body.seconds + " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
+        const saved =
+          "Đã lưu giọng mẫu " + SAMPLE_TEXT[body.language].name + " (" + body.seconds +
+          " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
         sampleFileInput.value = "";
         recordedFile = null;
         recordPlayback.classList.add("hidden");
         paintRecording(false);
+        // syncPreview() vẽ lại ô giọng mẫu — đặt dòng "Đã lưu" SAU nó.
         syncPreview();
+        document.getElementById("voiceSampleStatus").textContent = saved;
       } catch (err) {
         sampleError.textContent = err.message;
         sampleError.classList.remove("hidden");
