@@ -24,52 +24,113 @@ def _timings(count: int, sentence_sec: float = 4.0, pause: float = 0.35):
     return out
 
 
-# ── Lập cảnh ─────────────────────────────────────────────────
-def test_scenes_mode_one_image_per_scene_covering_whole_audio():
+# ── Lịch chiếu ───────────────────────────────────────────────
+def _sentences(count: int):
+    return [f"Câu {i}." for i in range(count)]
+
+
+def _no_gemini(monkeypatch):
+    def fail(*args):
+        raise RuntimeError("không có key")
+
+    monkeypatch.setattr(script_images, "write_storyboard", fail)
+
+
+def test_fallback_scenes_cover_whole_audio(monkeypatch):
+    _no_gemini(monkeypatch)
     timings = _timings(10)  # ~43 giây
-    total = timings[-1][1]
-    starts, slides = plan(timings, total, "scenes")
-    assert starts[0] == 0 and len(starts) == len(slides) >= 3
-    assert [s[0] for s in slides] == list(range(len(starts)))
+    prompts, slides = plan(_sentences(10), timings, "scenes")
+    assert len(prompts) == len(slides) >= 3
+    assert [s[0] for s in slides] == list(range(len(prompts)))
     # Liền mạch từ 0 tới hết file, đổi ảnh đúng lúc một câu bắt đầu.
-    assert slides[0][1] == 0.0 and slides[-1][2] == total
+    assert slides[0][1] == 0.0 and slides[-1][2] == timings[-1][1]
     assert all(a[2] == b[1] for a, b in zip(slides, slides[1:]))
     assert all(start in [t[0] for t in timings] for _, start, _ in slides[1:])
+    assert all(script_images.PLAIN_BACKGROUND in p for p in prompts)
 
 
-def test_scenes_mode_caps_image_count_for_long_scripts():
-    timings = _timings(400)  # ~29 phút
-    starts, _ = plan(timings, timings[-1][1], "scenes")
-    assert len(starts) <= script_images.MAX_SCENES + 1
-
-
-def test_few_mode_cycles_three_to_five_images():
+def test_fallback_few_cycles_three_to_five_images(monkeypatch):
+    _no_gemini(monkeypatch)
     timings = _timings(60)  # ~4,3 phút
-    starts, slides = plan(timings, timings[-1][1], "few")
-    assert script_images.FEW_MIN <= len(starts) <= script_images.FEW_MAX
-    assert [s[0] for s in slides][:len(starts) + 1] == list(range(len(starts))) + [0]
-    assert len(slides) > len(starts)  # có lặp lại
+    prompts, slides = plan(_sentences(60), timings, "few")
+    assert script_images.FEW_MIN <= len(prompts) <= script_images.FEW_MAX
+    assert [s[0] for s in slides][:len(prompts) + 1] == list(range(len(prompts))) + [0]
 
 
 def test_few_mode_short_script_never_more_images_than_sentences():
-    starts, slides = plan(_timings(2), _timings(2)[-1][1], "few")
-    assert len(starts) == 2 and {s[0] for s in slides} <= {0, 1}
+    assert script_images.few_count(_timings(2)) == 2
 
 
-# ── Prompt ───────────────────────────────────────────────────
-def test_parse_prompts_adds_style_and_fills_missing():
-    raw = json.dumps({"style": "watercolor", "prompts": ["a robot in a maze"]})
-    prompts = script_images.parse_prompts(raw, ["Robot đi tìm đường.", "Robot nhận thưởng."])
-    assert prompts[0] == f"a robot in a maze, watercolor, {NO_TEXT}"
-    assert prompts[1].startswith("Robot nhận thưởng.") and NO_TEXT in prompts[1]
+def test_tidy_starts_merges_short_scenes_and_caps_count():
+    timings = _timings(400)  # ~29 phút
+    kept = script_images.tidy_starts(list(range(400)), timings)
+    assert kept[0] == 0 and len(kept) <= script_images.MAX_SCENES
+    # Cảnh chỉ một câu (~4,35 giây) quá ngắn -> gộp vào cảnh trước.
+    assert script_images.tidy_starts([0, 1, 2, 5], _timings(10)) == [0, 2, 3]
 
 
-def test_write_prompts_falls_back_to_narration(monkeypatch):
+# ── Storyboard ───────────────────────────────────────────────
+BOARD = {
+    "style": "anime illustration",
+    "main_character": {"look": "young maid with blonde hair and a white ribbon."},
+    "scenes": [
+        {"start": 4, "main": False, "action": "extreme close-up of an old man's furious eye"},
+        {"start": 2, "main": True, "action": "Daisy waters the flowers."},
+        {"start": 9, "main": True, "action": ""},
+    ],
+}
+
+
+def test_parse_storyboard_main_character_or_symbolic():
+    board = script_images.parse_storyboard(json.dumps(BOARD), sentence_count=8)
+    assert [start for start, _ in board] == [0, 3]  # sắp theo câu, cảnh đầu phủ từ câu 0
+    daisy, symbolic = (prompt for _, prompt in board)
+    assert daisy.startswith("Daisy waters the flowers, The only character in the image: young maid")
+    assert "ribbon, Solo" in daisy and script_images.PLAIN_BACKGROUND in daisy
+    assert "anime illustration" in daisy and NO_TEXT in daisy
+    # Vắng nhân vật chính: cận cảnh tượng trưng, không chèn ngoại hình nhân vật chính.
+    assert script_images.SYMBOLIC_LOOK in symbolic and "maid" not in symbolic
+
+
+def test_parse_storyboard_without_main_character_is_all_symbolic():
+    raw = json.dumps({"main_character": None, "scenes": [{"start": 1, "main": True, "action": "a glowing star"}]})
+    [(_, prompt)] = script_images.parse_storyboard(raw, sentence_count=3)
+    assert script_images.SYMBOLIC_LOOK in prompt and script_images.DEFAULT_STYLE in prompt
+
+
+@pytest.mark.parametrize("main_character, main", [
+    ("young maid with blonde hair", True),
+    ({"name": "Daisy", "appearance": "young maid with blonde hair"}, "true"),
+])
+def test_parse_storyboard_tolerates_loose_json(main_character, main):
+    raw = json.dumps({"main_character": main_character,
+                      "scenes": [{"start": 1, "main": main, "action": "sweeping"}]})
+    [(_, prompt)] = script_images.parse_storyboard(raw, sentence_count=3)
+    assert "The only character in the image: young maid with blonde hair" in prompt
+    assert script_images.SYMBOLIC_LOOK not in prompt
+
+
+def test_storyboard_request_carries_rules_and_numbered_sentences():
+    request = script_images.storyboard_request(["Một.", "Hai."], [(0.0, 1.0), (61.0, 62.0)], "scenes", 2)
+    assert "never show any other character and never show scenery" in request
+    assert "[1] (0:00) Một." in request and "[2] (1:01) Hai." in request
+
+
+def test_plan_uses_storyboard_for_scenes(monkeypatch):
+    timings = _timings(10)
+    monkeypatch.setattr(script_images, "write_storyboard",
+                        lambda sentences, timings, mode, count: [(0, "a"), (1, "b"), (5, "c")])
+    prompts, slides = plan(_sentences(10), timings, "scenes")
+    assert prompts == ["a", "c"]  # cảnh "b" chỉ một câu -> gộp vào "a"
+    assert slides[1][1] == timings[5][0]
+
+
+def test_write_storyboard_needs_key(monkeypatch):
     import config.settings as settings
 
     monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
-    prompts = script_images.write_prompts(["Câu một.", "Câu hai."])
-    assert prompts == script_images.fallback_prompts(["Câu một.", "Câu hai."])
+    with pytest.raises(RuntimeError):
+        script_images.write_storyboard(["Câu."], [(0.0, 1.0)], "few", 1)
 
 
 # ── Pipeline ─────────────────────────────────────────────────
@@ -96,7 +157,8 @@ def test_pipeline_makes_mp4_with_images(monkeypatch, tmp_path):
         pytest.skip("cần ffmpeg")
     _fake_tts(monkeypatch, tmp_path)
     seen: dict = {}
-    monkeypatch.setattr(script_images, "write_prompts", lambda chunks: [f"p{i}" for i in range(len(chunks))])
+    monkeypatch.setattr(script_images, "write_storyboard",
+                        lambda sentences, timings, mode, count: [(0, f"p{i}") for i in range(count)])
     monkeypatch.setattr(image_client, "generate",
                         lambda prompts: seen.setdefault("prompts", prompts) and [_png("red") for _ in prompts])
 
@@ -117,7 +179,7 @@ def test_pipeline_makes_mp4_with_images(monkeypatch, tmp_path):
 def test_pipeline_keeps_mp3_when_images_fail(monkeypatch, tmp_path):
     pytest.importorskip("pydub")
     _fake_tts(monkeypatch, tmp_path)
-    monkeypatch.setattr(script_images, "write_prompts", lambda chunks: ["p"] * len(chunks))
+    _no_gemini(monkeypatch)
 
     def boom(prompts):
         raise RuntimeError("GPU hết chỗ")

@@ -1,11 +1,19 @@
 """
 core/script_images.py
-Ảnh minh hoạ cho "Đọc kịch bản": chia giọng đọc thành từng cảnh, nhờ Gemini
-viết prompt vẽ cho mỗi cảnh, rồi ghép ảnh + mp3 thành một video slideshow.
+Ảnh minh hoạ cho "Đọc kịch bản": nhờ Gemini đọc cả kịch bản và dựng
+storyboard, vẽ từng ảnh, rồi ghép ảnh + mp3 thành một video slideshow.
 
 Hai chế độ:
-  "few"    — 3-5 ảnh cho cả kịch bản, chiếu lần lượt rồi lặp lại từ đầu.
-  "scenes" — mỗi cảnh (~12 giây giọng đọc) một ảnh riêng.
+  "few"    — 3-5 khoảnh khắc tiêu biểu của cả kịch bản, chiếu lần lượt rồi lặp lại.
+  "scenes" — mỗi cảnh (đổi sự kiện) một ảnh riêng.
+
+Storyboard giữ ảnh nhất quán bằng cách vẽ ít thứ nhất có thể:
+  - Chỉ NHÂN VẬT CHÍNH, không bao giờ vẽ nhân vật phụ — model ảnh không nhớ
+    mặt giữa các ảnh, càng nhiều người càng lệch. Ngoại hình do Gemini viết MỘT
+    lần, code chèn nguyên văn vào mọi ảnh có nhân vật chính.
+  - Không vẽ bối cảnh: nền trơn, nên không bao giờ "nhảy" sai chỗ giữa hai cảnh.
+  - Cảnh không có nhân vật chính: cận cảnh tượng trưng (đôi mắt, nắm tay, bóng
+    người, đồ vật) trên nền tối — gợi không khí thay vì kể lại toàn cảnh.
 
 Ảnh chỉ đổi ở ranh giới câu, không bao giờ đổi giữa chừng một câu.
 """
@@ -14,28 +22,36 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from utils.proc import run_command
 
 MODES = ("none", "few", "scenes")
 SCENE_SEC = 12.0
 SLIDE_SEC = 8.0
+# Cảnh ngắn hơn thì gộp vào cảnh trước — ảnh lướt qua quá nhanh không ai kịp xem.
+MIN_SCENE_SEC = 5.0
 # Trần số ảnh của chế độ "scenes": kịch bản dài thì giãn cảnh ra thay vì vẽ
 # thêm — mỗi ảnh ~3 giây GPU L40S, cộng thêm thời gian nạp model.
 MAX_SCENES = 30
 FEW_MIN, FEW_MAX = 3, 5
 DEFAULT_STYLE = ("flat vector illustration, clean shapes, soft pastel colors, "
                  "educational explainer video style")
+PLAIN_BACKGROUND = "plain simple background, no scenery"
+# Cảnh vắng nhân vật chính, theo kiểu ảnh mẫu người dùng chọn (30/10/2026):
+# cận mặt nửa chìm trong bóng tối, nền đen, viền sáng mạnh.
+SYMBOLIC_LOOK = ("symbolic extreme close-up, partial view, deep black background, high-contrast dramatic rim "
+                 "lighting, half in shadow, moody cinematic atmosphere, no scenery")
 # Model ảnh hay vẽ chữ méo mó — luôn dặn không vẽ chữ, kể cả khi Gemini quên.
 NO_TEXT = "no text, no letters, no watermark"
-# Gửi Gemini tối đa bấy nhiêu ký tự cho mỗi phần, đủ để nắm ý chính.
+# Dự phòng khi không có storyboard: vẽ thẳng từ lời đọc, mỗi phần tối đa bấy nhiêu ký tự.
 MAX_CHUNK_CHARS = 1500
 
 #: (chỉ số ảnh, bắt đầu, kết thúc) — giây, trong file âm thanh kết quả.
 Slide = Tuple[int, float, float]
 
 
+# ── Lịch chiếu ───────────────────────────────────────────────
 def group_by_duration(timings: List[Tuple[float, float]], target_sec: float) -> List[int]:
     """Chia các câu liền nhau thành nhóm dài khoảng target_sec, chỉ cắt ở
     đầu câu. Trả về chỉ số câu mở đầu mỗi nhóm."""
@@ -55,17 +71,138 @@ def _slides(starts: List[int], timings: List[Tuple[float, float]], total: float,
     return [(image_of[k], bounds[k], bounds[k + 1]) for k in range(len(starts))]
 
 
-def plan(timings: List[Tuple[float, float]], total: float, mode: str) -> Tuple[List[int], List[Slide]]:
-    """Trả về (chỉ số câu mở đầu mỗi phần cần một ảnh, lịch chiếu ảnh)."""
-    if mode == "scenes":
-        starts = group_by_duration(timings, max(SCENE_SEC, total / MAX_SCENES))
-        return starts, _slides(starts, timings, total, list(range(len(starts))))
+def few_count(timings: List[Tuple[float, float]]) -> int:
+    total = timings[-1][1]
+    return min(FEW_MAX, max(FEW_MIN, math.ceil(total / 60)), len(timings))
 
-    count = min(FEW_MAX, max(FEW_MIN, math.ceil(total / 60)), len(timings))
-    chunk_starts = group_by_duration(timings, total / count)[:count]
-    slide_starts = group_by_duration(timings, SLIDE_SEC)
-    image_of = [k % len(chunk_starts) for k in range(len(slide_starts))]
-    return chunk_starts, _slides(slide_starts, timings, total, image_of)
+
+def cycle_slides(timings: List[Tuple[float, float]], image_count: int) -> List[Slide]:
+    """Chế độ "few": đổi ảnh mỗi ~SLIDE_SEC, lần lượt rồi lặp lại từ đầu."""
+    starts = group_by_duration(timings, SLIDE_SEC)
+    return _slides(starts, timings, timings[-1][1], [k % image_count for k in range(len(starts))])
+
+
+def scene_slides(starts: List[int], timings: List[Tuple[float, float]]) -> List[Slide]:
+    return _slides(starts, timings, timings[-1][1], list(range(len(starts))))
+
+
+def tidy_starts(starts: List[int], timings: List[Tuple[float, float]]) -> List[int]:
+    """Chỉ số câu mở đầu cảnh (đã sắp, câu 0 luôn mở đầu) -> bỏ những cảnh quá
+    ngắn hoặc vượt trần MAX_SCENES; cảnh bị bỏ gộp vào cảnh đứng trước nó.
+    Trả về VỊ TRÍ (trong starts) của các cảnh được giữ."""
+    min_sec = max(MIN_SCENE_SEC, timings[-1][1] / (MAX_SCENES + 1))
+    kept = [0]
+    for k in range(1, len(starts)):
+        if timings[starts[k]][0] - timings[starts[kept[-1]]][0] >= min_sec:
+            kept.append(k)
+    return kept[:MAX_SCENES]
+
+
+# ── Storyboard ───────────────────────────────────────────────
+def _clock(sec: float) -> str:
+    return f"{int(sec // 60)}:{int(sec % 60):02d}"
+
+
+def storyboard_request(sentences: List[str], timings: List[Tuple[float, float]], mode: str, count: int) -> str:
+    lines = "\n".join(f"[{i + 1}] ({_clock(t[0])}) {text}" for i, (text, t) in enumerate(zip(sentences, timings)))
+    if mode == "scenes":
+        task = (f"Split the script into scenes wherever the event changes. A scene should last roughly 6 to 25 "
+                f"seconds of narration; aim for about {count} scenes. Each scene's \"start\" is the number of the "
+                "sentence where it begins; the first scene starts at sentence 1 and starts increase.")
+    else:
+        task = (f"Choose exactly {count} key moments that best represent the whole script, in story order. "
+                "Set \"start\" to the sentence number each moment comes from.")
+    return (
+        "You are a storyboard artist turning a narrated script into still illustrations for a video.\n"
+        "The narration is below, one numbered sentence per line with its start time. It may be in Vietnamese "
+        "or English. Read the WHOLE script first and understand the story, then answer in JSON only:\n"
+        '{"style": "...", "main_character": {"look": "..."} or null, '
+        '"scenes": [{"start": 1, "main": true, "action": "..."}]}\n\n'
+        "Rules:\n"
+        "- style: one English art-style line that fits the content (e.g. anime illustration for a story, flat "
+        "vector for an explainer), used for every image.\n"
+        "- main_character: the protagonist of the script, with a fixed English description of appearance "
+        "(gender, age, hair, clothing, distinctive features). It is reused word for word in every image. "
+        "null if the script has no protagonist.\n"
+        "- Images never show any other character and never show scenery or places.\n"
+        "- main = true when the main character is physically present at that moment: action is her/his pose, "
+        "expression and the key object or gesture, on a plain background. Do not repeat the appearance there.\n"
+        "- main = false otherwise: action is a symbolic extreme close-up that conveys the mood of the moment: "
+        "one partial detail such as eyes, a clenched fist, a silhouette or a key object, half hidden in shadow "
+        "on a dark background. Never a full figure, never a group, never a place.\n"
+        "- Draw only what happens at that moment of the story, never what is merely mentioned in dialogue, "
+        "thoughts or memories.\n"
+        "- Nothing written: no text, letters, numbers, logos or captions.\n"
+        f"- {task}\n\n"
+        f"{lines}"
+    )
+
+
+def compose_prompt(action: str, main_look: Optional[str], style: str) -> str:
+    """main_look có giá trị: ảnh nhân vật chính; None: cận cảnh tượng trưng."""
+    if main_look:
+        parts = [action.rstrip(". "), f"The only character in the image: {main_look}",
+                 "Solo, single character", PLAIN_BACKGROUND]
+    else:
+        parts = [action.rstrip(". "), SYMBOLIC_LOOK]
+    return ", ".join(parts + [style, NO_TEXT])
+
+
+def _main_look(main) -> str:
+    """Gemini không phải lúc nào cũng theo đúng khuôn: main_character có khi
+    là chuỗi, có khi dùng khoá khác "look"."""
+    if isinstance(main, dict):
+        main = next((main[key] for key in ("look", "appearance", "description") if main.get(key)), "")
+    return str(main or "").strip().rstrip(". ")
+
+
+def parse_storyboard(raw: str, sentence_count: int) -> List[Tuple[int, str]]:
+    """JSON của Gemini -> [(chỉ số câu mở đầu, prompt)] theo thứ tự câu.
+    Cảnh hỏng (thiếu action, start sai) bị bỏ; không mô tả được nhân vật
+    chính thì mọi cảnh đều thành cận cảnh tượng trưng."""
+    data = json.loads(raw)
+    style = str(data.get("style") or "").strip() or DEFAULT_STYLE
+    main_look = _main_look(data.get("main_character"))
+    scenes: dict[int, str] = {}
+    for scene in data.get("scenes") or []:
+        if not isinstance(scene, dict) or not str(scene.get("action") or "").strip():
+            continue
+        try:
+            start = min(max(int(scene.get("start") or 1), 1), sentence_count) - 1
+        except (TypeError, ValueError):
+            continue
+        look = main_look if str(scene.get("main")).strip().lower() in ("true", "1", "yes") else None
+        scenes.setdefault(start, compose_prompt(str(scene["action"]).strip(), look or None, style))
+    board = sorted(scenes.items())
+    if board:
+        board[0] = (0, board[0][1])  # cảnh đầu luôn phủ từ câu đầu tiên
+    return board
+
+
+def write_storyboard(sentences: List[str], timings: List[Tuple[float, float]], mode: str,
+                     count: int) -> List[Tuple[int, str]]:
+    """Nhờ Gemini dựng storyboard. Lỗi thì ném ra để illustrate() lùi về cách vẽ
+    thẳng từ lời đọc."""
+    from config.settings import GEMINI_API_KEY, GEMINI_MODEL
+
+    if not GEMINI_API_KEY:
+        raise RuntimeError("chưa có GEMINI_API_KEY")
+    from google import genai
+    from google.genai import types
+
+    from core.translator.llm_common import call_with_retry
+
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    config = types.GenerateContentConfig(temperature=0.5, response_mime_type="application/json")
+    response = call_with_retry(
+        lambda: client.models.generate_content(model=GEMINI_MODEL, config=config,
+                                               contents=storyboard_request(sentences, timings, mode, count)),
+        what="Gemini (storyboard)",
+    )
+    board = parse_storyboard(response.text or "", len(sentences))
+    if not board:
+        raise RuntimeError("storyboard rỗng")
+    return board
 
 
 def chunk_texts(sentences: List[str], starts: List[int]) -> List[str]:
@@ -73,62 +210,40 @@ def chunk_texts(sentences: List[str], starts: List[int]) -> List[str]:
     return [" ".join(sentences[bounds[k]:bounds[k + 1]])[:MAX_CHUNK_CHARS] for k in range(len(starts))]
 
 
-def _prompt_request(chunks: List[str]) -> str:
-    parts = "\n".join(f"[{i + 1}] {text}" for i, text in enumerate(chunks))
-    return (
-        "You are an illustrator planning still images for a narrated explainer video.\n"
-        f"Below are {len(chunks)} consecutive parts of the narration (it may be in Vietnamese or English).\n"
-        "Write one English text-to-image prompt per part that depicts its main idea visually: "
-        "concrete subjects, setting and composition, 1-3 sentences. "
-        "Abstract ideas should become simple visual metaphors. "
-        "Never ask for text, letters, numbers, logos or captions in the image. "
-        "If a recurring character fits the story, describe it with the exact same words in every prompt.\n"
-        "Also write one short shared art-style line used for every image so they look consistent.\n"
-        f'Return JSON only: {{"style": "...", "prompts": ["...", ...]}} with exactly {len(chunks)} prompts.\n\n'
-        f"{parts}"
-    )
-
-
-def parse_prompts(raw: str, chunks: List[str]) -> List[str]:
-    """JSON của Gemini -> prompt hoàn chỉnh cho từng phần. Thiếu prompt nào
-    thì dùng chính lời đọc của phần đó (model ảnh hiểu được cả tiếng Việt)."""
-    data = json.loads(raw)
-    style = str(data.get("style") or "").strip() or DEFAULT_STYLE
-    prompts = [str(p).strip() for p in (data.get("prompts") or []) if str(p).strip()]
-    prompts += [text[:300] for text in chunks[len(prompts):]]
-    return [f"{prompt}, {style}, {NO_TEXT}" for prompt in prompts[:len(chunks)]]
-
-
 def fallback_prompts(chunks: List[str]) -> List[str]:
-    return [f"{text[:300]}, {DEFAULT_STYLE}, {NO_TEXT}" for text in chunks]
+    return [f"{text[:300]}, {PLAIN_BACKGROUND}, {DEFAULT_STYLE}, {NO_TEXT}" for text in chunks]
 
 
-def write_prompts(chunks: List[str]) -> List[str]:
-    """Nhờ Gemini viết prompt vẽ; không có key hoặc Gemini lỗi thì vẽ thẳng
-    từ lời đọc — ảnh kém sát ý hơn nhưng job không hỏng."""
-    from config.settings import GEMINI_API_KEY, GEMINI_MODEL
+def fallback_plan(sentences: List[str], timings: List[Tuple[float, float]], mode: str) -> Tuple[List[str], List[Slide]]:
+    """Không có storyboard: chia theo thời lượng, vẽ thẳng từ lời đọc."""
+    total = timings[-1][1]
+    if mode == "scenes":
+        starts = group_by_duration(timings, max(SCENE_SEC, total / MAX_SCENES))
+        return fallback_prompts(chunk_texts(sentences, starts)), scene_slides(starts, timings)
+    count = few_count(timings)
+    starts = group_by_duration(timings, total / count)[:count]
+    return fallback_prompts(chunk_texts(sentences, starts)), cycle_slides(timings, len(starts))
 
-    if not GEMINI_API_KEY:
-        return fallback_prompts(chunks)
+
+def plan(sentences: List[str], timings: List[Tuple[float, float]], mode: str) -> Tuple[List[str], List[Slide]]:
+    """(prompt cho từng ảnh, lịch chiếu ảnh)."""
+    total = timings[-1][1]
+    count = few_count(timings) if mode == "few" else min(MAX_SCENES, max(1, round(total / SCENE_SEC)))
     try:
-        from google import genai
-        from google.genai import types
-
-        from core.translator.llm_common import call_with_retry
-
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        config = types.GenerateContentConfig(temperature=0.7, response_mime_type="application/json")
-        response = call_with_retry(
-            lambda: client.models.generate_content(model=GEMINI_MODEL, contents=_prompt_request(chunks),
-                                                   config=config),
-            what="Gemini (prompt ảnh)",
-        )
-        return parse_prompts(response.text or "", chunks)
+        board = write_storyboard(sentences, timings, mode, count)
     except Exception as exc:
-        print(f"[Ảnh minh hoạ] Gemini không viết được prompt ({exc}), vẽ thẳng từ lời đọc.")
-        return fallback_prompts(chunks)
+        print(f"[Ảnh minh hoạ] Không dựng được storyboard ({exc}), vẽ thẳng từ lời đọc.")
+        return fallback_plan(sentences, timings, mode)
+
+    if mode == "few":
+        prompts = [prompt for _, prompt in board][:count]
+        return prompts, cycle_slides(timings, len(prompts))
+    starts = [start for start, _ in board]
+    kept = tidy_starts(starts, timings)
+    return [board[k][1] for k in kept], scene_slides([starts[k] for k in kept], timings)
 
 
+# ── Ghép video ───────────────────────────────────────────────
 def make_slideshow(images: List[Path], slides: List[Slide], audio: Path, output: Path) -> None:
     """Ghép ảnh theo lịch chiếu với giọng đọc thành mp4."""
     listing = output.with_suffix(".txt")
@@ -157,11 +272,8 @@ def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: 
     from core import image_client
 
     t0 = time.time()
-    starts, slides = plan(timings, timings[-1][1], mode)
-    chunks = chunk_texts(sentences, starts)
-
-    progress(75, f"Đang lên ý tưởng cho {len(chunks)} ảnh minh hoạ...")
-    prompts = write_prompts(chunks)
+    progress(75, "Đang đọc hiểu kịch bản để dựng cảnh minh hoạ...")
+    prompts, slides = plan(sentences, timings, mode)
     t1 = time.time()
 
     progress(80, f"Đang vẽ {len(prompts)} ảnh minh hoạ...")
