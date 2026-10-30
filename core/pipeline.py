@@ -55,6 +55,8 @@ class DubbingConfig:
     # Tua nhanh hình ở khoảng lặng cho khớp giọng đọc, tối đa bấy nhiêu lần
     # (core/video_retime.py). <= 1 là tắt: hình giữ nguyên, giọng xếp theo hình.
     max_video_speed: float = 0.0
+    # "Đọc kịch bản": ảnh minh hoạ, xem core/script_images.MODES.
+    script_images: str = "none"
     original_volume: float = 0.1            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -90,6 +92,8 @@ class DubbingResult:
     #: So token that da dung qua API dich — xem core/translator/base.py.
     translate_prompt_tokens: int = 0
     translate_completion_tokens: int = 0
+    #: Phần phụ hỏng nhưng job vẫn xong (vd không vẽ được ảnh minh hoạ).
+    notice: str = ""
 
 
 ProgressCallback = Callable[[int, str], None]  # (percent, message)
@@ -388,7 +392,8 @@ class DubbingPipeline:
                             ref_audio=cfg.tts_ref_audio, language=cfg.target_language)
             synthesized = tts.synthesize_all(segments)
 
-            _progress(90, "Ghép các câu thành một file âm thanh...")
+            # Có ảnh minh hoạ thì còn các bước 75-95% (core/script_images.illustrate).
+            _progress(70 if cfg.script_images != "none" else 90, "Ghép các câu thành một file âm thanh...")
             output_audio = cfg.output_dir / f"{uuid.uuid4().hex}_script.mp3"
             timings = assemble(synthesized, output_audio)
             voiced = {id(seg): timing for (seg, _), timing in zip(synthesized, timings)}
@@ -403,8 +408,12 @@ class DubbingPipeline:
             )
             result.timings["tts"] = round(time.time() - t0, 2)
 
+            output = output_audio
+            if cfg.script_images != "none" and timings:
+                output = self._illustrate_script(synthesized, timings, output_audio, job_temp_dir, result, _progress)
+
             _progress(100, "✅ Hoàn tất!")
-            result.output_video = output_audio
+            result.output_video = output
             result.srt_path = srt_path
             result.segments = segments
             result.success = True
@@ -420,6 +429,25 @@ class DubbingPipeline:
                 shutil.rmtree(job_temp_dir, ignore_errors=True)
 
         return result
+
+    def _illustrate_script(self, synthesized, timings, audio: Path, work_dir: Path,
+                           result: DubbingResult, progress) -> Path:
+        """Thêm ảnh minh hoạ vào giọng đọc kịch bản, trả về mp4. Hỏng thì vẫn
+        trả file mp3 kèm lời nhắn — không bỏ phí phần giọng đã đọc xong."""
+        from core.script_images import illustrate
+
+        video = audio.with_suffix(".mp4")
+        try:
+            result.timings.update(illustrate(
+                [(seg.translated or seg.text) for seg, _ in synthesized], timings, audio, video,
+                work_dir / "images", self.config.script_images, progress,
+            ))
+        except Exception as exc:
+            video.unlink(missing_ok=True)
+            result.notice = f"Không tạo được ảnh minh hoạ: {exc}"
+            return audio
+        audio.unlink(missing_ok=True)
+        return video
 
     def run(
         self,

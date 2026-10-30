@@ -230,10 +230,16 @@ class Job(db.Model):
         return self.kind == JobKind.SCRIPT
 
     @property
+    def is_audio_only(self) -> bool:
+        """Job kịch bản không có ảnh minh hoạ: video_name/video_url giữ file mp3."""
+        return self.is_script and not (self.video_name or "").endswith(".mp4")
+
+    @property
     def download_video_name(self) -> str:
-        # Job kịch bản: video_name/video_url giữ file mp3 kết quả.
-        if self.is_script:
+        if self.is_audio_only:
             return f"{self._download_stem} (giọng đọc).mp3"
+        if self.is_script:
+            return f"{self._download_stem} (minh hoạ).mp4"
         return f"{self._download_stem} (lồng tiếng).mp4"
 
     @property

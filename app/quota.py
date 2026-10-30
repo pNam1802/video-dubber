@@ -17,6 +17,7 @@ from app.models import Job, JobStatus, User
 from config.settings import (
     CPU_COST_PER_SECOND,
     GPU_COST_PER_SECOND,
+    IMAGE_GPU_COST_PER_SECOND,
     QUOTA_GPU_SECONDS_PER_DAY,
     QUOTA_JOBS_PER_DAY,
     QUOTA_STORAGE_MB,
@@ -60,6 +61,11 @@ def estimate_cost(gpu_seconds: float | None) -> float:
 def estimate_cpu_cost(cpu_seconds: float | None) -> float:
     """Như estimate_cost(), cho phần chạy trên container CPU (giai đoạn 2)."""
     return round((cpu_seconds or 0) * CPU_COST_PER_SECOND, 6)
+
+
+def estimate_image_cost(gpu_seconds: float | None) -> float:
+    """Như estimate_cost(), cho ảnh minh hoạ vẽ trên GPU L40S."""
+    return round((gpu_seconds or 0) * IMAGE_GPU_COST_PER_SECOND, 6)
 
 
 def _limits(user: User) -> tuple[int, float, int]:

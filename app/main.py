@@ -74,6 +74,7 @@ def _recent_outputs(limit: int = 8) -> list[dict[str, str | None]]:
             "video_url": job.video_url,
             "download_video_name": job.download_video_name,
             "is_script": job.is_script,
+            "is_audio_only": job.is_audio_only,
             # ISO có múi giờ (UTC) — trình duyệt tự đổi sang giờ của người xem.
             "created_at": _utc_iso(job.created_at),
             "target_language": job.target_language,

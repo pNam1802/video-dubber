@@ -239,6 +239,11 @@ GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))
 # Modal tinh theo muc dung that — so nay la can duoi.
 CPU_COST_PER_SECOND = float(os.getenv("CPU_COST_PER_SECOND", "0.0000175"))
 
+# Anh minh hoa "Doc kich ban" ve tren L40S (ImageGenerator trong modal_app.py),
+# ~$1.95/gio theo bang gia Modal. Tinh tren thoi gian cho ve, gom ca nap model
+# khi container lanh.
+IMAGE_GPU_COST_PER_SECOND = float(os.getenv("IMAGE_GPU_COST_PER_SECOND", "0.000542"))
+
 # Gia LLM THAT (USD / 1 trieu token) — dung de tinh chi phi DICH thuc su,
 # khac han GPU_COST_PER_SECOND (tien Modal, khong lien quan gi den API
 # Gemini/OpenAI). Chot tu trang gia chinh thuc luc 08/09/2026, bac Standard:

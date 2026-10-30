@@ -16,6 +16,7 @@ Kiến trúc:
              --spawn()-->  Composer (CPU, giai đoạn 2)  --ghi-->  Postgres + Volume
                              --remote()-->  VoiceCloner (GPU, giọng VieNeu)
                              --remote()-->  EnglishCloner (GPU, giọng Chatterbox)
+                             --remote()-->  ImageGenerator (GPU, ảnh minh hoạ kịch bản)
 Web và GPU dùng chung một Volume cho file upload/kết quả, và chung một Postgres
 để trao đổi tiến trình — nên web không cần chờ GPU, và request HTTP không bao giờ
 chạm giới hạn 150 giây của Modal.
@@ -98,6 +99,15 @@ chatterbox_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
     .pip_install("chatterbox-tts==0.1.7", "soundfile==0.13.1")
+    .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
+)
+
+# Anh RIENG cho anh minh hoa "Doc kich ban" (Z-Image-Turbo qua diffusers).
+# Chi chay core/image_client.py — nhan prompt, tra PNG. Ban ghim la ban da
+# chay thu that tren L40S ngay 30/10/2026.
+image_gen_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("torch==2.7.1", "diffusers==0.42.1", "transformers==5.22.1", "accelerate==1.15.0")
     .add_local_dir(".", remote_path="/root", ignore=SOURCE_IGNORE)
 )
 
@@ -331,6 +341,42 @@ class EnglishCloner:
         from core.chatterbox_client import synthesize_with
 
         return synthesize_with(self.tts, texts, ref_wav)
+
+
+# Anh minh hoa cho "Doc kich ban". Z-Image-Turbo ~20 GB trong so (bf16) nen
+# can GPU 24 GB+; L40S (48 GB) chay khong can offload, ~3,2 giay/anh 1280x720.
+# Composer goi .remote() mot lan cho ca kich ban.
+@app.cls(
+    image=image_gen_image,
+    gpu="L40S",
+    volumes={"/models": model_volume},
+    env={"HF_HOME": "/models/huggingface", "XDG_CACHE_HOME": "/models/cache"},
+    timeout=1800,
+    scaledown_window=60,
+    max_containers=1,
+)
+class ImageGenerator:
+    """Container GPU: Z-Image-Turbo vẽ ảnh minh hoạ từ prompt."""
+
+    @modal.enter()
+    def load(self):
+        import os
+
+        from core.image_client import load_model
+
+        # Như VoiceCloner: đã có bản cache thì nạp OFFLINE, chỉ lần đầu mới tải.
+        cached = os.path.isdir("/models/huggingface/hub/models--Tongyi-MAI--Z-Image-Turbo")
+        if cached:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+        self.pipe = load_model()
+        if not cached:
+            model_volume.commit()
+
+    @modal.method()
+    def generate(self, prompts: list) -> list:
+        from core.image_client import generate_with
+
+        return generate_with(self.pipe, prompts)
 
 
 @app.function(volumes=VOLUMES, secrets=secrets, env=RUNTIME_ENV, timeout=600)

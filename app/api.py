@@ -36,6 +36,7 @@ from config.settings import (
     tts_engine_supports,
 )
 from core.pipeline import DubbingConfig
+from core.script_images import MODES as SCRIPT_IMAGE_MODES
 from core.script_reader import split_script
 from core.transcriber import Segment
 from core.translator import get_translator
@@ -222,6 +223,7 @@ def create_script_job():
         return jsonify({"error": "Kịch bản không có câu nào để đọc."}), 400
 
     language = _pick("target_language", SCRIPT_LANGUAGES, "vi")
+    script_images = _pick("script_images", set(SCRIPT_IMAGE_MODES), "none")
     tts_engine = _pick("tts_engine", ALLOWED_TTS_ENGINES, "edge-tts")
     tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")
     if not tts_engine_supports(tts_engine, language):
@@ -270,7 +272,7 @@ def create_script_job():
         return jsonify({"error": "Không lưu được kịch bản, hãy thử lại.", "code": 500}), 500
 
     config = DubbingConfig(tts_engine=tts_engine, tts_voice=tts_voice, tts_ref_audio=ref_audio,
-                           target_language=language, subtitle_mode="target")
+                           target_language=language, subtitle_mode="target", script_images=script_images)
     start_script_job(current_app._get_current_object(), job.id, config)
     return jsonify({"job_id": job.id}), 202
 

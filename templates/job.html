@@ -120,9 +120,10 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-5 gap-lg items-start">
     <div class="lg:col-span-3 flex flex-col gap-md">
-      {# Job kịch bản: video_url là file mp3. Giữ id resultVideo — phần lời
-         thoại bên cạnh tua theo phần tử này, audio hay video đều như nhau. #}
-      {% if job.is_script %}
+      {# Job kịch bản không có ảnh minh hoạ: video_url là file mp3. Giữ id
+         resultVideo — phần lời thoại bên cạnh tua theo phần tử này, audio hay
+         video đều như nhau. #}
+      {% if job.is_audio_only %}
       <audio id="resultVideo" controls class="w-full"
         {% if job.video_url %}src="{{ job.video_url }}"{% endif %}></audio>
       {% else %}
@@ -133,7 +134,7 @@
       <div class="flex flex-wrap gap-3">
         <a id="downloadVideo" href="{{ job.video_url or '#' }}" download="{{ job.download_video_name }}"
           class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full font-bold flex items-center gap-2">
-          <span class="material-symbols-outlined text-[18px]">download</span>{{ 'Tải âm thanh' if job.is_script else 'Tải video' }}
+          <span class="material-symbols-outlined text-[18px]">download</span>{{ 'Tải âm thanh' if job.is_audio_only else 'Tải video' }}
         </a>
         {% if job.srt_url %}
         <a href="{{ job.srt_url }}" download="{{ job.download_srt_name }}"

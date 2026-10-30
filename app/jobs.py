@@ -18,7 +18,7 @@ from flask import Flask
 from app.extensions import db
 from app.mailer import notify_job_status
 from app.models import Job, JobStatus, TranscriptSegment, utcnow
-from app.quota import estimate_cost, estimate_cpu_cost
+from app.quota import estimate_cost, estimate_cpu_cost, estimate_image_cost
 from config.settings import JOB_RUNNER, MODAL_APP_NAME
 from core.pipeline import DubbingConfig, DubbingPipeline
 from core.transcriber import Segment
@@ -413,18 +413,22 @@ def run_script_job(flask_app: Flask, job_id: int, config: DubbingConfig) -> None
             return
 
         job.elapsed_sec = result.elapsed_seconds
-        job.estimated_cost_usd = estimate_cpu_cost(result.elapsed_seconds)
+        job.estimated_cost_usd = (estimate_cpu_cost(result.elapsed_seconds)
+                                  + estimate_image_cost(result.timings.get("images")))
         job.tts_sec = result.timings.get("tts")
         job.finished_at = utcnow()
 
         if result.success and result.output_video:
-            audio_name = result.output_video.name
+            # mp3, hoặc mp4 khi có ảnh minh hoạ.
+            output_name = result.output_video.name
             srt_name = result.srt_path.name
             job.status = JobStatus.DONE
             job.progress = 100
             job.message = "Đã đọc xong kịch bản."
-            job.video_name = audio_name
-            job.video_url = f"/media/output/{quote(audio_name)}"
+            if result.notice:
+                job.message = f"Đã đọc xong kịch bản. {result.notice}"[:500]
+            job.video_name = output_name
+            job.video_url = f"/media/output/{quote(output_name)}"
             job.srt_name = srt_name
             job.srt_url = f"/media/output/{quote(srt_name)}"
             job.file_size = result.output_video.stat().st_size + result.srt_path.stat().st_size
