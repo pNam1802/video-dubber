@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import io
 import threading
-from typing import Any, List
+from typing import Any, List, Optional, Tuple
 
 MODEL_ID = "Tongyi-MAI/Z-Image-Turbo"
 # Khung 16:9 cho video; Z-Image cần cạnh chia hết cho 16.
@@ -35,15 +35,17 @@ def load_model() -> Any:
     return pipe.to("cuda")
 
 
-def generate_with(pipe: Any, prompts: List[str], seed: int = 42) -> List[bytes]:
+def generate_with(pipe: Any, prompts: List[str], seed: int = 42,
+                  sizes: Optional[List[Tuple[int, int]]] = None) -> List[bytes]:
     """Vẽ từng prompt, trả PNG đúng thứ tự đầu vào. Cùng một seed cho mọi ảnh
-    để bố cục và nét vẽ đồng đều hơn giữa các cảnh."""
+    để bố cục và nét vẽ đồng đều hơn giữa các cảnh. sizes: (rộng, cao) riêng
+    cho từng ảnh, cạnh chia hết cho 16 — mặc định khung 16:9."""
     import torch
 
     out: List[bytes] = []
-    for prompt in prompts:
+    for prompt, (width, height) in zip(prompts, sizes or [(WIDTH, HEIGHT)] * len(prompts)):
         image = pipe(
-            prompt=prompt, width=WIDTH, height=HEIGHT, num_inference_steps=STEPS, guidance_scale=0.0,
+            prompt=prompt, width=width, height=height, num_inference_steps=STEPS, guidance_scale=0.0,
             generator=torch.Generator("cuda").manual_seed(seed),
         ).images[0]
         buf = io.BytesIO()
@@ -52,7 +54,7 @@ def generate_with(pipe: Any, prompts: List[str], seed: int = 42) -> List[bytes]:
     return out
 
 
-def generate(prompts: List[str]) -> List[bytes]:
+def generate(prompts: List[str], sizes: Optional[List[Tuple[int, int]]] = None) -> List[bytes]:
     """Điểm vào cho pipeline: tự chọn chạy trên Modal hay tại chỗ."""
     from config.settings import JOB_RUNNER, MODAL_APP_NAME
 
@@ -60,7 +62,7 @@ def generate(prompts: List[str]) -> List[bytes]:
         import modal
 
         generator = modal.Cls.from_name(MODAL_APP_NAME, "ImageGenerator")()
-        return generator.generate.remote(prompts)
+        return generator.generate.remote(prompts, sizes)
 
     global _local_pipe
     with _local_lock:
@@ -69,4 +71,4 @@ def generate(prompts: List[str]) -> List[bytes]:
                 _local_pipe = load_model()
             except ImportError as exc:
                 raise RuntimeError("Chưa cài diffusers để sinh ảnh: pip install diffusers") from exc
-        return generate_with(_local_pipe, prompts)
+        return generate_with(_local_pipe, prompts, sizes=sizes)

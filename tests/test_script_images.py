@@ -71,11 +71,10 @@ def test_tidy_starts_merges_short_scenes_and_caps_count():
 
 # ── Storyboard ───────────────────────────────────────────────
 BOARD = {
-    "style": "anime illustration",
-    "main_character": {"look": "young maid with blonde hair and a white ribbon."},
+    "main_character": {"look": "young maid with long hair and a ribbon."},
     "scenes": [
-        {"start": 4, "main": False, "action": "extreme close-up of an old man's furious eye"},
-        {"start": 2, "main": True, "action": "Daisy waters the flowers."},
+        {"start": 4, "main": False, "shot": "close-up", "action": "extreme close-up of an old man's furious eye"},
+        {"start": 2, "main": True, "shot": "Full body shot", "action": "Daisy waters the flowers."},
         {"start": 9, "main": True, "action": ""},
     ],
 }
@@ -85,17 +84,25 @@ def test_parse_storyboard_main_character_or_symbolic():
     board = script_images.parse_storyboard(json.dumps(BOARD), sentence_count=8)
     assert [start for start, _ in board] == [0, 3]  # sắp theo câu, cảnh đầu phủ từ câu 0
     daisy, symbolic = (prompt for _, prompt in board)
-    assert daisy.startswith("Daisy waters the flowers, The only character in the image: young maid")
+    assert daisy.startswith("full body shot, Daisy waters the flowers, The only character in the image: young maid")
     assert "ribbon, Solo" in daisy and script_images.PLAIN_BACKGROUND in daisy
-    assert "anime illustration" in daisy and NO_TEXT in daisy
-    # Vắng nhân vật chính: cận cảnh tượng trưng, không chèn ngoại hình nhân vật chính.
+    assert daisy.endswith(f"{script_images.MANGA_STYLE}, {NO_TEXT}")
+    # Vắng nhân vật chính: cận cảnh tượng trưng, không chèn ngoại hình hay cỡ cảnh.
     assert script_images.SYMBOLIC_LOOK in symbolic and "maid" not in symbolic
+    assert symbolic.startswith("extreme close-up of") and script_images.MANGA_STYLE in symbolic
+
+
+def test_parse_storyboard_ignores_unknown_shot():
+    raw = json.dumps({"main_character": "a boy",
+                      "scenes": [{"start": 1, "main": True, "shot": "drone flyover", "action": "running"}]})
+    [(_, prompt)] = script_images.parse_storyboard(raw, sentence_count=1)
+    assert prompt.startswith("running, The only character")
 
 
 def test_parse_storyboard_without_main_character_is_all_symbolic():
     raw = json.dumps({"main_character": None, "scenes": [{"start": 1, "main": True, "action": "a glowing star"}]})
     [(_, prompt)] = script_images.parse_storyboard(raw, sentence_count=3)
-    assert script_images.SYMBOLIC_LOOK in prompt and script_images.DEFAULT_STYLE in prompt
+    assert script_images.SYMBOLIC_LOOK in prompt and script_images.MANGA_STYLE in prompt
 
 
 @pytest.mark.parametrize("main_character, main", [
@@ -113,6 +120,7 @@ def test_parse_storyboard_tolerates_loose_json(main_character, main):
 def test_storyboard_request_carries_rules_and_numbered_sentences():
     request = script_images.storyboard_request(["Một.", "Hai."], [(0.0, 1.0), (61.0, 62.0)], "scenes", 2)
     assert "never show any other character and never show scenery" in request
+    assert "black and white manga panel" in request and "dynamic action pose" in request
     assert "[1] (0:00) Một." in request and "[2] (1:01) Hai." in request
 
 

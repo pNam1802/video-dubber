@@ -27,6 +27,7 @@ from config.settings import (
 	GEMINI_API_KEY,
 	GEMINI_TTS_MODEL,
 	GEMINI_TTS_STYLES,
+	NARRATOR_VOICE_REF,
 	NORA_VOICE_REF,
 	TEMP_DIR,
 	TTS_CONCURRENCY,
@@ -378,6 +379,8 @@ class TTSEngine:
 
 	def _chatterbox_ref(self) -> bytes | None:
 		"""None = giọng có sẵn của Chatterbox, còn lại là file mẫu để clone."""
+		if self.voice_name == "@narrator":
+			return NARRATOR_VOICE_REF.read_bytes()
 		if self.voice_name != "@user":
 			return None
 		if self.ref_audio is None or not self.ref_audio.is_file():

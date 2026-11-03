@@ -42,11 +42,13 @@
       </p>
       <fieldset class="flex flex-col gap-2">
         <legend class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Ảnh minh hoạ</legend>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {% for value, label, hint in [
             ('none', 'Không có ảnh', 'Chỉ file mp3 + SRT'),
             ('few', '3–5 ảnh lặp lại', 'Vài ảnh cho cả kịch bản, chiếu lần lượt rồi lặp lại'),
-            ('scenes', 'Ảnh theo từng cảnh', 'Mỗi ~12 giây một ảnh riêng, sát nội dung hơn')
+            ('scenes', 'Ảnh theo từng cảnh', 'Mỗi ~12 giây một ảnh riêng, sát nội dung hơn'),
+            ('manga', 'Trang manga', 'Truyện tranh đen trắng nhiều khung, có nhân vật và bối cảnh'),
+            ('recap', 'Manhwa recap', 'Ảnh webtoon màu ~6 giây đổi một lần, khung dọc trên nền mờ, zoom chậm')
           ] %}
           <label class="flex items-start gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 cursor-pointer has-[:checked]:border-primary">
             <input type="radio" name="script_images" value="{{ value }}" {% if value == 'none' %}checked{% endif %} class="w-4 h-4 mt-1 accent-primary">
@@ -799,7 +801,7 @@
         myduyen: "Mỹ Duyên — nữ miền Nam", kimthanh: "Kim Thanh — nữ miền Nam", male: "Thiện Minh — nam, kể chuyện",
         ductri: "Đức Trí — nam miền Nam", mine: "Giọng của bạn (clone)"
       },
-      chatterbox: { female: "Giọng có sẵn (Chatterbox)", mine: "Giọng của bạn (clone)" }
+      chatterbox: { narrator: "Narrator — kể chuyện (mặc định)", female: "Giọng có sẵn (Chatterbox)", mine: "Giọng của bạn (clone)" }
     };
     // Đích là tiếng Anh: HoaiMy/NamMinh đổi sang giọng bản xứ cùng khoá
     // (config.settings.TTS_VOICES_BY_LANGUAGE) — file nghe thử là giọng Việt nên ẩn.

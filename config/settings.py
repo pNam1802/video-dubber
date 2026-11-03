@@ -120,6 +120,7 @@ TTS_VOICES: dict[str, dict[str, str]] = {
 	# clone giong TIENG ANH tu file mau, chay tren GPU rieng
 	# (modal_app.py::EnglishCloner). "@builtin" la giong co san cua model.
 	"chatterbox": {
+		"narrator": "@narrator",    # giong ke chuyen mac dinh, xem NARRATOR_VOICE_REF
 		"female": "@builtin",
 		"mine": "@user",
 	},
@@ -149,6 +150,9 @@ def tts_engine_supports(engine: str, language: str) -> bool:
 # File mau cua giong mac dinh "Nora": VieNeu clone tu mot doan giong do chinh
 # VieNeu tao ra (khong phai giong nguoi that).
 NORA_VOICE_REF = ROOT_DIR / "core" / "voices" / "nora.wav"
+# Giong ke chuyen tieng Anh mac dinh cua Chatterbox: 10 giay giong doc sach
+# (khong nhac nen) cat tu mot video ke truyen manhwa.
+NARRATOR_VOICE_REF = ROOT_DIR / "core" / "voices" / "narrator_en.wav"
 # Giong mau nguoi dung tai len de clone: moi nguoi mot file
 # voices/user_<id>.wav tren volume du lieu.
 VOICE_SAMPLE_DIR = DATA_DIR / "voices"

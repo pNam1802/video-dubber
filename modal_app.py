@@ -373,10 +373,10 @@ class ImageGenerator:
             model_volume.commit()
 
     @modal.method()
-    def generate(self, prompts: list) -> list:
+    def generate(self, prompts: list, sizes: list | None = None) -> list:
         from core.image_client import generate_with
 
-        return generate_with(self.pipe, prompts)
+        return generate_with(self.pipe, prompts, sizes=[tuple(s) for s in sizes] if sizes else None)
 
 
 @app.function(volumes=VOLUMES, secrets=secrets, env=RUNTIME_ENV, timeout=600)

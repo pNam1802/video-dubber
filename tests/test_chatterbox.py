@@ -20,6 +20,19 @@ def test_chatterbox_builtin_voice_sends_no_sample(tmp_path):
     assert TTSEngine(engine="chatterbox", voice="female", tts_dir=tmp_path, language="en")._chatterbox_ref() is None
 
 
+def test_chatterbox_narrator_clones_bundled_sample(tmp_path):
+    from config.settings import NARRATOR_VOICE_REF
+
+    engine = TTSEngine(engine="chatterbox", voice="narrator", tts_dir=tmp_path, language="en")
+    assert engine._chatterbox_ref() == NARRATOR_VOICE_REF.read_bytes()
+
+
+def test_chatterbox_narrator_is_default_voice():
+    from config.settings import TTS_VOICES
+
+    assert next(iter(TTS_VOICES["chatterbox"])) == "narrator"
+
+
 def test_chatterbox_mine_reads_user_sample(tmp_path):
     sample = tmp_path / "me.wav"
     sample.write_bytes(b"RIFFme")

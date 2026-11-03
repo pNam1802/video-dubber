@@ -44,3 +44,6 @@ gTTS==2.5.4
 edge-tts==7.3.1
 pydub==0.25.1
 soundfile==0.13.1
+
+# ── Ảnh ("Đọc kịch bản": ghép trang manga, khung recap) ──
+Pillow==12.3.0
