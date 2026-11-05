@@ -40,31 +40,37 @@ BLUR_RADIUS = 28
 BACKGROUND_DIM = 0.55
 ENCODE_WORKERS = 4
 
-# Kiểu tranh anime mơ màng theo ảnh mẫu khách đưa (tóc bay, trời hoàng hôn
-# pastel, nước/ánh sáng lấp lánh) — chọn sau mấy vòng vẽ thử trên Z-Image
-# ngày 05/11/2026. Màu chỉ gắn vào BẦU TRỜI và ÁNH SÁNG: viết "rich pink" trơn
-# thì màu lây sang nội dung (tóc nhân vật hoá hồng, phố mọc hoa anh đào).
-# "not photorealistic": thiếu nó thì cận mặt hay ngả sang ảnh chụp.
-STYLE = ("beautiful dreamy anime illustration, full color, vivid saturated colors, "
-         "luminous sky with pastel pink, blue and golden sunset color grading, "
-         "hair blown by the wind with many fine flowing strands and glowing rim light, "
-         "sparkling light reflections, glittering bokeh and floating light particles, "
-         "painterly texture with soft glow, crisp clear details, intricate background, "
-         "delicate thin line art, anime face, not photorealistic, "
-         "highly detailed, masterpiece, best quality")
-# Nét nhân vật theo cùng bộ ảnh mẫu (nhất là nhân vật nữ), gắn ngay sau ngoại
+# Kiểu tranh màu nước manhwa lãng mạn theo ảnh mẫu khách đưa (girl1: cô gái cầm
+# hướng dương). Chỉnh 05-06/11/2026 theo nhận xét của người xem bản trước:
+# - nét mảnh, đứt quãng, hoà vào màu — KHÔNG viền đen dày ("clean outlines"
+#   kéo về anime TV; "no bold outlines, no cel shading" giữ chất tranh vẽ);
+# - tóc trong suốt, lọn bay, có vệt cọ — không thành mảng màu đặc;
+# - ánh ngược mạnh, bloom, bokeh vàng, vệt màu nước văng;
+# - mặt manhwa lãng mạn: mi mảnh cong nhiều sợi, má/mũi/môi ửng hồng tự nhiên.
+# Màu chỉ gắn vào BẦU TRỜI và ÁNH SÁNG: viết màu trơn thì lây sang nội dung
+# (tóc nhân vật hoá hồng, phố mọc hoa anh đào). "not a photo": thiếu nó thì
+# cận mặt hay ngả sang ảnh chụp.
+STYLE = ("loose expressive digital watercolor painting, romance manhwa key art, full color, "
+         "almost lineless, very thin broken lineart that dissolves into the paint, no bold outlines, no cel shading, "
+         "loose brush strokes in hair and clothes, light watercolor splatters and paint drips, "
+         "strong warm golden backlight shining through the hair, glowing rim light, intense backlight halo, "
+         "heavy soft bloom and dreamy glow, glittering golden bokeh orbs and floating sparkles, "
+         "luminous sky with pastel pink, blue and golden sunset color grading, soft gradient shading, "
+         "painting, not a photo, highly detailed, masterpiece, best quality")
+# Nét nhân vật theo cùng ảnh mẫu (nhất là nhân vật nữ), gắn ngay sau ngoại
 # hình mỗi nhân vật — giới tính đoán từ chính câu "look" Gemini viết.
-FEMALE_STYLE = ("beautiful delicate anime girl drawn in 2d illustration style with clean outlines, slender, "
-                "small elegant face, large shining anime eyes with sparkling highlights, rosy blushing cheeks, "
-                "small mouth, very long silky hair with many wispy translucent strands catching the light")
-MALE_STYLE = ("handsome delicate anime young man, slender, fine features, glossy eyes with soft highlights, "
-              "soft hair with fine wispy strands catching the light")
+FEMALE_STYLE = ("beautiful romance manhwa girl, delicate refined face, semi-realistic painted face, "
+                "expressive glossy eyes with fine curled eyelashes made of many thin lashes, "
+                "natural soft makeup with rosy blush on nose and cheeks, soft pink lips, "
+                "translucent hair with loose flyaway strands and visible brush strokes")
+MALE_STYLE = ("handsome romance manhwa young man, delicate refined features, semi-realistic painted face, "
+              "expressive eyes, soft hair with loose strands and visible brush strokes")
 # Kiểu "sunflower": nữ chính (nhân vật nữ ĐẦU TIÊN trong bảng nhân vật Gemini
 # viết — thường là nhân vật chính) mang đúng tóc và quần áo của ảnh mẫu girl1;
 # các nhân vật nữ khác giữ ngoại hình Gemini đặt để còn phân biệt được.
-SUNFLOWER_HEROINE = ("young woman, very long wavy flowing gradient hair, light golden blonde on top fading to dark "
-                     "navy black at the ends, wispy messy bangs, loose oversized white v-neck shirt, light blue jeans, "
-                     "small teal teardrop pendant on a thin silver necklace")
+SUNFLOWER_HEROINE = ("young woman, very long loose wavy hair in smoky brown and ash grey with soft blue and golden "
+                     "tints, translucent flyaway strands, wispy messy bangs, loose oversized white v-neck shirt, "
+                     "light blue jeans, small teal teardrop pendant on a thin silver necklace")
 DEFAULT_CHARACTER_STYLE = "dreamy"
 _FEMALE_RE = re.compile(r"\b(woman|women|girl|female|lady)\b", re.I)
 _MALE_RE = re.compile(r"\b(man|men|boy|male|guy)\b", re.I)
