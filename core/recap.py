@@ -39,45 +39,56 @@ ZOOM_TO = 1.06
 BLUR_RADIUS = 28
 BACKGROUND_DIM = 0.55
 ENCODE_WORKERS = 4
-# Chỉnh màu sau khi vẽ (06/11/2026): prompt màu nước + bloom cho ảnh hơi đục,
-# nhạt như phủ sương so với ảnh mẫu girl1. Mức "vừa" trong 3 mức thử — mạnh
-# hơn thì da ngả cam. Chỉnh ở đây chứ không ở prompt để không lệch ngoại hình.
-GRADE_CUTOFF = 0.5        # % điểm tối/sáng nhất bỏ qua khi kéo dãn tương phản
-GRADE_SATURATION = 1.25
-GRADE_CONTRAST = 1.10
-GRADE_SHARPEN = 90        # % UnsharpMask
+# Hậu kỳ sau khi vẽ, khớp tông ảnh mẫu girl1 (đo 06/11/2026: girl1 sáng 166,
+# tương phản 51, bão hoà 75, bóng đổ xám tím; ảnh Z-Image thô sáng ~181, bão
+# hoà ~49, bóng đổ nâu cam). Thông số dò tự động cho số đo khớp girl1 nhất.
+# Bloom + hạt sáng làm ở đây vì Z-Image không vẽ theo "double exposure",
+# "light streaks"; tự làm thì lần nào cũng như nhau, không tốn GPU.
+GRADE_BRIGHTNESS = 0.92
+GRADE_SATURATION = 1.3
+GRADE_SHADOW_TINT = (18, 0, 32)     # cộng vào R, G, B ở vùng tối -> xám tím
+GRADE_HIGHLIGHT_TINT = (6, -3, -14)  # vùng sáng -> hồng đào
+GRADE_SHARPEN = 80                   # % UnsharpMask
+BLOOM_THRESHOLD, BLOOM_RADIUS, BLOOM_STRENGTH = 190, 24, 0.55
+SPARKLES, LIGHT_STREAKS = 60, 5
 
 # Kiểu tranh màu nước manhwa lãng mạn theo ảnh mẫu khách đưa (girl1: cô gái cầm
-# hướng dương). Chỉnh 05-06/11/2026 theo nhận xét của người xem bản trước:
+# hướng dương). Chỉnh 05-06/11/2026 theo nhận xét của người xem các bản trước:
 # - nét mảnh, đứt quãng, hoà vào màu — KHÔNG viền đen dày ("clean outlines"
 #   kéo về anime TV; "no bold outlines, no cel shading" giữ chất tranh vẽ);
-# - tóc trong suốt, lọn bay, có vệt cọ — không thành mảng màu đặc;
-# - ánh ngược mạnh, bloom, bokeh vàng, vệt màu nước văng;
-# - mặt manhwa lãng mạn: mi mảnh cong nhiều sợi, má/mũi/môi ửng hồng tự nhiên.
-# Màu chỉ gắn vào BẦU TRỜI và ÁNH SÁNG: viết màu trơn thì lây sang nội dung
+# - tóc/vải trong suốt, lọn bay, vệt cọ — không thành mảng màu đặc;
+# - ánh hoàng hôn rọi từ SAU LƯNG xuyên qua tóc ("high-key lighting" làm ảnh
+#   sáng đều, mất quầng sáng — đừng thêm lại);
+# - tông hồng đào, bóng đổ lavender, nền tan thành bokeh;
+# - mặt manhwa lãng mạn: da trắng sứ ửng hồng, mi mảnh cong nhiều sợi.
+# Màu chỉ gắn vào ÁNH SÁNG / tông màu: viết màu trơn thì lây sang nội dung
 # (tóc nhân vật hoá hồng, phố mọc hoa anh đào). "not a photo": thiếu nó thì
 # cận mặt hay ngả sang ảnh chụp.
 STYLE = ("loose expressive digital watercolor painting, romance manhwa key art, full color, "
+         "warm peach and pink color grading with cool lavender shadows, "
+         "backlit by the low setting sun behind the subject, strong golden light glowing through the hair, "
+         "bright glowing rim light, "
          "almost lineless, very thin broken lineart that dissolves into the paint, no bold outlines, no cel shading, "
-         "loose brush strokes in hair and clothes, light watercolor splatters and paint drips, "
-         "strong warm golden backlight shining through the hair, glowing rim light, intense backlight halo, "
-         "heavy soft bloom and dreamy glow, glittering golden bokeh orbs and floating sparkles, "
-         "luminous sky with pastel pink, blue and golden sunset color grading, soft gradient shading, "
+         "translucent fabric and hair showing the light through them, soft vertical light streaks and paint drips, "
+         "a few drifting petals and sparkling water droplets, glittering bokeh, background melted into soft hazy bokeh, "
          "painting, not a photo, highly detailed, masterpiece, best quality")
 # Nét nhân vật theo cùng ảnh mẫu (nhất là nhân vật nữ), gắn ngay sau ngoại
 # hình mỗi nhân vật — giới tính đoán từ chính câu "look" Gemini viết.
 FEMALE_STYLE = ("beautiful romance manhwa girl, delicate refined face, semi-realistic painted face, "
                 "expressive glossy eyes with fine curled eyelashes made of many thin lashes, "
+                "pale porcelain skin with a rosy glow and glossy sparkle highlights on the cheeks, no freckles, "
                 "natural soft makeup with rosy blush on nose and cheeks, soft pink lips, "
                 "translucent hair with loose flyaway strands and visible brush strokes")
 MALE_STYLE = ("handsome romance manhwa young man, delicate refined features, semi-realistic painted face, "
               "expressive eyes, soft hair with loose strands and visible brush strokes")
 # Kiểu "sunflower": nữ chính (nhân vật nữ ĐẦU TIÊN trong bảng nhân vật Gemini
-# viết — thường là nhân vật chính) mang đúng tóc và quần áo của ảnh mẫu girl1;
-# các nhân vật nữ khác giữ ngoại hình Gemini đặt để còn phân biệt được.
-SUNFLOWER_HEROINE = ("young woman, very long loose wavy hair in smoky brown and ash grey with soft blue and golden "
-                     "tints, translucent flyaway strands, wispy messy bangs, loose oversized white v-neck shirt, "
-                     "light blue jeans, small teal teardrop pendant on a thin silver necklace")
+# viết — thường là nhân vật chính) mang đúng tóc và quần áo của ảnh mẫu girl1:
+# tóc hai tông (đỉnh vàng tro bắt nắng, đuôi xanh đen), áo sơ mi trắng rộng,
+# dây chuyền xanh ngọc. Nữ phụ giữ ngoại hình Gemini đặt để còn phân biệt.
+SUNFLOWER_HEROINE = ("young woman, very long loose wavy two-tone hair, light ash blonde on the top of the head lit "
+                     "golden by the sun, dark navy blue-black lower lengths with painterly streaks, translucent flyaway "
+                     "strands, wispy messy bangs, loose oversized white v-neck shirt, light blue jeans, "
+                     "small teal teardrop pendant on a thin silver necklace")
 DEFAULT_CHARACTER_STYLE = "dreamy"
 _FEMALE_RE = re.compile(r"\b(woman|women|girl|female|lady)\b", re.I)
 _MALE_RE = re.compile(r"\b(man|men|boy|male|guy)\b", re.I)
@@ -206,21 +217,59 @@ def plan(sentences: List[str], timings: List[Tuple[float, float]],
 
 
 # ── Dựng khung + video ───────────────────────────────────────
-def grade(img):
-    """Màu đậm hơn, tương phản rõ hơn, nét hơn — xem GRADE_*."""
-    from PIL import ImageEnhance, ImageFilter, ImageOps
+def grade(img, seed: int = 0):
+    """Hậu kỳ cho một ảnh vừa vẽ: tông màu khớp girl1, quầng sáng, hạt sáng."""
+    from PIL import ImageEnhance, ImageFilter
 
-    img = ImageOps.autocontrast(img, cutoff=GRADE_CUTOFF, preserve_tone=True)
+    img = ImageEnhance.Brightness(img).enhance(GRADE_BRIGHTNESS)
     img = ImageEnhance.Color(img).enhance(GRADE_SATURATION)
-    img = ImageEnhance.Contrast(img).enhance(GRADE_CONTRAST)
-    return img.filter(ImageFilter.UnsharpMask(radius=2, percent=GRADE_SHARPEN, threshold=2))
+    luts: List[int] = []
+    for ch in range(3):
+        for x in range(256):
+            t = x / 255
+            y = x + GRADE_SHADOW_TINT[ch] * (1 - t) ** 2 + GRADE_HIGHLIGHT_TINT[ch] * t ** 2
+            luts.append(max(0, min(255, round(y))))
+    img = img.point(luts).filter(ImageFilter.UnsharpMask(radius=2, percent=GRADE_SHARPEN, threshold=2))
+    return sparkle(bloom(img), seed)
 
 
-def compose_frame(panel: bytes, path: Path) -> None:
+def bloom(img):
+    """Vùng sáng nhoè ra rồi phủ lại kiểu Screen — quầng phát sáng."""
+    from PIL import Image, ImageChops, ImageEnhance, ImageFilter
+
+    span = 255 - BLOOM_THRESHOLD
+    mask = img.convert("L").point(lambda v: 0 if v < BLOOM_THRESHOLD else (v - BLOOM_THRESHOLD) * 255 // span)
+    glow = Image.composite(img, Image.new("RGB", img.size), mask).filter(ImageFilter.GaussianBlur(BLOOM_RADIUS))
+    return ImageChops.screen(img, ImageEnhance.Brightness(glow).enhance(BLOOM_STRENGTH * 2))
+
+
+def sparkle(img, seed: int = 0):
+    """Hạt sáng li ti + vài vệt sáng dọc mờ; vị trí cố định theo seed."""
+    import random
+
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+
+    rnd = random.Random(seed)
+    w, h = img.size
+    layer = Image.new("L", img.size, 0)
+    draw = ImageDraw.Draw(layer)
+    for _ in range(SPARKLES):
+        x, y, r = rnd.uniform(0, w), rnd.uniform(0, h), rnd.choice([1, 1, 2, 2, 3, 4])
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=rnd.randint(140, 255))
+    for _ in range(LIGHT_STREAKS):
+        x, y = rnd.uniform(0.05 * w, 0.95 * w), rnd.uniform(0, 0.5 * h)
+        draw.line([x, y, x + rnd.uniform(-4, 4), y + rnd.uniform(0.2 * h, 0.5 * h)],
+                  fill=rnd.randint(60, 110), width=rnd.choice([1, 2]))
+    layer = layer.filter(ImageFilter.GaussianBlur(1.2))
+    light = Image.composite(Image.new("RGB", img.size, (255, 238, 215)), Image.new("RGB", img.size), layer)
+    return ImageChops.screen(img, light)
+
+
+def compose_frame(panel: bytes, path: Path, seed: int = 0) -> None:
     """Khung dọc ở giữa, hai bên là chính ảnh đó phủ kín, mờ và tối."""
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-    img = grade(Image.open(io.BytesIO(panel)).convert("RGB"))
+    img = grade(Image.open(io.BytesIO(panel)).convert("RGB"), seed)
     frame = ImageOps.fit(img, (FRAME_W, FRAME_H)).filter(ImageFilter.GaussianBlur(BLUR_RADIUS))
     frame = ImageEnhance.Brightness(frame).enhance(BACKGROUND_DIM)
     front = ImageOps.contain(img, (FRAME_W, FRAME_H))
@@ -285,7 +334,7 @@ def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path
     frames_png = []
     for i, png in enumerate(drawn):
         path = work_dir / f"frame_{i:03d}.png"
-        compose_frame(png, path)
+        compose_frame(png, path, seed=i)
         frames_png.append(path)
     make_video(frames_png, slides, audio, output, work_dir)
     return {"image_prompts": round(t1 - t0, 2), "images": round(t2 - t1, 2),

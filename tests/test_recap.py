@@ -127,13 +127,16 @@ def test_compose_frame_keeps_portrait_centered_on_blurred_background(tmp_path):
     frame = Image.open(tmp_path / "f.png").convert("RGB")
     assert frame.size == (recap.FRAME_W, recap.FRAME_H)
     center, edge = frame.getpixel((recap.FRAME_W // 2, recap.FRAME_H // 2)), frame.getpixel((5, recap.FRAME_H // 2))
-    assert center == recap.grade(Image.new("RGB", (8, 8), (200, 40, 40))).getpixel((4, 4))
+    assert center[0] > center[1] + 100  # khung giữa vẫn là ảnh đỏ
     assert edge[0] < center[0]  # hai bên tối hơn
 
 
-def test_grade_makes_washed_out_colors_bolder():
+def test_grade_is_deterministic_and_warms_washed_out_colors():
     from PIL import Image
 
-    pastel = Image.new("RGB", (8, 8), (220, 190, 180))
-    graded = recap.grade(pastel).getpixel((4, 4))
-    assert graded[0] - graded[2] > 220 - 180  # màu đậm hơn
+    pastel = Image.new("RGB", (64, 80), (180, 160, 150))
+    graded = recap.grade(pastel, seed=3)
+    assert graded.tobytes() == recap.grade(pastel, seed=3).tobytes()
+    assert graded.tobytes() != recap.grade(pastel, seed=4).tobytes()  # hạt sáng đổi theo seed
+    r, g, b = graded.getpixel((1, 1))
+    assert r - b > 180 - 150  # màu đậm hơn
