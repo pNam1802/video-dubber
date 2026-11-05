@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -49,8 +50,17 @@ STYLE = ("beautiful dreamy anime illustration, full color, vivid saturated color
          "hair blown by the wind with many fine flowing strands and glowing rim light, "
          "sparkling light reflections, glittering bokeh and floating light particles, "
          "painterly texture with soft glow, crisp clear details, intricate background, "
-         "delicate thin line art, simple cute anime face, not photorealistic, "
+         "delicate thin line art, anime face, not photorealistic, "
          "highly detailed, masterpiece, best quality")
+# Nét nhân vật theo cùng bộ ảnh mẫu (nhất là nhân vật nữ), gắn ngay sau ngoại
+# hình mỗi nhân vật — giới tính đoán từ chính câu "look" Gemini viết.
+FEMALE_STYLE = ("beautiful delicate anime girl drawn in 2d illustration style with clean outlines, slender, "
+                "small elegant face, large shining anime eyes with sparkling highlights, rosy blushing cheeks, "
+                "small mouth, very long silky hair with many wispy translucent strands catching the light")
+MALE_STYLE = ("handsome delicate anime young man, slender, fine features, glossy eyes with soft highlights, "
+              "soft hair with fine wispy strands catching the light")
+_FEMALE_RE = re.compile(r"\b(woman|women|girl|female|lady)\b", re.I)
+_MALE_RE = re.compile(r"\b(man|men|boy|male|guy)\b", re.I)
 PANEL_NO_TEXT = f"{NO_TEXT}, no speech bubbles"
 SHOTS = ("wide establishing shot", "full body shot", "medium shot", "close-up", "extreme close-up",
          "low angle shot", "high angle shot", "over the shoulder shot", "dynamic action shot")
@@ -90,13 +100,21 @@ def recap_request(sentences: List[str], timings: List[Tuple[float, float]], coun
     )
 
 
+def styled_look(look: str) -> str:
+    if _FEMALE_RE.search(look):
+        return f"{look}, {FEMALE_STYLE}"
+    if _MALE_RE.search(look):
+        return f"{look}, {MALE_STYLE}"
+    return look
+
+
 def compose_shot(shot: dict, characters: Dict[str, str], locations: Dict[str, str]) -> str:
     kind = str(shot.get("shot") or "").strip().lower()
     parts = [kind] if kind in SHOTS else []
     parts.append(str(shot["action"]).strip().rstrip(". "))
 
     ids = [str(c).strip().lower() for c in shot.get("characters") or [] if isinstance(c, str)]
-    cast = [(i, characters[i]) for i in dict.fromkeys(ids) if i in characters][:2]
+    cast = [(i, styled_look(characters[i])) for i in dict.fromkeys(ids) if i in characters][:2]
     if len(cast) == 1:
         parts += [f"{cast[0][0]}: {cast[0][1]}", "solo, single character"]
     elif len(cast) == 2:

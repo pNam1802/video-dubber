@@ -29,9 +29,16 @@ def test_compose_shot_inserts_fixed_look_and_color_style():
     prompt = recap.compose_shot({"shot": "close-up", "characters": ["Jun"], "location": "room",
                                  "action": "jun looks shocked."},
                                 {"jun": "young man, black hair"}, {"room": "dim bedroom"})
-    assert prompt.startswith("close-up, jun looks shocked, jun: young man, black hair, solo")
+    assert prompt.startswith(f"close-up, jun looks shocked, jun: young man, black hair, {recap.MALE_STYLE}, solo")
     assert "background: dim bedroom" in prompt
     assert "full color" in prompt and "no speech bubbles" in prompt
+
+
+def test_character_style_follows_gender_in_look():
+    assert recap.styled_look("young woman, long brown hair").endswith(recap.FEMALE_STYLE)
+    assert recap.styled_look("teenage girl").endswith(recap.FEMALE_STYLE)
+    assert recap.styled_look("old man, grey beard").endswith(recap.MALE_STYLE)
+    assert recap.styled_look("a black cat") == "a black cat"
 
 
 def test_compose_shot_drops_unknown_characters_and_caps_two():
