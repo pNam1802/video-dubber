@@ -110,6 +110,15 @@ def test_guest_sees_landing_page_at_root(client):
     assert 'id="sidebar"' not in html
 
 
+def test_landing_shows_script_to_video_section(client):
+    html = client.get("/").get_data(as_text=True)
+    assert 'id="doc-kich-ban"' in html and 'href="#doc-kich-ban"' in html
+    for path in ["img/landing/recap/sunflower-smile.jpg", "img/landing/recap/video-frame.jpg",
+                 "recap_styles/sunflower.jpg", "recap_styles/dreamy.jpg"]:
+        assert f"/static/{path}?v=" in html
+        assert client.get(f"/static/{path}").status_code == 200
+
+
 def test_signed_in_user_gets_app_at_root_and_landing_at_gioi_thieu(as_user):
     assert 'id="sidebar"' in as_user.get("/").get_data(as_text=True)
     html = as_user.get("/gioi-thieu").get_data(as_text=True)

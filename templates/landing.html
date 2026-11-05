@@ -4,9 +4,9 @@
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
-  <title>Nora · Lồng tiếng Việt cho video</title>
+  <title>Nora · Lồng tiếng Việt và đọc kịch bản thành video</title>
   <meta name="description"
-    content="Nora lồng tiếng Việt cho video tiếng Anh: nhận dạng giọng nói, dịch, cho bạn duyệt bản dịch rồi đọc liền mạch bằng giọng tự nhiên.">
+    content="Nora lồng tiếng Việt cho video tiếng Anh, và biến kịch bản thành video truyện tranh có lời kể: giọng đọc tự nhiên, tranh minh hoạ manhwa vẽ theo từng cảnh, kèm phụ đề.">
 
   <link rel="icon" href="{{ asset('img/favicon.svg') }}" type="image/svg+xml">
   <link rel="icon" href="{{ asset('img/favicon-32.png') }}" sizes="32x32" type="image/png">
@@ -56,7 +56,7 @@
     img, video { display: block; max-width: 100%; }
 
     .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
-    section { padding: 96px 0; }
+    section { padding: 96px 0; scroll-margin-top: 68px; }  /* chừa chỗ thanh điều hướng dính trên */
     .eyebrow {
       font-size: 13px; font-weight: 500; letter-spacing: .08em;
       text-transform: uppercase; color: var(--accent); margin: 0 0 16px;
@@ -110,6 +110,31 @@
     .tag { font-size: 13px; padding: 3px 10px; border-radius: 99px; background: var(--card-hi); color: var(--ink-soft); white-space: nowrap; font-family: var(--mono); }
     .tag.accent { background: rgba(189, 253, 93, .12); color: var(--accent); }
     .credit { font-size: 14px; color: var(--ink-soft); margin-top: 18px; }
+
+    /* ── Đọc kịch bản → video manhwa ── */
+    .new-pill { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px; padding: 5px 14px 5px 6px; border: 1px solid var(--line); border-radius: 99px; font-size: 14px; color: var(--ink-soft); text-decoration: none; }
+    .new-pill:hover { border-color: var(--ink-soft); color: var(--ink); }
+    .new-pill b { background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 1px 9px; font-size: 12px; font-weight: 600; letter-spacing: .04em; }
+    .gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 0; }
+    .gallery figure { margin: 0; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: var(--card); aspect-ratio: 4 / 5; }
+    .gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
+    .gallery figure:hover img { transform: scale(1.04); }
+    .recap-detail { display: grid; grid-template-columns: 7fr 5fr; gap: 48px; align-items: start; margin-top: 72px; }
+    .frame { margin: 0; }
+    .frame img { width: 100%; height: auto; border-radius: 16px; border: 1px solid var(--line); aspect-ratio: 16 / 9; object-fit: cover; }
+    .frame figcaption { font-size: 14px; color: var(--ink-soft); margin-top: 12px; }
+    .modes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 56px; }
+    .mode { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+    .mode.featured { border-color: var(--accent); }
+    .mode h3 { font-size: 17px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .mode p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+    .styles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 20px; }
+    .style-card { display: grid; grid-template-columns: 96px 1fr; gap: 14px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+    .style-card img { width: 96px; height: 120px; object-fit: cover; border-radius: 10px; }
+    .style-card h3 { font-size: 17px; margin-bottom: 4px; }
+    .style-card p { margin: 0; font-size: 14px; color: var(--ink-soft); }
+    .recap-cost { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .recap-cost .price-value { margin: 0; font-size: 36px; }
 
     /* ── Các bước ── */
     .alt { background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -176,6 +201,11 @@
       .steps { grid-template-columns: 1fr 1fr; }
       .step:nth-child(3) { border-left: 0; padding-left: 0; }
       .why { grid-template-columns: 1fr; gap: 32px; }
+      .gallery { grid-template-columns: repeat(3, 1fr); }
+      .gallery figure:nth-child(n+4) { display: none; }
+      .recap-detail { grid-template-columns: 1fr; gap: 32px; margin-top: 48px; }
+      .modes { grid-template-columns: repeat(2, 1fr); }
+      .styles { grid-template-columns: 1fr; }
       .prices { grid-template-columns: 1fr; }
       .foot { grid-template-columns: 1fr 1fr; }
       .foot > :first-child { grid-column: 1 / -1; }
@@ -186,6 +216,10 @@
       .hero { padding: 64px 0 48px; }
       .lead { font-size: 18px; }
       .compare-grid, .voices { grid-template-columns: 1fr; }
+      .gallery { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .gallery figure:nth-child(n+4) { display: block; }
+      .gallery figure:nth-child(5) { display: none; }
+      .modes { grid-template-columns: 1fr; }
       .steps { grid-template-columns: 1fr; }
       .step, .step + .step { border-left: 0; padding-left: 0; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
       .step-num { margin-bottom: 16px; }
@@ -213,6 +247,7 @@
         Nora
       </a>
       <nav class="nav-links" aria-label="Mục lục">
+        <a href="#doc-kich-ban">Kịch bản → video</a>
         <a href="#cach-hoat-dong">Cách hoạt động</a>
         <a href="#giong-doc">Giọng đọc</a>
         <a href="#chi-phi">Chi phí</a>
@@ -232,13 +267,16 @@
   <main>
     <section class="hero">
       <div class="wrap">
-        <p class="eyebrow">Lồng tiếng tự động · Anh → Việt</p>
+        <a class="new-pill" href="#doc-kich-ban"><b>MỚI</b> Dán kịch bản, nhận video truyện tranh có lời kể →</a>
+        <p class="eyebrow">Lồng tiếng tự động · Anh → Việt · Kịch bản → video</p>
         <h1>Video tiếng Anh, giọng Việt liền mạch như người đọc thật.</h1>
         <p class="lead">Nora nghe, dịch và lồng tiếng Việt cho video của bạn. Bạn duyệt bản dịch trước khi
-          giọng đọc được tạo, nên kết quả luôn đúng ý.</p>
+          giọng đọc được tạo, nên kết quả luôn đúng ý. Chưa có video? Dán kịch bản, Nora đọc và vẽ tranh minh hoạ
+          cho bạn.</p>
         <div class="hero-actions">
           <a class="btn btn-accent" href="{{ start_url }}">{{ start_label }}</a>
           <a class="btn btn-line" href="#nghe-thu">Nghe thử bản lồng tiếng</a>
+          <a class="btn btn-line" href="#doc-kich-ban">Xem tranh minh hoạ</a>
         </div>
       </div>
     </section>
@@ -260,6 +298,89 @@
         <p class="credit">Trích đoạn 7:30–10:00 của video “Chap 6 — The Apocalypse Has Come”, kênh
           <strong>Manhwa Academy</strong>. Bản quyền nội dung gốc thuộc về kênh và tác giả truyện; chỉ dùng
           để minh hoạ cho đồ án, không dùng thương mại.</p>
+      </div>
+    </section>
+
+    <section id="doc-kich-ban">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Mới · Đọc kịch bản</p>
+            <h2>Dán kịch bản, nhận video truyện tranh có lời kể.</h2>
+          </div>
+          <p class="muted">Nora đọc kịch bản bằng giọng tự nhiên, AI vẽ tranh minh hoạ cho từng cảnh rồi dựng
+            thành video kiểu manhwa recap, kèm phụ đề SRT.</p>
+        </div>
+
+        <div class="gallery">
+          {% for file, alt in [
+            ('sunflower-smile.jpg', 'Cô gái tóc dài cầm hoa hướng dương cười rạng rỡ bên biển lúc hoàng hôn'),
+            ('sunflower-tears.jpg', 'Cô gái ngước nhìn bầu trời hoàng hôn, nước mắt lăn trên má'),
+            ('duo-street.jpg', 'Đôi bạn đi cạnh nhau trên con phố vắng, nắng chiều rọi phía sau'),
+            ('hero-boy.jpg', 'Chàng trai đeo kính, áo khoác jean, đứng sững trong tầng hầm ngập nắng'),
+            ('sunflower-walk.jpg', 'Cô gái áo sơ mi trắng rộng bước đi trên phố, tóc bay trong gió'),
+          ] %}
+          <figure class="reveal"><img src="{{ asset('img/landing/recap/' ~ file) }}" alt="{{ alt }}" width="480" height="600" loading="lazy"></figure>
+          {% endfor %}
+        </div>
+        <p class="credit">Toàn bộ tranh trên do Nora vẽ tự động từ một kịch bản dài 5 phút, không chỉnh sửa tay.</p>
+
+        <div class="recap-detail">
+          <figure class="frame reveal">
+            <img src="{{ asset('img/landing/recap/video-frame.jpg') }}" alt="Một khung hình trong video: tranh dọc ở giữa, hai bên là nền mờ" width="960" height="540" loading="lazy">
+            <figcaption>Khung hình trong video: tranh dọc ở giữa, hai bên là nền mờ, mỗi tranh zoom chậm và đổi cảnh
+              khoảng 6 giây một lần, khớp với lời kể.</figcaption>
+          </figure>
+          <div class="points">
+            <div class="point reveal">
+              <h3>Hiểu cả câu chuyện</h3>
+              <p>Gemini đọc toàn bộ kịch bản, lập danh sách nhân vật và bối cảnh cố định, nên nhân vật giữ nguyên
+                ngoại hình từ cảnh đầu đến cảnh cuối.</p>
+            </div>
+            <div class="point reveal">
+              <h3>Tranh màu nước manhwa</h3>
+              <p>Nắng hoàng hôn rọi sau lưng, tóc trong suốt bắt sáng, da ửng hồng, tông hồng đào. Mỗi tranh được
+                chỉnh màu và tạo quầng sáng tự động.</p>
+            </div>
+            <div class="point reveal">
+              <h3>Giọng Việt và giọng Anh</h3>
+              <p>Đọc kịch bản tiếng Việt hoặc tiếng Anh, có thêm giọng kể chuyện tiếng Anh trầm ấm cho truyện.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modes">
+          {% for name, note, featured in [
+            ('Chỉ giọng đọc', 'File mp3 kèm phụ đề SRT, không có tranh.', False),
+            ('3–5 tranh', 'Vài tranh cho cả kịch bản, chiếu lần lượt rồi lặp lại.', False),
+            ('Tranh theo cảnh', 'Mỗi khoảng 12 giây một tranh riêng, sát nội dung hơn.', False),
+            ('Trang manga', 'Truyện tranh đen trắng nhiều khung, có nhân vật và bối cảnh.', False),
+            ('Manhwa recap', 'Tranh màu khoảng 6 giây đổi một lần, khung dọc trên nền mờ.', True),
+          ] %}
+          <div class="mode reveal{{ ' featured' if featured else '' }}">
+            <h3>{{ name }}{% if featured %} <span class="tag accent">Mới</span>{% endif %}</h3>
+            <p>{{ note }}</p>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="styles">
+          {% for file, name, note in [
+            ('recap_styles/sunflower.jpg', 'Cô gái hướng dương', 'Mặc định. Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc.'),
+            ('recap_styles/dreamy.jpg', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI thiết kế theo kịch bản.'),
+          ] %}
+          <div class="style-card reveal">
+            <img src="{{ asset(file) }}" alt="Ảnh mẫu kiểu nhân vật {{ name }}" width="96" height="120" loading="lazy">
+            <div><h3>{{ name }}</h3><p>{{ note }}</p></div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="recap-cost reveal">
+          <div class="price-value">≈ $0,03</div>
+          <p class="muted" style="margin:0">mỗi phút video manhwa recap. Video 5 phút khoảng $0,19, đã gồm giọng
+            đọc, lập cảnh, vẽ tranh và dựng video.</p>
+        </div>
       </div>
     </section>
 
@@ -396,14 +517,15 @@
             </ul>
           </div>
         </div>
-        <p class="footnote">Ước tính theo bảng giá năm 2026. Giá giọng Gemini dự kiến tăng gấp đôi từ năm 2027.</p>
+        <p class="footnote">Ước tính theo bảng giá năm 2026. Giá giọng Gemini dự kiến tăng gấp đôi từ năm 2027.
+          Đọc kịch bản thành video manhwa recap: khoảng $0,03 mỗi phút video, đã gồm máy chủ và GPU vẽ tranh.</p>
       </div>
     </section>
 
     <section class="cta">
       <div class="wrap">
         <h2>Lồng tiếng video đầu tiên của bạn ngay hôm nay.</h2>
-        <p>Tải video lên, duyệt bản dịch, nhận video tiếng Việt kèm phụ đề.</p>
+        <p>Tải video lên để lồng tiếng Việt, hoặc dán kịch bản để nhận video truyện tranh có lời kể, kèm phụ đề.</p>
         <div class="hero-actions">
           <a class="btn btn-accent" href="{{ start_url }}">{{ start_label }}</a>
           <a class="btn btn-line" href="https://github.com/pNam1802/video-dubber" rel="noopener">Xem mã nguồn</a>
@@ -417,11 +539,13 @@
       <div class="foot">
         <div>
           <a class="brand" href="{{ url_for('main.landing') }}">Nora</a>
-          <p class="muted" style="max-width:36ch">Đồ án lồng tiếng Việt tự động cho video tiếng Anh.</p>
+          <p class="muted" style="max-width:36ch">Đồ án lồng tiếng Việt tự động cho video tiếng Anh và đọc kịch bản
+            thành video có tranh minh hoạ.</p>
         </div>
         <div>
           <h4>Sản phẩm</h4>
           <ul>
+            <li><a href="#doc-kich-ban">Kịch bản → video</a></li>
             <li><a href="#cach-hoat-dong">Cách hoạt động</a></li>
             <li><a href="#giong-doc">Giọng đọc</a></li>
             <li><a href="#chi-phi">Chi phí</a></li>
