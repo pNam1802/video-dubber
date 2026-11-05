@@ -39,6 +39,13 @@ ZOOM_TO = 1.06
 BLUR_RADIUS = 28
 BACKGROUND_DIM = 0.55
 ENCODE_WORKERS = 4
+# Chỉnh màu sau khi vẽ (06/11/2026): prompt màu nước + bloom cho ảnh hơi đục,
+# nhạt như phủ sương so với ảnh mẫu girl1. Mức "vừa" trong 3 mức thử — mạnh
+# hơn thì da ngả cam. Chỉnh ở đây chứ không ở prompt để không lệch ngoại hình.
+GRADE_CUTOFF = 0.5        # % điểm tối/sáng nhất bỏ qua khi kéo dãn tương phản
+GRADE_SATURATION = 1.25
+GRADE_CONTRAST = 1.10
+GRADE_SHARPEN = 90        # % UnsharpMask
 
 # Kiểu tranh màu nước manhwa lãng mạn theo ảnh mẫu khách đưa (girl1: cô gái cầm
 # hướng dương). Chỉnh 05-06/11/2026 theo nhận xét của người xem bản trước:
@@ -199,11 +206,21 @@ def plan(sentences: List[str], timings: List[Tuple[float, float]],
 
 
 # ── Dựng khung + video ───────────────────────────────────────
+def grade(img):
+    """Màu đậm hơn, tương phản rõ hơn, nét hơn — xem GRADE_*."""
+    from PIL import ImageEnhance, ImageFilter, ImageOps
+
+    img = ImageOps.autocontrast(img, cutoff=GRADE_CUTOFF, preserve_tone=True)
+    img = ImageEnhance.Color(img).enhance(GRADE_SATURATION)
+    img = ImageEnhance.Contrast(img).enhance(GRADE_CONTRAST)
+    return img.filter(ImageFilter.UnsharpMask(radius=2, percent=GRADE_SHARPEN, threshold=2))
+
+
 def compose_frame(panel: bytes, path: Path) -> None:
     """Khung dọc ở giữa, hai bên là chính ảnh đó phủ kín, mờ và tối."""
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
-    img = Image.open(io.BytesIO(panel)).convert("RGB")
+    img = grade(Image.open(io.BytesIO(panel)).convert("RGB"))
     frame = ImageOps.fit(img, (FRAME_W, FRAME_H)).filter(ImageFilter.GaussianBlur(BLUR_RADIUS))
     frame = ImageEnhance.Brightness(frame).enhance(BACKGROUND_DIM)
     front = ImageOps.contain(img, (FRAME_W, FRAME_H))
