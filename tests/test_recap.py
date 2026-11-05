@@ -29,16 +29,40 @@ def test_compose_shot_inserts_fixed_look_and_color_style():
     prompt = recap.compose_shot({"shot": "close-up", "characters": ["Jun"], "location": "room",
                                  "action": "jun looks shocked."},
                                 {"jun": "young man, black hair"}, {"room": "dim bedroom"})
-    assert prompt.startswith(f"close-up, jun looks shocked, jun: young man, black hair, {recap.MALE_STYLE}, solo")
+    assert prompt.startswith("close-up, jun looks shocked, jun: young man, black hair, solo")
     assert "background: dim bedroom" in prompt
     assert "full color" in prompt and "no speech bubbles" in prompt
 
 
 def test_character_style_follows_gender_in_look():
-    assert recap.styled_look("young woman, long brown hair").endswith(recap.FEMALE_STYLE)
-    assert recap.styled_look("teenage girl").endswith(recap.FEMALE_STYLE)
-    assert recap.styled_look("old man, grey beard").endswith(recap.MALE_STYLE)
-    assert recap.styled_look("a black cat") == "a black cat"
+    cast = recap.style_cast({"a": "young woman, long brown hair", "b": "teenage girl",
+                             "c": "old man, grey beard", "d": "a black cat"})
+    assert cast["a"] == f"young woman, long brown hair, {recap.FEMALE_STYLE}"
+    assert cast["b"].endswith(recap.FEMALE_STYLE)
+    assert cast["c"].endswith(recap.MALE_STYLE)
+    assert cast["d"] == "a black cat"
+
+
+def test_sunflower_style_dresses_only_the_first_woman_like_the_sample():
+    cast = recap.style_cast({"jun": "young man", "yena": "young woman, brown hair, lavender cardigan",
+                             "mom": "middle-aged woman, short grey hair"}, "sunflower")
+    assert cast["yena"] == f"{recap.SUNFLOWER_HEROINE}, {recap.FEMALE_STYLE}"
+    assert cast["mom"].startswith("middle-aged woman, short grey hair")
+    assert cast["jun"].endswith(recap.MALE_STYLE)
+
+
+def test_parse_recap_applies_character_style():
+    raw = _board([{"start": 1, "characters": ["yena"], "action": "yena smiles"}],
+                 characters=[{"id": "yena", "look": "young woman, brown hair"}])
+    assert recap.SUNFLOWER_HEROINE in recap.parse_recap(raw, 3, "sunflower")[0][1]
+    assert recap.SUNFLOWER_HEROINE not in recap.parse_recap(raw, 3)[0][1]
+
+
+def test_every_character_style_has_a_preview_image():
+    from config.settings import ROOT_DIR
+
+    for style in script_images.RECAP_CHARACTER_STYLES:
+        assert (ROOT_DIR / "static" / "recap_styles" / f"{style}.jpg").is_file()
 
 
 def test_compose_shot_drops_unknown_characters_and_caps_two():

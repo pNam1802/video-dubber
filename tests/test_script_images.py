@@ -210,6 +210,13 @@ def test_script_job_passes_image_mode(as_user, monkeypatch):
     assert captured["config"].script_images == "none"
 
 
+def test_script_job_passes_recap_character_style(as_user, monkeypatch):
+    _, captured = _post_script(as_user, monkeypatch, script_images="recap", recap_style="sunflower")
+    assert captured["config"].recap_style == "sunflower"
+    _, captured = _post_script(as_user, monkeypatch, script_images="recap", recap_style="robot")
+    assert captured["config"].recap_style == "dreamy"
+
+
 def test_illustrated_script_job_shows_video(app, as_user, monkeypatch, tmp_path):
     from app.jobs import run_script_job
     from core.pipeline import DubbingResult

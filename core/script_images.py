@@ -34,6 +34,9 @@ from typing import List, Optional, Tuple
 from utils.proc import run_command
 
 MODES = ("none", "few", "scenes", "manga", "recap")
+# Kiểu nhân vật của chế độ "recap" (xem core/recap.style_cast). Ảnh mẫu từng
+# kiểu ở static/recap_styles/<kiểu>.jpg cho nút "Xem mẫu" trên form.
+RECAP_CHARACTER_STYLES = ("dreamy", "sunflower")
 SCENE_SEC = 12.0
 SLIDE_SEC = 8.0
 # Cảnh ngắn hơn thì gộp vào cảnh trước — ảnh lướt qua quá nhanh không ai kịp xem.
@@ -293,7 +296,8 @@ def make_slideshow(images: List[Path], slides: List[Slide], audio: Path, output:
 
 
 def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: Path, output: Path,
-               work_dir: Path, mode: str, progress=lambda percent, message: None) -> dict:
+               work_dir: Path, mode: str, progress=lambda percent, message: None,
+               recap_style: str = RECAP_CHARACTER_STYLES[0]) -> dict:
     """Toàn bộ bước ảnh minh hoạ. Trả về thời gian từng bước (giây)."""
     import time
 
@@ -304,7 +308,7 @@ def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: 
     if mode == "recap":
         from core import recap
 
-        return recap.render(sentences, timings, audio, output, work_dir, progress)
+        return recap.render(sentences, timings, audio, output, work_dir, progress, style=recap_style)
     if mode == "manga":
         from core import manga
 

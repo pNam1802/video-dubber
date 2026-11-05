@@ -57,6 +57,8 @@ class DubbingConfig:
     max_video_speed: float = 0.0
     # "Đọc kịch bản": ảnh minh hoạ, xem core/script_images.MODES.
     script_images: str = "none"
+    # Kiểu nhân vật của chế độ "recap", xem core/script_images.RECAP_CHARACTER_STYLES.
+    recap_style: str = "dreamy"
     original_volume: float = 0.1            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -441,6 +443,7 @@ class DubbingPipeline:
             result.timings.update(illustrate(
                 [(seg.translated or seg.text) for seg, _ in synthesized], timings, audio, video,
                 work_dir / "images", self.config.script_images, progress,
+                recap_style=self.config.recap_style,
             ))
         except Exception as exc:
             video.unlink(missing_ok=True)

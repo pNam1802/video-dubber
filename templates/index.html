@@ -59,6 +59,31 @@
           </label>
           {% endfor %}
         </div>
+        {# Chỉ hiện khi chọn Manhwa recap — xem syncRecapStyle(). Ảnh mẫu ở static/recap_styles/. #}
+        <div id="recapStyles" class="hidden flex flex-col gap-2 mt-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Kiểu nhân vật</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {% for value, label, hint in [
+              ('dreamy', 'Mơ màng', 'Tranh anime mơ màng, ngoại hình nhân vật do AI đặt theo kịch bản'),
+              ('sunflower', 'Cô gái hướng dương', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc')
+            ] %}
+            <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary">
+              <label class="flex items-start gap-2 cursor-pointer">
+                <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1 accent-primary">
+                <span class="flex flex-col">
+                  <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
+                  <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
+                </span>
+              </label>
+              <details class="group">
+                <summary class="font-label-sm text-label-sm text-primary cursor-pointer select-none">Xem mẫu</summary>
+                <img src="{{ url_for('static', filename='recap_styles/' ~ value ~ '.jpg') }}" alt="Ảnh mẫu kiểu {{ label }}"
+                  loading="lazy" width="480" height="600" class="mt-2 w-full max-w-[240px] rounded-lg">
+              </details>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
         <p class="font-label-sm text-label-sm text-on-surface-variant">
           Có ảnh thì kết quả là video mp4 (ảnh do AI vẽ theo nội dung kịch bản) kèm phụ đề SRT.
         </p>
@@ -693,6 +718,15 @@
     }
     scriptInput.addEventListener("input", syncScriptCount);
 
+    // "Kiểu nhân vật" chỉ áp dụng cho chế độ ảnh Manhwa recap.
+    function syncRecapStyle() {
+      document.getElementById("recapStyles").classList.toggle("hidden", form.elements["script_images"].value !== "recap");
+    }
+    form.querySelectorAll('input[name="script_images"]').forEach(function (el) {
+      el.addEventListener("change", syncRecapStyle);
+    });
+    syncRecapStyle();
+
     function setMode(next) {
       mode = next;
       const script = mode === "script";
@@ -724,7 +758,7 @@
     // Chỉ gửi đúng các trường /api/script đọc — không kèm file video đã chọn ở tab kia.
     async function submitScript() {
       const data = new FormData();
-      ["csrf_token", "script", "target_language", "tts_engine", "tts_voice", "script_images"].forEach(function (name) {
+      ["csrf_token", "script", "target_language", "tts_engine", "tts_voice", "script_images", "recap_style"].forEach(function (name) {
         data.append(name, form.elements[name].value);
       });
       try {

@@ -59,6 +59,13 @@ FEMALE_STYLE = ("beautiful delicate anime girl drawn in 2d illustration style wi
                 "small mouth, very long silky hair with many wispy translucent strands catching the light")
 MALE_STYLE = ("handsome delicate anime young man, slender, fine features, glossy eyes with soft highlights, "
               "soft hair with fine wispy strands catching the light")
+# Kiểu "sunflower": nữ chính (nhân vật nữ ĐẦU TIÊN trong bảng nhân vật Gemini
+# viết — thường là nhân vật chính) mang đúng tóc và quần áo của ảnh mẫu girl1;
+# các nhân vật nữ khác giữ ngoại hình Gemini đặt để còn phân biệt được.
+SUNFLOWER_HEROINE = ("young woman, very long wavy flowing gradient hair, light golden blonde on top fading to dark "
+                     "navy black at the ends, wispy messy bangs, loose oversized white v-neck shirt, light blue jeans, "
+                     "small teal teardrop pendant on a thin silver necklace")
+DEFAULT_CHARACTER_STYLE = "dreamy"
 _FEMALE_RE = re.compile(r"\b(woman|women|girl|female|lady)\b", re.I)
 _MALE_RE = re.compile(r"\b(man|men|boy|male|guy)\b", re.I)
 PANEL_NO_TEXT = f"{NO_TEXT}, no speech bubbles"
@@ -100,12 +107,21 @@ def recap_request(sentences: List[str], timings: List[Tuple[float, float]], coun
     )
 
 
-def styled_look(look: str) -> str:
-    if _FEMALE_RE.search(look):
-        return f"{look}, {FEMALE_STYLE}"
-    if _MALE_RE.search(look):
-        return f"{look}, {MALE_STYLE}"
-    return look
+def style_cast(characters: Dict[str, str], style: str = DEFAULT_CHARACTER_STYLE) -> Dict[str, str]:
+    """Gắn nét vẽ theo giới tính (đoán từ câu "look") vào ngoại hình từng nhân
+    vật; kiểu "sunflower" thay hẳn ngoại hình nữ chính bằng SUNFLOWER_HEROINE."""
+    out: Dict[str, str] = {}
+    heroine_set = style != "sunflower"
+    for cid, look in characters.items():
+        if _FEMALE_RE.search(look):
+            if not heroine_set:
+                look, heroine_set = SUNFLOWER_HEROINE, True
+            out[cid] = f"{look}, {FEMALE_STYLE}"
+        elif _MALE_RE.search(look):
+            out[cid] = f"{look}, {MALE_STYLE}"
+        else:
+            out[cid] = look
+    return out
 
 
 def compose_shot(shot: dict, characters: Dict[str, str], locations: Dict[str, str]) -> str:
@@ -114,7 +130,7 @@ def compose_shot(shot: dict, characters: Dict[str, str], locations: Dict[str, st
     parts.append(str(shot["action"]).strip().rstrip(". "))
 
     ids = [str(c).strip().lower() for c in shot.get("characters") or [] if isinstance(c, str)]
-    cast = [(i, styled_look(characters[i])) for i in dict.fromkeys(ids) if i in characters][:2]
+    cast = [(i, characters[i]) for i in dict.fromkeys(ids) if i in characters][:2]
     if len(cast) == 1:
         parts += [f"{cast[0][0]}: {cast[0][1]}", "solo, single character"]
     elif len(cast) == 2:
@@ -126,11 +142,12 @@ def compose_shot(shot: dict, characters: Dict[str, str], locations: Dict[str, st
     return ", ".join(parts + [STYLE, PANEL_NO_TEXT])
 
 
-def parse_recap(raw: str, sentence_count: int) -> List[Tuple[int, str]]:
+def parse_recap(raw: str, sentence_count: int,
+                style: str = DEFAULT_CHARACTER_STYLE) -> List[Tuple[int, str]]:
     """JSON của Gemini -> [(chỉ số câu mở đầu, prompt)] theo thứ tự câu.
     Ảnh hỏng (thiếu action) bị bỏ; ảnh đầu luôn phủ từ câu 0."""
     data = json.loads(raw)
-    characters = _bible(data.get("characters"))
+    characters = style_cast(_bible(data.get("characters")), style)
     locations = _bible(data.get("locations"))
     shots: Dict[int, str] = {}
     for shot in data.get("shots") or []:
@@ -157,11 +174,12 @@ def fallback_board(sentences: List[str], timings: List[Tuple[float, float]]) -> 
             for k in range(len(starts))]
 
 
-def plan(sentences: List[str], timings: List[Tuple[float, float]]) -> Tuple[List[str], List[Slide]]:
+def plan(sentences: List[str], timings: List[Tuple[float, float]],
+         style: str = DEFAULT_CHARACTER_STYLE) -> Tuple[List[str], List[Slide]]:
     """(prompt cho từng ảnh, lịch chiếu). Gemini lỗi thì vẽ thẳng từ lời đọc."""
     try:
         board = parse_recap(ask_gemini_json(recap_request(sentences, timings, shot_count(timings))),
-                            len(sentences))
+                            len(sentences), style)
         if not board:
             raise RuntimeError("storyboard rỗng")
     except Exception as exc:
@@ -225,14 +243,14 @@ def make_video(frames_png: List[Path], slides: List[Slide], audio: Path, output:
 
 
 def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path, output: Path, work_dir: Path,
-           progress=lambda percent, message: None) -> dict:
+           progress=lambda percent, message: None, style: str = DEFAULT_CHARACTER_STYLE) -> dict:
     """Toàn bộ chế độ recap. Trả về thời gian từng bước (giây)."""
     import time
 
     from core import image_client
 
     t0 = time.time()
-    prompts, slides = plan(sentences, timings)
+    prompts, slides = plan(sentences, timings, style)
     t1 = time.time()
 
     progress(80, f"Đang vẽ {len(prompts)} ảnh manhwa...")
