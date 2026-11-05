@@ -39,16 +39,18 @@ BLUR_RADIUS = 28
 BACKGROUND_DIM = 0.55
 ENCODE_WORKERS = 4
 
-# Kiểu "anime key visual" (ánh ngược, hạt sáng, mắt long lanh) — chọn sau khi
-# vẽ thử A/B trên Z-Image ngày 05/11/2026 theo ảnh mẫu khách đưa. "anime face,
-# not photorealistic": thiếu nó thì cận mặt hay ngả sang ảnh chụp.
-STYLE = ("stunning anime key visual, full color, highly detailed painterly digital illustration, "
-         "delicate thin line art, anime face, not photorealistic, "
-         "dramatic backlighting with strong rim light, glowing translucent hair strands, "
-         "intense bloom and soft lens flare, floating golden light particles and sparkles, "
-         "crystal-clear glossy eyes with detailed iris reflections, glistening highlights, "
-         "rich saturated warm color grading, soft dreamy depth of field, emotional cinematic composition, "
-         "masterpiece, best quality")
+# Kiểu tranh anime mơ màng theo ảnh mẫu khách đưa (tóc bay, trời hoàng hôn
+# pastel, nước/ánh sáng lấp lánh) — chọn sau mấy vòng vẽ thử trên Z-Image
+# ngày 05/11/2026. Màu chỉ gắn vào BẦU TRỜI và ÁNH SÁNG: viết "rich pink" trơn
+# thì màu lây sang nội dung (tóc nhân vật hoá hồng, phố mọc hoa anh đào).
+# "not photorealistic": thiếu nó thì cận mặt hay ngả sang ảnh chụp.
+STYLE = ("beautiful dreamy anime illustration, full color, vivid saturated colors, "
+         "luminous sky with pastel pink, blue and golden sunset color grading, "
+         "hair blown by the wind with many fine flowing strands and glowing rim light, "
+         "sparkling light reflections, glittering bokeh and floating light particles, "
+         "painterly texture with soft glow, crisp clear details, intricate background, "
+         "delicate thin line art, simple cute anime face, not photorealistic, "
+         "highly detailed, masterpiece, best quality")
 PANEL_NO_TEXT = f"{NO_TEXT}, no speech bubbles"
 SHOTS = ("wide establishing shot", "full body shot", "medium shot", "close-up", "extreme close-up",
          "low angle shot", "high angle shot", "over the shoulder shot", "dynamic action shot")
