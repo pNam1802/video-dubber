@@ -89,7 +89,7 @@ SUNFLOWER_HEROINE = ("young woman, very long loose wavy two-tone hair, light ash
                      "golden by the sun, dark navy blue-black lower lengths with painterly streaks, translucent flyaway "
                      "strands, wispy messy bangs, loose oversized white v-neck shirt, light blue jeans, "
                      "small teal teardrop pendant on a thin silver necklace")
-DEFAULT_CHARACTER_STYLE = "dreamy"
+DEFAULT_CHARACTER_STYLE = "sunflower"
 _FEMALE_RE = re.compile(r"\b(woman|women|girl|female|lady)\b", re.I)
 _MALE_RE = re.compile(r"\b(man|men|boy|male|guy)\b", re.I)
 PANEL_NO_TEXT = f"{NO_TEXT}, no speech bubbles"

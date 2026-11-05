@@ -58,7 +58,7 @@ class DubbingConfig:
     # "Đọc kịch bản": ảnh minh hoạ, xem core/script_images.MODES.
     script_images: str = "none"
     # Kiểu nhân vật của chế độ "recap", xem core/script_images.RECAP_CHARACTER_STYLES.
-    recap_style: str = "dreamy"
+    recap_style: str = "sunflower"
     original_volume: float = 0.1            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.

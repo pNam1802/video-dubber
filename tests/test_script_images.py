@@ -214,7 +214,7 @@ def test_script_job_passes_recap_character_style(as_user, monkeypatch):
     _, captured = _post_script(as_user, monkeypatch, script_images="recap", recap_style="sunflower")
     assert captured["config"].recap_style == "sunflower"
     _, captured = _post_script(as_user, monkeypatch, script_images="recap", recap_style="robot")
-    assert captured["config"].recap_style == "dreamy"
+    assert captured["config"].recap_style == "sunflower"
 
 
 def test_illustrated_script_job_shows_video(app, as_user, monkeypatch, tmp_path):

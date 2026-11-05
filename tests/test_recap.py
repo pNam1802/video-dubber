@@ -36,7 +36,7 @@ def test_compose_shot_inserts_fixed_look_and_color_style():
 
 def test_character_style_follows_gender_in_look():
     cast = recap.style_cast({"a": "young woman, long brown hair", "b": "teenage girl",
-                             "c": "old man, grey beard", "d": "a black cat"})
+                             "c": "old man, grey beard", "d": "a black cat"}, "dreamy")
     assert cast["a"] == f"young woman, long brown hair, {recap.FEMALE_STYLE}"
     assert cast["b"].endswith(recap.FEMALE_STYLE)
     assert cast["c"].endswith(recap.MALE_STYLE)
@@ -55,7 +55,8 @@ def test_parse_recap_applies_character_style():
     raw = _board([{"start": 1, "characters": ["yena"], "action": "yena smiles"}],
                  characters=[{"id": "yena", "look": "young woman, brown hair"}])
     assert recap.SUNFLOWER_HEROINE in recap.parse_recap(raw, 3, "sunflower")[0][1]
-    assert recap.SUNFLOWER_HEROINE not in recap.parse_recap(raw, 3)[0][1]
+    assert recap.SUNFLOWER_HEROINE not in recap.parse_recap(raw, 3, "dreamy")[0][1]
+    assert recap.SUNFLOWER_HEROINE in recap.parse_recap(raw, 3)[0][1]  # mặc định là "sunflower"
 
 
 def test_every_character_style_has_a_preview_image():

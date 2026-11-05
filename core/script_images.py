@@ -36,7 +36,8 @@ from utils.proc import run_command
 MODES = ("none", "few", "scenes", "manga", "recap")
 # Kiểu nhân vật của chế độ "recap" (xem core/recap.style_cast). Ảnh mẫu từng
 # kiểu ở static/recap_styles/<kiểu>.jpg cho nút "Xem mẫu" trên form.
-RECAP_CHARACTER_STYLES = ("dreamy", "sunflower")
+# Kiểu đầu tiên là mặc định (khách chọn "sunflower" ngày 06/11/2026).
+RECAP_CHARACTER_STYLES = ("sunflower", "dreamy")
 SCENE_SEC = 12.0
 SLIDE_SEC = 8.0
 # Cảnh ngắn hơn thì gộp vào cảnh trước — ảnh lướt qua quá nhanh không ai kịp xem.
