@@ -81,6 +81,45 @@ def register():
     return render_template("register.html", google_enabled=google_enabled())
 
 
+#: Khớp minlength="8" ở form đăng ký — ở đây kiểm cả phía server.
+MIN_PASSWORD_LENGTH = 8
+
+
+@bp.post("/doi-mat-khau")
+@login_required
+@limiter.limit(RATELIMIT_LOGIN)
+def change_password():
+    """Đổi mật khẩu từ trang Cài đặt. Bắt nhập mật khẩu hiện tại: phiên đăng
+    nhập bị lộ (máy dùng chung quên đăng xuất) không đủ để chiếm tài khoản.
+    Rate limit như đăng nhập vì đây cũng là chỗ dò mật khẩu được."""
+    back = redirect(url_for("main.account_settings") + "#mat-khau")
+    if not current_user.password_hash:
+        flash("Tài khoản này đăng nhập bằng Google nên không có mật khẩu để đổi.", "info")
+        return back
+
+    current = request.form.get("current_password", "")
+    new = request.form.get("new_password", "")
+    confirm = request.form.get("confirm_password", "")
+
+    if not check_password_hash(current_user.password_hash, current):
+        flash("Mật khẩu hiện tại không đúng.", "danger")
+        return back
+    if len(new) < MIN_PASSWORD_LENGTH:
+        flash(f"Mật khẩu mới cần tối thiểu {MIN_PASSWORD_LENGTH} ký tự.", "danger")
+        return back
+    if new != confirm:
+        flash("Hai mật khẩu mới chưa khớp.", "danger")
+        return back
+    if new == current:
+        flash("Mật khẩu mới phải khác mật khẩu hiện tại.", "danger")
+        return back
+
+    current_user.password_hash = generate_password_hash(new)
+    db.session.commit()
+    flash("Đã đổi mật khẩu.", "success")
+    return back
+
+
 @bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
