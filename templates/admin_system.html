@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mb-lg">
-  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+  <h2 class="page-title">
     <span class="material-symbols-outlined text-[32px] text-primary">monitor_heart</span>Hệ thống
   </h2>
   <p class="font-body-md text-body-md text-on-surface-variant mt-1">Cấu hình đang chạy và tình trạng hạ tầng</p>
@@ -17,7 +17,7 @@
 <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Công cụ dịch</h3>
 <div id="engines" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-lg">
   {% for _ in range(3) %}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-2">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-2">
     <div class="flex items-center justify-between gap-2">{{ skeleton.line('w-24', 'h-5') }}{{ skeleton.line('w-20', 'h-5') }}</div>
     {{ skeleton.line('w-32') }}
     {{ skeleton.line('w-40') }}
@@ -27,7 +27,7 @@
 
 {# ── Hạ tầng ───────────────────────────────────────────── #}
 <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Hạ tầng</h3>
-<div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg mb-lg">
+<div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg mb-lg">
   <div id="health" class="grid grid-cols-2 md:grid-cols-4 gap-4">
     {% for _ in range(3) %}
     <div class="flex items-center gap-3">
@@ -41,7 +41,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
   {# ── Hạn mức mặc định ────────────────────────────────── #}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg">
     <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Hạn mức mặc định</h3>
     <dl id="quotas" class="flex flex-col gap-3">
       {% for _ in range(3) %}
@@ -55,7 +55,7 @@
   </div>
 
   {# ── Môi trường chạy ─────────────────────────────────── #}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg">
     <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Môi trường chạy</h3>
     <dl id="runtime" class="flex flex-col gap-3">
       {% for _ in range(2) %}
@@ -63,7 +63,7 @@
       {% endfor %}
     </dl>
     <a href="https://modal.com/apps" target="_blank" rel="noopener"
-      class="inline-flex items-center gap-1 mt-md text-primary font-label-sm text-label-sm uppercase tracking-wider hover:underline">
+      class="inline-flex items-center gap-1 mt-md text-primary font-label-sm text-label-sm tracking-normal font-medium hover:underline">
       Xem hoá đơn thật trên Modal
       <span class="material-symbols-outlined text-[16px]">open_in_new</span>
     </a>
@@ -107,7 +107,7 @@
         // Chỉ báo key CÓ hay KHÔNG và độ dài — không bao giờ hiện giá trị.
         const keyLine = '<p class="font-label-sm text-label-sm text-on-surface-variant">API key: ' +
           (ready ? "đã cấu hình (" + engine.length + " ký tự)" : "chưa có") + "</p>";
-        return '<div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-2">' +
+        return '<div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-2">' +
           '<div class="flex items-center justify-between gap-2">' +
           '<span class="font-body-lg text-body-lg text-on-surface">' + (ENGINE_NAMES[key] || key) + "</span>" + badge + "</div>" +
           '<p class="font-label-sm text-label-sm text-on-surface-variant tabular">Model: ' + escapeHtml(engine.model) + "</p>" +
@@ -133,7 +133,7 @@
       if (broken.length) {
         const box = document.getElementById("degraded");
         box.textContent = "Hệ thống đang thiếu: " + broken.map(function (k) { return labels[k] || k; }).join(", ") +
-          ". Job mới có thể thất bại.";
+          ". Tác vụ mới có thể thất bại.";
         box.classList.remove("hidden");
       }
     }

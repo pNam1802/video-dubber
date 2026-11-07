@@ -5,24 +5,23 @@
 {% block content %}
 <div class="mb-lg flex flex-wrap items-center justify-between gap-md">
   <div>
-    <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+    <h2 class="page-title">
       <span class="material-symbols-outlined text-[32px] text-primary">group</span>Người dùng
     </h2>
     <p id="userCount" class="font-body-md text-body-md text-on-surface-variant mt-1">Đang tải...</p>
   </div>
   <input id="search" type="search" placeholder="Tìm tên đăng nhập..."
-    class="bg-background border border-outline-variant text-on-surface font-body-md text-body-md px-4 py-2 rounded-xl focus:outline-none focus:border-primary placeholder-outline">
+    class="input sm:w-72">
 </div>
 
-<div id="toast" class="hidden rounded-xl px-4 py-3 mb-lg font-body-md text-body-md"></div>
 
-<div class="bg-surface-container rounded-2xl border border-outline-variant/30 overflow-hidden">
+<div class="bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full min-w-[900px]">
       <thead>
         <tr class="bg-surface-container-high">
           {% for label in ['Tên đăng nhập', 'Vai trò', 'Trạng thái', 'Lượt hôm nay', 'Giây GPU', 'Chi phí', 'Tham gia', ''] %}
-          <th class="text-left px-4 py-3 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">{{ label }}</th>
+          <th class="text-left px-4 py-3 font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">{{ label }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -50,11 +49,11 @@
     </div>
 
     <div class="flex flex-col gap-2">
-      <label for="quotaInput" class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
+      <label for="quotaInput" class="font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">
         Số lượt mỗi ngày
       </label>
       <input id="quotaInput" type="number" min="0"
-        class="bg-background border border-outline-variant text-on-surface font-body-md text-body-md px-4 py-2 rounded-xl focus:outline-none focus:border-primary tabular">
+        class="input tabular">
       <p class="font-label-sm text-label-sm text-on-surface-variant">
         Để trống để dùng hạn mức mặc định của hệ thống.
       </p>
@@ -62,11 +61,11 @@
 
     <div class="flex gap-3">
       <button type="button" id="quotaSave"
-        class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full font-bold">
+        class="btn-primary">
         Lưu
       </button>
       <button type="button" id="quotaClear"
-        class="border border-outline-variant text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
+        class="btn-secondary">
         Dùng mặc định
       </button>
     </div>
@@ -88,16 +87,7 @@
       return div.innerHTML;
     }
 
-    function toast(message, kind) {
-      const box = document.getElementById("toast");
-      box.textContent = message;
-      box.className = "rounded-xl px-4 py-3 mb-lg font-body-md text-body-md border " +
-        (kind === "error"
-          ? "bg-error-container/20 border-error/50 text-error"
-          : "bg-primary/10 border-primary/40 text-primary");
-      box.classList.remove("hidden");
-      setTimeout(function () { box.classList.add("hidden"); }, 4000);
-    }
+    function toast(message, kind) { Nora.toast(message, kind === "error" ? "error" : "success"); }
 
     async function patch(id, payload) {
       const res = await fetch("/api/admin/users/" + id, {
@@ -125,7 +115,7 @@
       document.getElementById("rows").innerHTML = visible.map(function (u) {
         const self = u.id === ME;
         const jobs = u.usage.jobs;
-        return '<tr class="border-t border-outline-variant/30 hover:bg-surface-container-high/60">' +
+        return '<tr class="border-t border-outline-variant/40 hover:bg-surface-container-high/60">' +
           '<td class="px-4 py-3"><span class="font-body-md text-body-md text-on-surface">' + escapeHtml(u.username) + "</span>" +
             (self ? '<span class="ml-2 font-label-sm text-label-sm text-on-surface-variant">(bạn)</span>' : "") + "</td>" +
 
@@ -178,8 +168,14 @@
       if (!select) return;
       const id = Number(select.dataset.role);
       const person = users.find(function (u) { return u.id === id; });
-      if (!window.confirm('Đổi quyền của "' + person.username + '" thành ' +
-          (select.value === "admin" ? "Quản trị" : "Người dùng") + "?")) {
+      const toAdmin = select.value === "admin";
+      const ok = await Nora.confirm({
+        title: "Đổi quyền người dùng?",
+        message: '"' + person.username + '" sẽ trở thành ' + (toAdmin ? "Quản trị viên, có toàn quyền hệ thống." : "người dùng thường."),
+        confirmLabel: "Đổi quyền",
+        danger: toAdmin
+      });
+      if (!ok) {
         render();
         return;
       }
@@ -199,10 +195,10 @@
         const id = Number(toggle.dataset.toggle);
         const person = users.find(function (u) { return u.id === id; });
         const next = !person.is_active;
-        const question = next
-          ? 'Mở khoá tài khoản "' + person.username + '"?'
-          : 'Khoá tài khoản "' + person.username + '"? Người này sẽ không đăng nhập được nữa.';
-        if (!window.confirm(question)) return;
+        const ok = await Nora.confirm(next
+          ? { title: "Mở khoá tài khoản?", message: '"' + person.username + '" sẽ đăng nhập lại được.', confirmLabel: "Mở khoá", danger: false }
+          : { title: "Khoá tài khoản?", message: '"' + person.username + '" sẽ không đăng nhập được nữa cho tới khi được mở khoá.', confirmLabel: "Khoá tài khoản" });
+        if (!ok) return;
         try {
           await patch(id, { is_active: next });
           toast(next ? "Đã mở khoá " + person.username + "." : "Đã khoá " + person.username + ".");

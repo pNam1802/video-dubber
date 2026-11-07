@@ -6,22 +6,22 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <div class="space-y-xs">
-    <label class="block text-label-sm font-label-sm uppercase text-on-surface-variant" for="username">
+    <label class="field-label" for="username">
       Tên đăng nhập
     </label>
     <input id="username" name="username" type="text" required autofocus autocomplete="username"
       placeholder="Nhập tên đăng nhập"
-      class="w-full bg-background border border-outline-variant px-md py-sm text-body-md font-body-md text-on-surface placeholder-outline rounded-none focus:border-primary-container focus:outline-none transition-colors">
+      class="input py-2.5">
   </div>
 
   <div class="space-y-xs">
-    <label class="flex justify-between text-label-sm font-label-sm uppercase text-on-surface-variant" for="password">
+    <label class="field-label flex justify-between" for="password">
       Mật khẩu
     </label>
     <div class="relative">
       <input id="password" name="password" type="password" required autocomplete="current-password"
         placeholder="Nhập mật khẩu"
-        class="w-full bg-background border border-outline-variant px-md py-sm pr-12 text-body-md font-body-md text-on-surface placeholder-outline rounded-none focus:border-primary-container focus:outline-none transition-colors">
+        class="input py-2.5 pr-12">
       <button type="button" data-toggle-password="password" aria-label="Hiện hoặc ẩn mật khẩu"
         class="absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
         <span class="material-symbols-outlined">visibility_off</span>
@@ -30,7 +30,7 @@
   </div>
 
   <button type="submit"
-    class="w-full bg-primary-container text-on-primary-container text-body-lg font-headline-md font-bold py-md mt-md hover:bg-primary transition-colors rounded-none border border-transparent">
+    class="btn-primary w-full py-3 mt-md text-body-lg">
     Đăng nhập
   </button>
 

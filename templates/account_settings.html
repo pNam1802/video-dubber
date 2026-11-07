@@ -3,18 +3,19 @@
 
 {% block content %}
 <div class="mb-lg">
-  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+  <h2 class="page-title">
     <span class="material-symbols-outlined text-[32px] text-primary">manage_accounts</span>Cài đặt tài khoản
   </h2>
 </div>
 
-<section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md max-w-xl">
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-lg items-start">
+<section class="card flex flex-col gap-md">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
       <span class="material-symbols-outlined text-primary">mail</span>Thông báo qua email
     </h3>
     <p class="font-body-md text-body-md text-on-surface-variant mt-1">
-      Nhận email khi job dịch xong (cần bạn duyệt transcript), khi hoàn tất, hoặc khi thất bại —
+      Nhận email khi bản dịch xong (cần bạn duyệt lời thoại), khi hoàn tất, hoặc khi thất bại —
       không cần ngồi canh trang.
     </p>
   </div>
@@ -23,19 +24,19 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <div>
-      <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="email">
+      <label class="field-label" for="email">
         Email nhận thông báo
       </label>
       {% if current_user.uses_google %}
       <input id="email" type="email" value="{{ current_user.email or '' }}" disabled
-        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface-variant font-body-md text-body-md rounded-xl px-3 py-2 cursor-not-allowed">
+        class="input">
       <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
         Lấy từ tài khoản Google lúc đăng nhập, không sửa được ở đây.
       </p>
       {% else %}
       <input id="email" name="email" type="email" value="{{ current_user.email or '' }}"
         placeholder="ban@example.com"
-        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary">
+        class="input">
       <p class="font-label-sm text-label-sm text-on-surface-variant mt-1">
         Để trống nếu không muốn nhận thông báo qua email.
       </p>
@@ -45,17 +46,17 @@
     <label class="flex items-center gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
       <input type="checkbox" name="notify_email" {% if current_user.notify_email %}checked{% endif %}
         class="w-4 h-4 accent-primary">
-      Nhận email khi job cần duyệt / xong / lỗi
+      Nhận email khi bản lồng tiếng cần duyệt, hoàn tất hoặc gặp lỗi
     </label>
 
     <button type="submit"
-      class="self-start bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+      class="self-start btn-primary">
       Lưu
     </button>
   </form>
 </section>
 
-<section id="giong-cua-ban" class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md max-w-xl mt-lg">
+<section id="giong-cua-ban" class="card flex flex-col gap-md">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
       <span class="material-symbols-outlined text-primary">mic</span>Giọng của bạn
@@ -71,8 +72,8 @@
   {# Mỗi ngôn ngữ một giọng mẫu (config.settings.VOICE_SAMPLE_LANGUAGES). #}
   {% for lang, lang_name in voice_languages.items() %}
   {% set has_sample = current_user.has_voice_sample_in(lang) %}
-  <div class="flex flex-col gap-sm {% if not loop.first %}border-t border-outline-variant/30 pt-md{% endif %}">
-    <h4 class="font-label-sm text-label-sm text-on-surface uppercase tracking-wider font-bold">
+  <div class="flex flex-col gap-sm {% if not loop.first %}border-t border-outline-variant/40 pt-md{% endif %}">
+    <h4 class="font-body-md text-body-md text-on-surface font-semibold">
       Giọng mẫu {{ lang_name }}
       <span class="font-normal normal-case text-on-surface-variant">— {{ 'đọc bằng tiếng Anh, dùng cho bản lồng tiếng Anh (Chatterbox)' if lang == 'en' else 'đọc bằng tiếng Việt, dùng cho bản lồng tiếng Việt (VieNeu)' }}</span>
     </h4>
@@ -83,7 +84,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="language" value="{{ lang }}">
       <button type="submit"
-        class="flex items-center gap-1 text-error font-label-sm text-label-sm uppercase tracking-wider">
+        class="flex items-center gap-1 text-error font-label-sm text-label-sm tracking-normal font-medium">
         <span class="material-symbols-outlined text-[18px]">delete</span>Xoá giọng mẫu {{ lang_name }}
       </button>
     </form>
@@ -93,7 +94,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="language" value="{{ lang }}">
       <div>
-        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="voice_sample_{{ lang }}">
+        <label class="field-label" for="voice_sample_{{ lang }}">
           {{ 'Thay giọng mẫu' if has_sample else 'File ghi âm' }}
         </label>
         <input id="voice_sample_{{ lang }}" name="voice_sample" type="file" required
@@ -111,11 +112,12 @@
       </label>
 
       <button type="submit"
-        class="self-start flex items-center gap-1 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+        class="self-start flex items-center gap-1 btn-primary">
         <span class="material-symbols-outlined text-[18px]">upload_file</span>Lưu giọng mẫu {{ lang_name }}
       </button>
     </form>
   </div>
   {% endfor %}
 </section>
+</div>
 {% endblock %}

@@ -12,3 +12,6 @@ requests==2.33.1
 python-dotenv==1.2.2
 pytest==9.1.1
 Pillow==12.3.0
+# test_llm_translation.py import thang hai SDK nay (tao client gia lap).
+openai==2.52.0
+google-genai==2.30.1

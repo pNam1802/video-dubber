@@ -14,81 +14,73 @@
   {# Nền mờ khi mở menu trên điện thoại — bấm vào để đóng. #}
   <div id="navBackdrop" class="hidden fixed inset-0 bg-black/60 z-40 lg:hidden"></div>
 
+  {% set nav_items = [
+    ('main.index', 'add_circle', 'Tạo bản lồng tiếng'),
+    ('main.script_reader', 'record_voice_over', 'Đọc kịch bản'),
+    ('main.history', 'history', 'Lịch sử'),
+    ('main.account_settings', 'settings', 'Cài đặt'),
+  ] %}
+  {% set admin_items = [
+    ('main.admin_stats', 'monitoring', 'Thống kê'),
+    ('main.admin_users', 'group', 'Người dùng'),
+    ('main.admin_system', 'monitor_heart', 'Hệ thống')
+  ] %}
+  {% set initial = current_user.username[:1]|upper %}
+
   {# ── Thanh điều hướng trái ─────────────────────────────── #}
   {# Dưới 1024px thanh này trượt ra ngoài màn hình; nút ☰ ở thanh trên kéo nó vào. #}
   <nav id="sidebar" aria-label="Điều hướng chính"
-    class="w-[240px] h-screen flex flex-col border-r border-outline-variant bg-background fixed left-0 top-0 z-50
+    class="w-[240px] h-screen flex flex-col border-r border-outline-variant bg-surface-container-lowest fixed left-0 top-0 z-50
            -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
-    <div class="px-md py-lg border-b border-outline-variant bg-surface-dim flex items-center gap-3">
-      <div class="w-9 h-9 rounded-[9px] bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
+    <a href="{{ url_for('main.index') }}" class="h-16 px-5 border-b border-outline-variant flex items-center gap-3">
+      <span class="w-9 h-9 rounded-xl bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
           <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
           <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
           <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
         </svg>
-      </div>
-      <div>
-        <h1 class="font-headline-md text-headline-md font-bold text-on-surface tracking-tighter">Nora</h1>
-        <p class="font-label-sm text-label-sm text-on-surface-variant uppercase mt-1">Lồng tiếng bài giảng</p>
-      </div>
-    </div>
+      </span>
+      <span>
+        <span class="block font-headline-md text-headline-md font-bold text-on-surface tracking-tight leading-6">Nora</span>
+        <span class="block font-label-sm text-label-sm text-on-surface-variant tracking-normal">Lồng tiếng bài giảng</span>
+      </span>
+    </a>
 
-    <div class="p-md">
-      <a href="{{ url_for('main.index') }}"
-        class="w-full flex items-center justify-center gap-2 bg-primary-container text-on-primary-container font-label-sm text-label-sm py-2 px-4 border border-primary-container hover:bg-primary-fixed transition-colors uppercase tracking-wider font-bold">
-        <span class="material-symbols-outlined text-[18px]">add</span>Tạo job mới
+    {% macro nav_link(endpoint, icon, label) %}
+    <li>
+      <a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page" {% endif %}
+        class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-xl font-body-md text-body-md transition-colors
+               {% if request.endpoint == endpoint %}text-primary bg-primary/10 font-medium{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
+        <span class="material-symbols-outlined text-[20px]">{{ icon }}</span>{{ label }}
       </a>
-    </div>
+    </li>
+    {% endmacro %}
 
-    {% set nav_items = [
-      ('main.index', 'add_circle', 'Tạo bản lồng tiếng'),
-      ('main.script_reader', 'record_voice_over', 'Đọc kịch bản'),
-      ('main.history', 'history', 'Lịch sử'),
-      ('main.account_settings', 'settings', 'Cài đặt'),
-    ] %}
-    {% set admin_items = [
-      ('main.admin_stats', 'monitoring', 'Thống kê'),
-      ('main.admin_users', 'group', 'Người dùng'),
-      ('main.admin_system', 'monitor_heart', 'Hệ thống')
-    ] %}
-    <ul class="flex-1 overflow-y-auto py-2">
-      {% for endpoint, icon, label in nav_items %}
-      <li>
-        <a href="{{ url_for(endpoint) }}"
-          class="flex items-center gap-3 px-md py-3 font-body-md text-body-md transition-colors
-                 {% if request.endpoint == endpoint %}text-primary bg-primary/10 border-l-2 border-primary{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 border-l-2 border-transparent{% endif %}">
-          <span class="material-symbols-outlined">{{ icon }}</span>{{ label }}
-        </a>
-      </li>
-      {% endfor %}
+    <ul class="flex-1 overflow-y-auto py-4 flex flex-col gap-0.5">
+      {% for endpoint, icon, label in nav_items %}{{ nav_link(endpoint, icon, label) }}{% endfor %}
 
       {% if current_user.is_admin %}
-      <li class="px-md pt-lg pb-2">
-        <span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant/60">Quản trị</span>
-      </li>
-      {% for endpoint, icon, label in admin_items %}
-      <li>
-        <a href="{{ url_for(endpoint) }}"
-          class="flex items-center gap-3 px-md py-3 font-body-md text-body-md transition-colors
-                 {% if request.endpoint == endpoint %}text-primary bg-primary/10 border-l-2 border-primary{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 border-l-2 border-transparent{% endif %}">
-          <span class="material-symbols-outlined">{{ icon }}</span>{{ label }}
-        </a>
-      </li>
-      {% endfor %}
+      <li class="px-6 pt-lg pb-2"><span class="eyebrow">Quản trị</span></li>
+      {% for endpoint, icon, label in admin_items %}{{ nav_link(endpoint, icon, label) }}{% endfor %}
       {% endif %}
     </ul>
 
     <div class="p-md border-t border-outline-variant">
-      <p class="font-label-sm text-label-sm text-on-surface-variant truncate" title="{{ current_user.username }}">
-        {{ current_user.username }}
-      </p>
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="w-9 h-9 rounded-full bg-surface-container-highest text-on-surface font-semibold flex items-center justify-center flex-shrink-0" aria-hidden="true">{{ initial }}</span>
+        <div class="min-w-0">
+          <p class="font-body-md text-body-md text-on-surface truncate" title="{{ current_user.username }}">{{ current_user.username }}</p>
+          <p class="font-label-sm text-label-sm tracking-normal {% if current_user.is_admin %}text-primary{% else %}text-on-surface-variant{% endif %}">
+            {{ 'Quản trị viên' if current_user.is_admin else 'Thành viên' }}
+          </p>
+        </div>
+      </div>
       {% if current_user.is_admin %}
-      <p class="font-label-sm text-label-sm text-primary uppercase mt-1">Quản trị viên</p>
-      <p class="font-label-sm text-label-sm text-on-surface-variant mt-2">Lượt hôm nay: không giới hạn</p>
+      <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant mt-3">Lượt hôm nay: không giới hạn</p>
       {% else %}
       {# Hạn mức nạp bằng /api/usage, ẩn cho tới khi có số thật để không nháy "—". #}
       <div id="quotaBadge" class="hidden mt-3">
-        <div class="flex items-center justify-between gap-2 font-label-sm text-label-sm">
+        <div class="flex items-center justify-between gap-2 font-label-sm text-label-sm tracking-normal">
           <span class="text-on-surface-variant">Lượt còn hôm nay</span>
           <span id="quotaText" class="tabular text-on-surface"></span>
         </div>
@@ -100,16 +92,16 @@
     </div>
   </nav>
 
-  <main class="lg:ml-[240px] w-full flex flex-col min-h-screen">
+  <main class="lg:ml-[240px] w-full min-w-0 flex flex-col min-h-screen">
     {# ── Thanh trên ──────────────────────────────────────── #}
     <header
-      class="w-full h-16 flex items-center justify-between px-lg border-b border-outline-variant bg-surface-container-lowest sticky top-0 z-30">
+      class="w-full h-16 flex items-center justify-between gap-md px-lg border-b border-outline-variant bg-surface-container-lowest/90 backdrop-blur sticky top-0 z-30">
       <div class="flex items-center gap-3 lg:hidden">
         <button type="button" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Mở menu"
-          class="-ml-2 p-2 text-on-surface-variant hover:text-on-surface transition-colors">
+          class="btn-icon -ml-2">
           <span class="material-symbols-outlined">menu</span>
         </button>
-        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 font-headline-md text-headline-md font-bold tracking-tighter">
+        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 font-headline-md text-headline-md font-bold tracking-tight">
           <span class="w-6 h-6 rounded-md bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none">
               <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
@@ -119,47 +111,170 @@
           </span>Nora
         </a>
       </div>
-      <div class="hidden lg:block"></div>
-      <div class="flex items-center gap-4">
-        <span class="material-symbols-outlined text-on-surface-variant">account_circle</span>
-        <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit"
-            class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-colors">
-            Đăng xuất
-          </button>
-        </form>
-      </div>
+
+      {# Vị trí hiện tại. Trang con ghi đè block crumbs (ví dụ trang chi tiết:
+         Lịch sử / tên video); mặc định lấy nhãn của mục menu đang mở. #}
+      <nav aria-label="Vị trí" class="max-lg:hidden flex items-center gap-2 min-w-0 font-body-md text-body-md text-on-surface-variant">
+        {% block crumbs %}
+        {% for endpoint, icon, label in nav_items + admin_items %}
+        {% if request.endpoint == endpoint %}<span class="text-on-surface font-medium">{{ label }}</span>{% endif %}
+        {% endfor %}
+        {% endblock %}
+      </nav>
+
+      {# Menu tài khoản. <details> tự mở/đóng không cần JS; script cuối trang
+         chỉ đóng nó khi bấm ra ngoài hoặc nhấn Esc. #}
+      <details id="accountMenu" class="relative">
+        <summary aria-label="Menu tài khoản"
+          class="list-none [&::-webkit-details-marker]:hidden flex items-center gap-2 cursor-pointer rounded-full py-1 pl-1 pr-2 hover:bg-surface-container-high transition-colors">
+          <span class="w-8 h-8 rounded-full bg-primary text-on-primary font-semibold flex items-center justify-center" aria-hidden="true">{{ initial }}</span>
+          <span class="hidden sm:block font-body-md text-body-md text-on-surface max-w-[160px] truncate">{{ current_user.username }}</span>
+          <span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span>
+        </summary>
+        <div class="absolute right-0 mt-2 w-64 rounded-2xl border border-outline-variant bg-surface-container shadow-2xl shadow-black/40 p-1.5 z-40">
+          <div class="px-3 py-2.5 border-b border-outline-variant/60 mb-1">
+            <p class="font-body-md text-body-md text-on-surface font-medium truncate">{{ current_user.username }}</p>
+            <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant truncate">
+              {{ current_user.email or ('Quản trị viên' if current_user.is_admin else 'Thành viên') }}
+            </p>
+          </div>
+          <a href="{{ url_for('main.account_settings') }}"
+            class="flex items-center gap-3 px-3 py-2 rounded-xl font-body-md text-body-md text-on-surface hover:bg-surface-container-high">
+            <span class="material-symbols-outlined text-[20px] text-on-surface-variant">settings</span>Cài đặt
+          </a>
+          <form method="post" action="{{ url_for('auth.logout') }}" class="m-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+              class="w-full flex items-center gap-3 px-3 py-2 rounded-xl font-body-md text-body-md text-on-surface hover:bg-surface-container-high text-left">
+              <span class="material-symbols-outlined text-[20px] text-on-surface-variant">logout</span>Đăng xuất
+            </button>
+          </form>
+        </div>
+      </details>
     </header>
 
-    {# ── Thông báo ───────────────────────────────────────── #}
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="px-lg pt-md flex flex-col gap-2">
-      {% for category, message in messages %}
-      <div class="rounded-xl px-4 py-3 font-body-md text-body-md border
-        {% if category == 'danger' %}bg-error-container/20 border-error/50 text-error
-        {% elif category == 'success' %}bg-primary/10 border-primary/40 text-primary
-        {% else %}bg-surface-container border-outline-variant text-on-surface-variant{% endif %}">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% endwith %}
-
-    <div class="flex-1 overflow-y-auto p-lg flex justify-center">
+    <div class="flex-1 p-lg flex justify-center">
       <div class="w-full max-w-7xl">
         {% block content %}{% endblock %}
       </div>
     </div>
   </main>
 
+  {# ── Thông báo ───────────────────────────────────────── #}
+  {# Flash từ server và Nora.toast() từ JS hiện chung một chỗ ở góc dưới,
+     tự ẩn sau vài giây (lỗi thì ở lâu hơn). #}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  <div id="toasts" aria-live="polite"
+    class="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[380px] z-[60] flex flex-col gap-2 pointer-events-none">
+    {% for category, message in messages %}
+    <div data-toast="{{ 'error' if category == 'danger' else ('success' if category == 'success' else 'info') }}">{{ message }}</div>
+    {% endfor %}
+  </div>
+  {% endwith %}
+
+  {# Hộp xác nhận dùng chung thay cho window.confirm() — gọi Nora.confirm({...}). #}
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle"
+    class="w-[calc(100%-2rem)] max-w-md rounded-2xl border border-outline-variant bg-surface-container text-on-surface p-0 shadow-2xl backdrop:bg-black/60">
+    <form method="dialog" class="p-lg flex flex-col gap-md">
+      <div class="flex items-start gap-3">
+        <span id="confirmIcon" class="w-10 h-10 rounded-full bg-error/15 text-error flex items-center justify-center flex-shrink-0">
+          <span class="material-symbols-outlined">warning</span>
+        </span>
+        <div class="min-w-0 pt-1">
+          <h2 id="confirmTitle" class="font-headline-md text-headline-md text-on-surface"></h2>
+          <p id="confirmMessage" class="font-body-md text-body-md text-on-surface-variant mt-1"></p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 mt-sm">
+        <button value="cancel" class="btn-secondary">Huỷ</button>
+        <button value="ok" id="confirmOk" class="btn-primary"></button>
+      </div>
+    </form>
+  </dialog>
+
+  {# Phải chạy TRƯỚC block scripts: trang con gọi Nora.toast/confirm. #}
+  <script>
+    window.Nora = (function () {
+      const STYLE = {
+        success: ["check_circle", "border-primary/40 text-primary"],
+        error: ["error", "border-error/50 text-error"],
+        info: ["info", "border-outline-variant text-on-surface"]
+      };
+      const box = document.getElementById("toasts");
+
+      function decorate(el, kind) {
+        const [icon, tone] = STYLE[kind] || STYLE.info;
+        const text = el.textContent.trim();
+        el.className = "pointer-events-auto flex items-start gap-3 rounded-xl border bg-surface-container-high shadow-xl shadow-black/40 " +
+          "px-4 py-3 font-body-md text-body-md transition-all duration-300 translate-y-2 opacity-0 " + tone;
+        el.setAttribute("role", kind === "error" ? "alert" : "status");
+        el.textContent = "";
+        const i = document.createElement("span");
+        i.className = "material-symbols-outlined text-[20px] flex-shrink-0";
+        i.textContent = icon;
+        const t = document.createElement("span");
+        t.className = "flex-1 text-on-surface";
+        t.textContent = text;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "text-on-surface-variant hover:text-on-surface flex";
+        close.setAttribute("aria-label", "Đóng thông báo");
+        close.innerHTML = '<span class="material-symbols-outlined text-[18px]">close</span>';
+        close.addEventListener("click", function () { dismiss(el); });
+        el.append(i, t, close);
+        requestAnimationFrame(function () { el.classList.remove("translate-y-2", "opacity-0"); });
+        setTimeout(function () { dismiss(el); }, kind === "error" ? 8000 : 4000);
+      }
+
+      function dismiss(el) {
+        el.classList.add("opacity-0", "translate-y-2");
+        setTimeout(function () { el.remove(); }, 300);
+      }
+
+      box.querySelectorAll("[data-toast]").forEach(function (el) { decorate(el, el.dataset.toast); });
+
+      function toast(message, kind) {
+        const el = document.createElement("div");
+        el.textContent = message;
+        box.appendChild(el);
+        decorate(el, kind || "info");
+      }
+
+      const dialog = document.getElementById("confirmDialog");
+      function confirm(opts) {
+        opts = opts || {};
+        document.getElementById("confirmTitle").textContent = opts.title || "Xác nhận";
+        document.getElementById("confirmMessage").textContent = opts.message || "";
+        const ok = document.getElementById("confirmOk");
+        ok.textContent = opts.confirmLabel || "Đồng ý";
+        ok.className = opts.danger === false ? "btn-primary" : "btn bg-error text-on-error hover:bg-error/90";
+        document.getElementById("confirmIcon").classList.toggle("hidden", opts.danger === false);
+        // Trình duyệt quá cũ không có <dialog>: lùi về hộp mặc định.
+        if (typeof dialog.showModal !== "function") {
+          return Promise.resolve(window.confirm((opts.title || "") + "\n" + (opts.message || "")));
+        }
+        dialog.returnValue = "";
+        dialog.showModal();
+        return new Promise(function (resolve) {
+          dialog.addEventListener("close", function () { resolve(dialog.returnValue === "ok"); }, { once: true });
+        });
+      }
+
+      return { toast: toast, confirm: confirm };
+    })();
+  </script>
+
   {% block scripts %}{% endblock %}
 
   {# Nằm ngoài block scripts để trang con không ghi đè mất. #}
   <script>
     (function () {
+      // ── Menu tài khoản: đóng khi bấm ra ngoài / Esc ─────
+      const account = document.getElementById("accountMenu");
+      document.addEventListener("click", function (event) {
+        if (account.open && !account.contains(event.target)) account.open = false;
+      });
+
       // ── Menu trượt trên điện thoại ──────────────────────
       const sidebar = document.getElementById("sidebar");
       const backdrop = document.getElementById("navBackdrop");
@@ -179,7 +294,9 @@
       });
       backdrop.addEventListener("click", function () { setNav(false); });
       document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") setNav(false);
+        if (event.key !== "Escape") return;
+        setNav(false);
+        account.open = false;
       });
 
       // ── Hạn mức còn lại ─────────────────────────────────
