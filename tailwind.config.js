@@ -43,6 +43,7 @@ module.exports = {
         "on-primary-container": "#3e6100",
         "secondary": "#c2c7cb",
         "tertiary": "#ffe4dd",
+        "info": "#8ab4f8",
         "error": "#ffb4ab",
         "on-error": "#690005",
         "error-container": "#93000a",

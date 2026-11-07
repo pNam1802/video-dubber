@@ -1,10 +1,16 @@
 {% extends "layout.html" %}
 {% block title %}{{ job.source_filename or 'Chi tiết' }} · Nora{% endblock %}
 
+{% block crumbs %}
+<a href="{{ url_for('main.history') }}" class="hover:text-on-surface">Lịch sử</a>
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+<span class="text-on-surface font-medium truncate max-w-[480px]">{{ job.source_filename or 'Bản #' ~ job.id }}</span>
+{% endblock %}
+
 {% block content %}
 {% set STATUS = {
   'queued':           ('Đang chờ',       'text-on-surface-variant', 'schedule'),
-  'processing':       ('Đang xử lý',     'text-primary',            'sync'),
+  'processing':       ('Đang xử lý',     'text-info',               'sync'),
   'awaiting_review':  ('Chờ bạn duyệt',  'text-tertiary',           'fact_check'),
   'done':             ('Hoàn tất',       'text-primary',            'check_circle'),
   'failed':           ('Thất bại',       'text-error',              'error'),
@@ -28,7 +34,7 @@
 
   <span id="statusPill"
     class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm tracking-normal font-medium {{ STATUS.get(job.status, ('', 'text-on-surface-variant', 'help'))[1] }}">
-    <span class="material-symbols-outlined text-[18px]">{{ STATUS.get(job.status, ('', '', 'help'))[2] }}</span>
+    <span class="material-symbols-outlined text-[18px]{% if job.status == 'processing' %} animate-spin{% endif %}">{{ STATUS.get(job.status, ('', '', 'help'))[2] }}</span>
     <span id="statusText">{{ STATUS.get(job.status, (job.status, '', ''))[0] }}</span>
   </span>
 </div>
@@ -51,12 +57,26 @@
 
   {# Job kịch bản chỉ có một bước (đọc), không có gì để chia giai đoạn. #}
   {% if not job.is_script %}
-  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+  {# Thanh bước: số thứ tự → ✓ khi xong; bước đang chạy viền sáng. Trạng
+     thái nằm ở data-state (todo/active/done), paintStages() chỉ đổi thuộc
+     tính đó, màu do group-data-[state=…] lo. #}
+  <ol class="flex items-start" aria-label="Các bước xử lý">
     {% for key, label in [('extract','Tách audio'), ('transcribe','Nhận dạng'), ('translate','Dịch'), ('tts','Tổng hợp giọng'), ('compose','Ghép video')] %}
-    <div class="stage rounded-xl px-3 py-2 border border-outline-variant/50 bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm text-center transition-colors"
-      data-stage="{{ key }}">{{ label }}</div>
+    <li class="stage group flex-1 flex flex-col items-center gap-2 relative" data-stage="{{ key }}" data-state="todo">
+      {% if not loop.first %}
+      <span class="absolute top-4 right-1/2 w-full h-0.5 -z-0 bg-outline-variant group-data-[state=active]:bg-primary group-data-[state=done]:bg-primary transition-colors" aria-hidden="true"></span>
+      {% endif %}
+      <span class="relative z-10 w-8 h-8 rounded-full border-2 flex items-center justify-center tabular text-[13px] transition-colors
+                   border-outline-variant bg-surface-container text-on-surface-variant
+                   group-data-[state=active]:border-primary group-data-[state=active]:text-primary group-data-[state=active]:ring-4 group-data-[state=active]:ring-primary/15
+                   group-data-[state=done]:border-primary group-data-[state=done]:bg-primary group-data-[state=done]:text-on-primary">
+        <span class="group-data-[state=done]:hidden">{{ loop.index }}</span>
+        <span class="hidden group-data-[state=done]:flex"><span class="material-symbols-outlined text-[18px]">check</span></span>
+      </span>
+      <span class="font-label-sm text-label-sm tracking-normal text-center text-on-surface-variant group-data-[state=active]:text-on-surface group-data-[state=active]:font-semibold group-data-[state=done]:text-on-surface">{{ label }}</span>
+    </li>
     {% endfor %}
-  </div>
+  </ol>
   {% endif %}
 
   <div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
@@ -545,10 +565,9 @@
         const idx = STAGE_BY_PERCENT.findIndex(function (s) { return s[1] === el.dataset.stage; });
         const start = STAGE_BY_PERCENT[idx][0];
         const next = idx + 1 < STAGE_BY_PERCENT.length ? STAGE_BY_PERCENT[idx + 1][0] : 101;
-        const active = percent >= start && percent < next;
-        el.classList.toggle("border-primary", active);
-        el.classList.toggle("bg-primary/10", active);
-        el.classList.toggle("text-primary", percent >= start);
+        el.dataset.state = percent >= next ? "done" : (percent >= start ? "active" : "todo");
+        if (el.dataset.state === "active") el.setAttribute("aria-current", "step");
+        else el.removeAttribute("aria-current");
       });
     }
 
