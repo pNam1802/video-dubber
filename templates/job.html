@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{{ job.source_filename or 'Job' }} · Nora{% endblock %}
+{% block title %}{{ job.source_filename or 'Chi tiết' }} · Nora{% endblock %}
 
 {% block content %}
 {% set STATUS = {
@@ -19,10 +19,10 @@
       <span class="material-symbols-outlined text-[16px]">arrow_back</span>{{ 'Đọc kịch bản' if job.is_script else 'Tạo bản lồng tiếng' }}
     </a>
     <h2 class="font-headline-xl text-headline-xl text-on-surface truncate" title="{{ job.source_filename }}">
-      {{ job.source_filename or 'Job #' ~ job.id }}
+      {{ job.source_filename or 'Bản #' ~ job.id }}
     </h2>
     <p class="font-label-sm text-label-sm text-on-surface-variant mt-1 tabular">
-      Job #{{ job.id }} · {{ job.created_at.strftime('%d/%m/%Y %H:%M') if job.created_at }}
+      Mã #{{ job.id }} · {{ job.created_at.strftime('%d/%m/%Y %H:%M') if job.created_at }}
     </p>
   </div>
 
@@ -66,7 +66,7 @@
   <div class="flex items-center gap-4">
     <button type="button" id="cancelBtn" class="cancel-job-btn
       btn-danger">
-      Huỷ job
+      Huỷ xử lý
     </button>
     <span id="elapsed" class="tabular font-label-sm text-label-sm text-on-surface-variant"></span>
   </div>
@@ -77,7 +77,7 @@
   class="{% if job.status != 'awaiting_review' %}hidden {% endif %}card flex flex-col gap-md mb-lg">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-      <span class="material-symbols-outlined text-tertiary">fact_check</span>Duyệt transcript trước khi tạo giọng đọc
+      <span class="material-symbols-outlined text-tertiary">fact_check</span>Duyệt lời thoại trước khi tạo giọng đọc
     </h3>
     <p class="font-body-md text-body-md text-on-surface-variant mt-1">
       Đã nhận dạng và dịch xong. Sửa lại câu nghe/dịch sai bên dưới nếu cần — giọng đọc và video sẽ
@@ -92,7 +92,7 @@
     <span class="font-label-sm text-label-sm text-on-surface-variant flex-shrink-0">Chỉ cần khi bấm "Dịch lại"</span>
   </div>
 
-  <p id="reviewLoading" class="font-body-md text-body-md text-on-surface-variant">Đang tải transcript...</p>
+  <p id="reviewLoading" class="font-body-md text-body-md text-on-surface-variant">Đang tải lời thoại...</p>
   <div id="reviewList" class="flex flex-col gap-3 max-h-[520px] overflow-y-auto -mx-1 px-1"></div>
   <p id="reviewStatus" class="hidden font-label-sm text-label-sm"></p>
 
@@ -103,7 +103,7 @@
     </button>
     <button type="button" id="cancelBtnReview" class="cancel-job-btn
       btn-danger">
-      Huỷ job
+      Huỷ xử lý
     </button>
   </div>
 </section>
@@ -527,13 +527,13 @@
             // được transcript, không bao giờ để job dừng ở đây mà rỗng.
             // Vẫn xử lý cho chắc, và nói thật thay vì hứa nút "Xác nhận" chạy được.
             list.innerHTML = '<p class="font-body-md text-body-md text-error">' +
-              'Không tải được transcript để duyệt. Hãy huỷ job này và thử lại.</p>';
+              'Không tải được lời thoại để duyệt. Hãy huỷ xử lý và thử lại.</p>';
             continueBtn.disabled = true;
             return;
           }
           data.segments.forEach(function (seg) { list.appendChild(rowEl(seg)); });
         } catch (err) {
-          loading.textContent = "Không tải được transcript. Tải lại trang để thử lại.";
+          loading.textContent = "Không tải được lời thoại. Tải lại trang để thử lại.";
         }
       })();
     })();
@@ -580,7 +580,7 @@
           if (progressText) progressText.textContent = data.message;
           setTimeout(function () { window.location.reload(); }, 1200);
         } catch (err) {
-          cancelBtns.forEach(function (b) { b.disabled = false; b.textContent = "Huỷ job"; });
+          cancelBtns.forEach(function (b) { b.disabled = false; b.textContent = "Huỷ xử lý"; });
           const progressText = document.getElementById("progressText");
           if (progressText) progressText.textContent = err.message;
           // liveCard (chứa progressText) đang ẩn lúc chờ duyệt — báo lỗi ở
@@ -651,7 +651,7 @@
         }
         if (res.status === 404) {
           showReconnecting(false);
-          document.getElementById("progressText").textContent = data.error || "Không tìm thấy job.";
+          document.getElementById("progressText").textContent = data.error || "Không tìm thấy bản lồng tiếng này.";
           return stopPolling();
         }
         if (!res.ok) throw new Error(data.error || "Lỗi tạm thời khi lấy tiến trình.");
@@ -665,7 +665,7 @@
 
         if (data.status === "queued" && typeof data.queue_position === "number") {
           document.getElementById("progressText").textContent = data.queue_position > 0
-            ? "Đang chờ tới lượt — còn " + data.queue_position + " job trước bạn"
+            ? "Đang chờ tới lượt — còn " + data.queue_position + " lượt trước bạn"
             : "Đang chờ container GPU khởi động...";
         } else {
           document.getElementById("progressText").textContent = data.message;

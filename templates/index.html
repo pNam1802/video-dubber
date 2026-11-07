@@ -255,7 +255,7 @@
           <p id="engineTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
             DeepSeek, Gemini và OpenAI đều dịch tự nhiên và hỗ trợ đủ các ngôn ngữ đích; DeepSeek rẻ nhất.
             Cần bạn tự có API key, tính phí theo lượng chữ. Nếu một bên gặp lỗi, hệ thống tự
-            chuyển sang bên còn lại để job không bị hỏng giữa chừng.
+            chuyển sang bên còn lại để bản lồng tiếng không bị hỏng giữa chừng.
           </p>
           <select id="translator_engine_select" class="{{ field_class }}">
             <option value="deepseek">DeepSeek{% if not deepseek_key_exists %} — cần API key{% endif %}</option>
@@ -332,9 +332,9 @@
         <div data-mode-only="video">
           <label class="{{ label_class }}" for="subtitle_mode">Phụ đề</label>
           <select name="subtitle_mode" id="subtitle_mode" class="{{ field_class }}">
-            <option value="bilingual">Song ngữ (EN + VI)</option>
+            <option value="bilingual">Song ngữ (gốc + Tiếng Việt)</option>
             <option value="target">Chỉ tiếng Việt</option>
-            <option value="source">Chỉ tiếng Anh</option>
+            <option value="source">Chỉ ngôn ngữ gốc</option>
             <option value="none">Không phụ đề</option>
           </select>
         </div>
@@ -462,7 +462,7 @@
       </div>
 
       <p class="font-label-sm text-label-sm text-on-surface-variant leading-relaxed">
-        Mỗi lần bấm bắt đầu đều tính một lượt, kể cả khi job thất bại.
+        Mỗi lần bấm bắt đầu đều tính một lượt, kể cả khi xử lý thất bại.
       </p>
 
       <div id="engineHint"
@@ -643,7 +643,7 @@
         document.getElementById(key + "KeyGroup").classList.toggle("hidden", engine !== key);
       });
       if (names[engine]) {
-        hint.textContent = "Nếu " + names[engine] + " gặp lỗi, hệ thống tự chuyển sang nhà cung cấp khác để job không bị hỏng.";
+        hint.textContent = "Nếu " + names[engine] + " gặp lỗi, hệ thống tự chuyển sang nhà cung cấp khác để bản lồng tiếng không bị hỏng.";
         hint.classList.remove("hidden");
       } else {
         hint.classList.add("hidden");
@@ -853,6 +853,31 @@
     const targetLanguageSelect = document.getElementById("target_language");
     const ttsEngineSelect = document.getElementById("tts_engine");
     const ttsVoiceSelect = document.getElementById("tts_voice");
+
+    // Nhãn phụ đề theo đúng cặp ngôn ngữ đang chọn — trước đây ghi cứng
+    // "EN + VI" kể cả khi dịch sang tiếng Nhật.
+    (function syncSubtitleLabels() {
+      const subtitle = document.getElementById("subtitle_mode");
+      const source = document.getElementById("source_language");
+      function name(select) {
+        return select.selectedOptions[0] ? select.selectedOptions[0].textContent.trim() : "";
+      }
+      function paint() {
+        const target = name(targetLanguageSelect);
+        const original = source.value === "auto" ? "ngôn ngữ gốc" : name(source);
+        const labels = {
+          bilingual: "Song ngữ (" + (source.value === "auto" ? "gốc" : original) + " + " + target + ")",
+          target: "Chỉ " + target,
+          source: "Chỉ " + original,
+          none: "Không phụ đề"
+        };
+        Array.from(subtitle.options).forEach(function (o) { o.textContent = labels[o.value] || o.textContent; });
+      }
+      targetLanguageSelect.addEventListener("change", paint);
+      source.addEventListener("change", paint);
+      paint();
+    })();
+
     function languageVoiceLabels() {
       return (VOICE_LABELS_BY_LANGUAGE[targetLanguageSelect.value] || {})[ttsEngineSelect.value] || {};
     }

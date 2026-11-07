@@ -133,7 +133,7 @@
       if (broken.length) {
         const box = document.getElementById("degraded");
         box.textContent = "Hệ thống đang thiếu: " + broken.map(function (k) { return labels[k] || k; }).join(", ") +
-          ". Job mới có thể thất bại.";
+          ". Tác vụ mới có thể thất bại.";
         box.classList.remove("hidden");
       }
     }
