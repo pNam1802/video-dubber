@@ -133,3 +133,18 @@ def test_demo_media_is_public_and_confined(client):
     response.close()
     assert client.get("/demo/../app/main.py").status_code == 404
     assert client.get("/demo/khong-co.mp4").status_code == 404
+
+
+# ── Form tạo bản lồng tiếng ──────────────────────────────────
+def test_whisper_select_matches_default_preset(as_user):
+    """Ô chọn Whisper phải khớp preset mặc định (small). Trước đây nó hiện
+    "Tiny" — đổi công cụ dịch là JS chép "tiny" vào trường gửi lên server."""
+    html = as_user.get("/").get_data(as_text=True)
+    assert '<option value="small" selected>' in html
+    assert 'name="whisper_model" id="whisper_model" value="small"' in html
+
+
+def test_api_keys_are_tucked_away_in_collapsible(as_user):
+    html = as_user.get("/").get_data(as_text=True)
+    assert '<details id="apiKeyDetails"' in html
+    assert 'id="deepseek_api_key"' in html

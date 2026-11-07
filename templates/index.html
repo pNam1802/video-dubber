@@ -194,13 +194,15 @@
         {% endfor %}
       </div>
 
-      <button type="button" id="toggleAdvanced" data-mode-only="video"
-        class="mt-2 text-primary flex items-center gap-1 font-label-sm text-label-sm hover:underline decoration-primary/50 underline-offset-4 self-start">
-        <span class="material-symbols-outlined text-[16px]">tune</span>Tuỳ chỉnh nâng cao
+      <button type="button" id="toggleAdvanced" data-mode-only="video" aria-expanded="false" aria-controls="advanced"
+        class="btn-ghost btn-sm self-start -ml-3 text-primary hover:text-primary">
+        <span class="material-symbols-outlined text-[18px]">tune</span>Tuỳ chỉnh nâng cao
+        <span id="advancedChevron" class="flex transition-transform"><span class="material-symbols-outlined text-[18px]">expand_more</span></span>
       </button>
 
       {# ── Tuỳ chọn thô: đúng tên trường backend đang đọc ── #}
-      <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/40">
+      <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 pt-md border-t border-outline-variant/40">
+        <p data-mode-only="video" class="eyebrow sm:col-span-2 pt-2">Nhận dạng &amp; dịch</p>
         <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
             <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="source_language">Ngôn ngữ nguồn</label>
@@ -239,7 +241,7 @@
           </p>
           <select id="whisper_model_select" class="{{ field_class }}">
             {% for value, text in [('tiny','Tiny — nhanh nhất'), ('base','Base'), ('small','Small'), ('medium','Medium'), ('large','Large — chính xác nhất')] %}
-            <option value="{{ value }}">{{ text }}</option>
+            <option value="{{ value }}"{% if value == "small" %} selected{% endif %}>{{ text }}</option>
             {% endfor %}
           </select>
         </div>
@@ -264,8 +266,9 @@
           </select>
         </div>
 
+        <p data-mode-only="video" class="eyebrow sm:col-span-2 pt-sm border-t border-outline-variant/30 mt-1 pt-2">Giọng đọc</p>
         <div>
-          <label class="{{ label_class }}" for="tts_engine">Giọng đọc</label>
+          <label class="{{ label_class }}" for="tts_engine">Công cụ giọng đọc</label>
           <select name="tts_engine" id="tts_engine" class="{{ field_class }}">
             <option value="vieneu" selected>VieNeu — tự nhiên, clone giọng (miễn phí)</option>
             <option value="chatterbox">Chatterbox — clone giọng tiếng Anh (miễn phí)</option>
@@ -329,6 +332,7 @@
           </div>
         </div>
 
+        <p data-mode-only="video" class="eyebrow sm:col-span-2 pt-sm border-t border-outline-variant/30 mt-1 pt-2">Video &amp; phụ đề</p>
         <div data-mode-only="video">
           <label class="{{ label_class }}" for="subtitle_mode">Phụ đề</label>
           <select name="subtitle_mode" id="subtitle_mode" class="{{ field_class }}">
@@ -365,7 +369,19 @@
           </span>
         </label>
 
-        <div id="deepseekKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {# Hầu hết người dùng chạy bằng key của hệ thống, nên khối này gập lại.
+           Tự mở khi công cụ dịch đang chọn chưa có key hệ thống — xem syncEngineHint(). #}
+        <details id="apiKeyDetails" data-mode-only="video" class="sm:col-span-2 group/keys rounded-xl border border-outline-variant/50 bg-surface-container-low">
+          <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none flex items-center gap-2 px-4 py-3 font-body-md text-body-md text-on-surface">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">key</span>
+            <span class="flex-1">API key riêng <span class="text-on-surface-variant">(không bắt buộc)</span></span>
+            <span class="flex transition-transform group-open/keys:rotate-180"><span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span></span>
+          </summary>
+          <div class="px-4 pb-4 flex flex-col gap-3">
+            <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant">
+              Để trống để dùng key của hệ thống. Key chỉ gửi kèm lần xử lý này, Nora không lưu lại.
+            </p>
+        <div id="deepseekKeyGroup" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="{{ label_class }}" for="deepseek_model">Model DeepSeek</label>
             <input type="text" name="deepseek_model" id="deepseek_model" value="{{ default_deepseek_model }}" class="{{ field_class }} tabular">
@@ -377,7 +393,7 @@
           </div>
         </div>
 
-        <div id="geminiKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div id="geminiKeyGroup" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="{{ label_class }}" for="gemini_model">Model Gemini</label>
             <input type="text" name="gemini_model" id="gemini_model" value="{{ default_gemini_model }}" class="{{ field_class }} tabular">
@@ -389,7 +405,7 @@
           </div>
         </div>
 
-        <div id="openaiKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div id="openaiKeyGroup" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="{{ label_class }}" for="openai_model">Model OpenAI</label>
             <input type="text" name="openai_model" id="openai_model" value="{{ default_openai_model }}" class="{{ field_class }} tabular">
@@ -400,6 +416,8 @@
               placeholder="{% if openai_key_exists %}Dùng key của hệ thống{% else %}sk-...{% endif %}">
           </div>
         </div>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -634,6 +652,11 @@
       });
     }
 
+    const SYSTEM_KEYS = {
+      deepseek: {{ 'true' if deepseek_key_exists else 'false' }},
+      gemini: {{ 'true' if gemini_key_exists else 'false' }},
+      openai: {{ 'true' if openai_key_exists else 'false' }}
+    };
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
       const names = { deepseek: "DeepSeek", gemini: "Gemini", openai: "OpenAI" };
@@ -642,6 +665,8 @@
       Object.keys(names).forEach(function (key) {
         document.getElementById(key + "KeyGroup").classList.toggle("hidden", engine !== key);
       });
+      // Công cụ đang chọn chưa có key hệ thống thì bắt buộc nhập — mở sẵn khối key.
+      if (names[engine] && !SYSTEM_KEYS[engine]) document.getElementById("apiKeyDetails").open = true;
       if (names[engine]) {
         hint.textContent = "Nếu " + names[engine] + " gặp lỗi, hệ thống tự chuyển sang nhà cung cấp khác để bản lồng tiếng không bị hỏng.";
         hint.classList.remove("hidden");
@@ -672,7 +697,9 @@
     });
 
     document.getElementById("toggleAdvanced").addEventListener("click", function () {
-      document.getElementById("advanced").classList.toggle("hidden");
+      const open = document.getElementById("advanced").classList.toggle("hidden") === false;
+      this.setAttribute("aria-expanded", String(open));
+      document.getElementById("advancedChevron").classList.toggle("rotate-180", open);
     });
 
     // Bấm nút info để bật/tắt câu giải thích — dùng click chứ không phải hover
