@@ -491,21 +491,44 @@
 
 {% if outputs %}
 <section class="mt-xl">
-  <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Gần đây</h3>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <div class="flex items-center justify-between mb-md">
+    <h3 class="font-headline-md text-headline-md text-on-surface">Gần đây</h3>
+    <a href="{{ url_for('main.history') }}" class="font-body-md text-body-md text-primary hover:underline underline-offset-4">Xem tất cả</a>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     {% for item in outputs %}
-    <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-4 flex flex-col gap-2">
-      <span class="font-body-md text-body-md text-on-surface truncate" title="{{ item.display_name }}">{{ item.display_name }}</span>
-      <span class="font-label-sm text-label-sm text-on-surface-variant tabular" data-local-time="{{ item.created_at or '' }}"></span>
-      <div class="flex items-center gap-4">
-        <a href="{{ url_for('main.job_detail', job_id=item.id) }}"
-          class="text-primary font-label-sm text-label-sm tracking-normal font-medium">Xem chi tiết</a>
-        {% if item.video_url %}
-        <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
-          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm tracking-normal font-medium">{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}</a>
+    <article class="group relative bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden flex flex-col hover:border-outline transition-colors">
+      {# Khung hình đầu làm ảnh thu nhỏ: video ra đều có +faststart nên
+         preload="metadata" chỉ tải phần đầu file, không kéo cả video. #}
+      <div class="aspect-video bg-surface-container-lowest flex items-center justify-center overflow-hidden">
+        {% if item.video_url and not item.is_audio_only %}
+        <video src="{{ item.video_url }}#t=1" preload="metadata" muted playsinline tabindex="-1" aria-hidden="true"
+          class="w-full h-full object-cover pointer-events-none"></video>
+        {% else %}
+        <span class="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-[28px]">{{ 'graphic_eq' if item.is_audio_only else 'movie' }}</span>
+        </span>
         {% endif %}
       </div>
-    </div>
+      <div class="p-4 flex flex-col gap-1.5 min-w-0">
+        <a href="{{ url_for('main.job_detail', job_id=item.id) }}" title="{{ item.display_name }}"
+          class="font-body-md text-body-md text-on-surface font-medium truncate after:absolute after:inset-0 hover:text-primary">{{ item.display_name }}</a>
+        <div class="flex items-center gap-2 font-label-sm text-label-sm tracking-normal text-on-surface-variant">
+          <span class="material-symbols-outlined text-[16px]">{{ 'record_voice_over' if item.is_script else 'movie' }}</span>
+          <span>{{ 'Đọc kịch bản' if item.is_script else 'Lồng tiếng' }}</span>
+          <span aria-hidden="true">·</span>
+          <span class="tabular" data-local-time="{{ item.created_at or '' }}"></span>
+        </div>
+      </div>
+      {% if item.video_url %}
+      {# Nằm trên lớp link phủ cả thẻ (z-10) để bấm tải không mở trang chi tiết. #}
+      <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
+        title="{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}"
+        class="absolute top-2 right-2 z-10 btn-icon bg-black/60 text-white hover:bg-black/80 hover:text-white sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity">
+        <span class="material-symbols-outlined text-[20px]">download</span>
+      </a>
+      {% endif %}
+    </article>
     {% endfor %}
   </div>
 </section>

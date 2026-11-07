@@ -148,3 +148,19 @@ def test_api_keys_are_tucked_away_in_collapsible(as_user):
     html = as_user.get("/").get_data(as_text=True)
     assert '<details id="apiKeyDetails"' in html
     assert 'id="deepseek_api_key"' in html
+
+
+def test_recent_outputs_show_thumbnail_cards(app, as_user, user):
+    from app.models import JobStatus, JobKind
+    from tests.conftest import make_job
+    with app.app_context():
+        make_job(user, status=JobStatus.DONE, source_filename="bai-1.mp4",
+                 video_url="/media/output/x_dubbed.mp4", video_name="x_dubbed.mp4")
+        make_job(user, status=JobStatus.DONE, kind=JobKind.SCRIPT, source_filename="kich-ban.txt",
+                 video_url="/media/output/y_script.mp3", video_name="y_script.mp3")
+    html = as_user.get("/").get_data(as_text=True)
+    # Video lấy khung hình đầu làm ảnh thu nhỏ; bản chỉ có âm thanh hiện icon sóng âm.
+    assert 'src="/media/output/x_dubbed.mp4#t=1" preload="metadata"' in html
+    assert "y_script.mp3#t=1" not in html
+    assert "graphic_eq" in html
+    assert "Xem tất cả" in html
