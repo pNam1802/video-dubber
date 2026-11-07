@@ -23,9 +23,101 @@
     font-family: "Be Vietnam Pro", sans-serif;
   }
 
+  /* Viền nổi khi đi bằng bàn phím (Tab), không hiện khi bấm chuột. Đặt một
+     lần ở đây thay vì thêm focus-visible:… vào từng nút trong template. */
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible,
+  input[type="checkbox"]:focus-visible,
+  input[type="radio"]:focus-visible,
+  input[type="range"]:focus-visible {
+    outline: 2px solid #bdfd5d;
+    outline-offset: 2px;
+  }
+
   /* Chữ số thẳng cột trong bảng và biểu đồ. */
   .tabular {
     font-family: "JetBrains Mono", monospace;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+ * Thành phần dùng chung. Trước đây mỗi nút, ô nhập, thẻ lặp lại một chuỗi
+ * class dài ~150 ký tự và lệch nhau giữa các trang (góc vuông ở trang đăng
+ * nhập, tròn hẳn ở trang cài đặt...). Một thang bo góc duy nhất:
+ *   thẻ 16px (rounded-2xl) · nút, ô nhập 12px (rounded-xl) · chip tròn hẳn.
+ */
+@layer components {
+  .card {
+    @apply bg-surface-container rounded-2xl border border-outline-variant/40 p-lg;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
+      font-body-md text-body-md font-semibold whitespace-nowrap
+      transition-colors duration-150
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-label-sm;
+  }
+  .btn-lg {
+    @apply px-6 py-4 text-headline-md rounded-2xl;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-on-primary hover:bg-primary-fixed-dim;
+  }
+  .btn-secondary {
+    @apply btn border border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-outline;
+  }
+  .btn-danger {
+    @apply btn border border-error/40 text-error hover:bg-error/10;
+  }
+  .btn-ghost {
+    @apply btn text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-xl text-on-surface-variant
+      hover:text-on-surface hover:bg-surface-container-high transition-colors;
+  }
+
+  .input {
+    @apply w-full bg-surface-container-high border border-outline-variant/60 text-on-surface
+      font-body-md text-body-md rounded-xl px-3 py-2 placeholder-outline
+      transition-colors focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary
+      disabled:text-on-surface-variant disabled:cursor-not-allowed;
+  }
+
+  .field-label {
+    @apply block mb-1.5 font-label-sm text-label-sm text-on-surface-variant tracking-normal;
+  }
+
+  /* Nhãn nhóm nhỏ — chỗ duy nhất còn chữ in hoa. */
+  .eyebrow {
+    @apply font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant/70;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-full border font-label-sm text-label-sm transition-colors;
+  }
+
+  .page-title {
+    @apply font-headline-xl text-headline-xl text-on-surface flex items-center gap-3;
+  }
+}
+
+/* Chrome tự điền mật khẩu sẽ tô nền ô nhập màu trắng xanh, lạc tông nền tối.
+   Không đổi được background khi autofill, nên phủ bóng đổ bên trong thay. */
+@layer base {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: #e0e3e5;
+    -webkit-box-shadow: 0 0 0 1000px #272b2d inset;
+    caret-color: #e0e3e5;
+    transition: background-color 9999s ease-out 0s;
   }
 }

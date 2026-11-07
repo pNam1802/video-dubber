@@ -28,16 +28,16 @@
     <div class="flex flex-wrap items-center justify-center gap-3 mt-md">
       {% if current_user.is_authenticated %}
       <a href="{{ url_for('main.index') }}"
-        class="inline-flex items-center gap-2 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+        class="inline-flex items-center gap-2 btn-primary">
         <span class="material-symbols-outlined text-[18px]">home</span>Về trang chủ
       </a>
       <a href="{{ url_for('main.history') }}"
-        class="inline-flex items-center gap-2 border border-outline-variant text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full hover:text-on-surface transition-colors">
+        class="inline-flex items-center gap-2 btn-secondary">
         <span class="material-symbols-outlined text-[18px]">history</span>Lịch sử
       </a>
       {% else %}
       <a href="{{ url_for('auth.login') }}"
-        class="inline-flex items-center gap-2 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold">
+        class="inline-flex items-center gap-2 btn-primary">
         <span class="material-symbols-outlined text-[18px]">login</span>Đăng nhập
       </a>
       {% endif %}

@@ -6,7 +6,7 @@
    "/" lồng tiếng video, "/doc-kich-ban" đọc kịch bản. Phần tử chỉ thuộc một
    chế độ mang data-mode-only; xem setMode(). #}
 <div class="mb-xl flex items-center justify-between">
-  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+  <h2 class="page-title">
     {% if mode == 'script' %}
     <span class="material-symbols-outlined text-[32px] text-primary">record_voice_over</span>Đọc kịch bản
     {% else %}
@@ -25,14 +25,14 @@
   <div class="lg:col-span-8 flex flex-col gap-lg">
 
     {# ── Bước 1 (đọc kịch bản): dán văn bản ──────────────── #}
-    <section data-mode-only="script" class="hidden bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
+    <section data-mode-only="script" class="hidden card flex flex-col gap-md">
       <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
         <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
         Dán kịch bản
       </h3>
       <textarea name="script" id="script" rows="12" maxlength="{{ script_max_chars }}"
         placeholder="Dán nội dung cần đọc vào đây. Mỗi lần xuống dòng là một đoạn — giọng đọc sẽ nghỉ lâu hơn ở chỗ xuống dòng."
-        class="w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary resize-y"></textarea>
+        class="input resize-y"></textarea>
       <p class="font-label-sm text-label-sm text-on-surface-variant tabular">
         <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
         <span id="scriptLength"></span>
@@ -41,7 +41,7 @@
         Đọc nguyên văn theo ngôn ngữ bạn chọn ở bước 2 (không dịch). Kết quả: một file mp3 và file phụ đề SRT.
       </p>
       <fieldset class="flex flex-col gap-2">
-        <legend class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-2">Ảnh minh hoạ</legend>
+        <legend class="field-label">Ảnh minh hoạ</legend>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {% for value, label, hint in [
             ('none', 'Không có ảnh', 'Chỉ file mp3 + SRT'),
@@ -61,7 +61,7 @@
         </div>
         {# Chỉ hiện khi chọn Manhwa recap — xem syncRecapStyle(). Ảnh mẫu ở static/recap_styles/. #}
         <div id="recapStyles" class="hidden flex flex-col gap-2 mt-2">
-          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Kiểu nhân vật</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Kiểu nhân vật</span>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {% for value, label, hint in [
               ('sunflower', 'Cô gái hướng dương (mặc định)', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc'),
@@ -91,7 +91,7 @@
     </section>
 
     {# ── Bước 1: chọn video ───────────────────────────── #}
-    <section data-mode-only="video" class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
+    <section data-mode-only="video" class="card flex flex-col gap-md">
       <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
         <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
         Chọn video
@@ -117,7 +117,7 @@
       <div id="filePreview"
         class="hidden bg-surface-container-high rounded-2xl p-4 flex items-center justify-between border border-outline-variant/50">
         <div class="flex items-center gap-4 min-w-0">
-          <div class="w-16 h-16 rounded-xl bg-background flex items-center justify-center border border-outline-variant/30 flex-shrink-0">
+          <div class="w-16 h-16 rounded-xl bg-background flex items-center justify-center border border-outline-variant/40 flex-shrink-0">
             <span class="material-symbols-outlined text-on-surface-variant">movie</span>
           </div>
           <div class="flex flex-col min-w-0">
@@ -134,7 +134,7 @@
           </div>
         </div>
         <button type="button" id="clearFile"
-          class="text-error hover:bg-error/10 p-2 rounded-lg transition-colors flex items-center gap-2 font-label-sm text-label-sm uppercase tracking-wider">
+          class="btn-danger btn-sm border-transparent">
           <span class="material-symbols-outlined text-[18px]">delete</span><span class="hidden sm:inline">Xoá</span>
         </button>
       </div>
@@ -148,7 +148,7 @@
     </section>
 
     {# ── Bước 2: chất lượng ───────────────────────────── #}
-    <section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md">
+    <section class="card flex flex-col gap-md">
       <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
         <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">2</span>
         <span id="step2Title">Chất lượng</span>
@@ -156,11 +156,11 @@
 
       {# Dời lên đây từ khối "nâng cao" phía dưới — dropdown Ngôn ngữ đích ở
          ngay trên cần dùng field_class trước khi khối đó được render. #}
-      {% set field_class = "w-full bg-surface-container-high border border-outline-variant/50 text-on-surface font-body-md text-body-md rounded-xl px-3 py-2 focus:outline-none focus:border-primary" %}
-      {% set label_class = "font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" %}
+      {% set field_class = "input" %}
+      {% set label_class = "field-label" %}
 
       <div class="max-w-xs">
-        <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-1 block" for="target_language"
+        <label class="field-label" for="target_language"
           id="targetLanguageLabel">Ngôn ngữ đích</label>
         <select name="target_language" id="target_language" class="{{ field_class }}">
           <option value="vi" selected>Tiếng Việt</option>
@@ -203,7 +203,7 @@
       <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/40">
         <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="source_language">Ngôn ngữ nguồn</label>
+            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="source_language">Ngôn ngữ nguồn</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
               data-tip="sourceLangTip" aria-expanded="false" aria-label="Giải thích ngôn ngữ nguồn">
               <span class="material-symbols-outlined text-[16px]">info</span>
@@ -226,7 +226,7 @@
 
         <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="whisper_model_select">Mô hình Whisper</label>
+            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="whisper_model_select">Mô hình Whisper</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
               data-tip="whisperTip" aria-expanded="false" aria-label="Giải thích các mô hình Whisper">
               <span class="material-symbols-outlined text-[16px]">info</span>
@@ -246,7 +246,7 @@
 
         <div data-mode-only="video">
           <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider" for="translator_engine_select">Công cụ dịch</label>
+            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="translator_engine_select">Công cụ dịch</label>
             <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
               data-tip="engineTip" aria-expanded="false" aria-label="Giải thích các công cụ dịch">
               <span class="material-symbols-outlined text-[16px]">info</span>
@@ -280,7 +280,7 @@
           <div class="flex gap-2">
             <select name="tts_voice" id="tts_voice" class="{{ field_class }} flex-1 min-w-0"></select>
             <button type="button" id="voicePreviewBtn" title="Nghe thử giọng này"
-                    class="hidden flex-shrink-0 inline-flex items-center gap-1 px-3 rounded-lg border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+                    class="hidden flex-shrink-0 btn-secondary px-3">
               <span id="voicePreviewPlay" class="flex"><span class="material-symbols-outlined text-[20px]">play_arrow</span></span>
               <span id="voicePreviewStop" class="flex hidden"><span class="material-symbols-outlined text-[20px]">stop</span></span>
               <span class="font-label-sm text-label-sm">Nghe thử</span>
@@ -416,13 +416,13 @@
     <p id="uploadStatus" class="hidden text-center font-body-md text-body-md text-primary tabular"></p>
 
     {# ── Lỗi ──────────────────────────────────────────── #}
-    <section id="errorCard" class="hidden bg-error-container/20 rounded-3xl p-lg border border-error/50 flex flex-col gap-3">
+    <section id="errorCard" class="hidden bg-error-container/20 rounded-2xl p-lg border border-error/50 flex flex-col gap-3">
       <h3 class="font-headline-md text-headline-md text-error flex items-center gap-2">
         <span class="material-symbols-outlined">error</span>Xử lý thất bại
       </h3>
       <p id="errorMessage" class="font-body-md text-body-md text-on-error-container"></p>
       <button type="button" id="retryBtn"
-        class="self-start border border-error/60 text-error font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
+        class="self-start btn-danger">
         Thử lại
       </button>
     </section>
@@ -430,7 +430,7 @@
 
   {# ── Cột phải: tóm tắt ──────────────────────────────── #}
   <div class="lg:col-span-4">
-    <div class="sticky top-[88px] bg-surface-container-low rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-5">
+    <div class="sticky top-[88px] bg-surface-container-low rounded-2xl p-lg border border-outline-variant/40 flex flex-col gap-5">
       <div class="flex items-center gap-3 pb-4 border-b border-outline-variant/50">
         <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
           <span class="material-symbols-outlined text-primary">receipt_long</span>
@@ -476,15 +476,15 @@
   <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Gần đây</h3>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for item in outputs %}
-    <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-4 flex flex-col gap-2">
+    <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-4 flex flex-col gap-2">
       <span class="font-body-md text-body-md text-on-surface truncate" title="{{ item.display_name }}">{{ item.display_name }}</span>
       <span class="font-label-sm text-label-sm text-on-surface-variant tabular" data-local-time="{{ item.created_at or '' }}"></span>
       <div class="flex items-center gap-4">
         <a href="{{ url_for('main.job_detail', job_id=item.id) }}"
-          class="text-primary font-label-sm text-label-sm uppercase tracking-wider">Xem chi tiết</a>
+          class="text-primary font-label-sm text-label-sm tracking-normal font-medium">Xem chi tiết</a>
         {% if item.video_url %}
         <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
-          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider">{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}</a>
+          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm tracking-normal font-medium">{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}</a>
         {% endif %}
       </div>
     </div>
@@ -627,7 +627,8 @@
         const on = btn.dataset.preset === active;
         btn.classList.toggle("bg-primary/10", on);
         btn.classList.toggle("border-primary", on);
-        btn.classList.toggle("border-2", on);
+        btn.classList.toggle("ring-1", on);
+        btn.classList.toggle("ring-primary", on);
         btn.classList.toggle("bg-surface-container-high", !on);
         btn.querySelector("span.material-symbols-outlined").classList.toggle("text-primary", on);
       });

@@ -15,7 +15,7 @@
 <div class="flex flex-wrap items-start justify-between gap-md mb-xl">
   <div class="min-w-0">
     <a href="{{ url_for('main.script_reader') if job.is_script else url_for('main.index') }}"
-      class="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary font-label-sm text-label-sm uppercase tracking-wider mb-2">
+      class="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary font-label-sm text-label-sm tracking-normal font-medium mb-2">
       <span class="material-symbols-outlined text-[16px]">arrow_back</span>{{ 'Đọc kịch bản' if job.is_script else 'Tạo bản lồng tiếng' }}
     </a>
     <h2 class="font-headline-xl text-headline-xl text-on-surface truncate" title="{{ job.source_filename }}">
@@ -27,7 +27,7 @@
   </div>
 
   <span id="statusPill"
-    class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm uppercase tracking-wider {{ STATUS.get(job.status, ('', 'text-on-surface-variant', 'help'))[1] }}">
+    class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-outline-variant font-label-sm text-label-sm tracking-normal font-medium {{ STATUS.get(job.status, ('', 'text-on-surface-variant', 'help'))[1] }}">
     <span class="material-symbols-outlined text-[18px]">{{ STATUS.get(job.status, ('', '', 'help'))[2] }}</span>
     <span id="statusText">{{ STATUS.get(job.status, (job.status, '', ''))[0] }}</span>
   </span>
@@ -35,7 +35,7 @@
 
 {# ── Đang chờ hoặc đang chạy ───────────────────────────── #}
 <section id="liveCard"
-  class="{% if job.is_finished or job.status == 'awaiting_review' %}hidden {% endif %}bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md mb-lg">
+  class="{% if job.is_finished or job.status == 'awaiting_review' %}hidden {% endif %}card flex flex-col gap-md mb-lg">
   {# Ẩn mặc định — chỉ hiện khi vài lần lấy tiến trình liên tiếp đều lỗi.
      Không phải lỗi thật: job vẫn chạy trên server, chỉ là trình duyệt tạm
      thời không lấy được tiến trình. #}
@@ -65,7 +65,7 @@
 
   <div class="flex items-center gap-4">
     <button type="button" id="cancelBtn" class="cancel-job-btn
-      text-error hover:bg-error/10 px-4 py-2 rounded-full border border-error/40 font-label-sm text-label-sm uppercase tracking-wider">
+      btn-danger">
       Huỷ job
     </button>
     <span id="elapsed" class="tabular font-label-sm text-label-sm text-on-surface-variant"></span>
@@ -74,7 +74,7 @@
 
 {# ── Chờ duyệt transcript ───────────────────────────────── #}
 <section id="reviewCard"
-  class="{% if job.status != 'awaiting_review' %}hidden {% endif %}bg-surface-container rounded-3xl p-lg border border-outline-variant/30 flex flex-col gap-md mb-lg">
+  class="{% if job.status != 'awaiting_review' %}hidden {% endif %}card flex flex-col gap-md mb-lg">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
       <span class="material-symbols-outlined text-tertiary">fact_check</span>Duyệt transcript trước khi tạo giọng đọc
@@ -96,13 +96,13 @@
   <div id="reviewList" class="flex flex-col gap-3 max-h-[520px] overflow-y-auto -mx-1 px-1"></div>
   <p id="reviewStatus" class="hidden font-label-sm text-label-sm"></p>
 
-  <div class="flex items-center gap-3 pt-3 border-t border-outline-variant/30">
+  <div class="flex items-center gap-3 pt-3 border-t border-outline-variant/40">
     <button type="button" id="continueBtn"
-      class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-5 py-2.5 rounded-full font-bold flex items-center gap-2">
+      class="btn-primary flex items-center gap-2">
       <span class="material-symbols-outlined text-[18px]">graphic_eq</span>Xác nhận, tạo giọng đọc
     </button>
     <button type="button" id="cancelBtnReview" class="cancel-job-btn
-      text-error hover:bg-error/10 px-4 py-2 rounded-full border border-error/40 font-label-sm text-label-sm uppercase tracking-wider">
+      btn-danger">
       Huỷ job
     </button>
   </div>
@@ -133,17 +133,17 @@
 
       <div class="flex flex-wrap gap-3">
         <a id="downloadVideo" href="{{ job.video_url or '#' }}" download="{{ job.download_video_name }}"
-          class="bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full font-bold flex items-center gap-2">
+          class="btn-primary flex items-center gap-2">
           <span class="material-symbols-outlined text-[18px]">download</span>{{ 'Tải âm thanh' if job.is_audio_only else 'Tải video' }}
         </a>
         {% if job.srt_url %}
         <a href="{{ job.srt_url }}" download="{{ job.download_srt_name }}"
-          class="border border-outline-variant text-on-surface font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full flex items-center gap-2">
+          class="btn-secondary flex items-center gap-2">
           <span class="material-symbols-outlined text-[18px]">subtitles</span>Tải phụ đề
         </a>
         {% endif %}
         <button type="button" id="copyLink"
-          class="border border-outline-variant text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full flex items-center gap-2">
+          class="btn-secondary flex items-center gap-2">
           <span class="material-symbols-outlined text-[18px]">link</span><span>Chép liên kết</span>
         </button>
       </div>
@@ -151,7 +151,7 @@
 
     {# Ẩn mặc định — chỉ hiện khi job có transcript lưu lại (job cũ chạy
        trước khi có bảng transcript_segment thì không có gì để hiện). #}
-    <div id="transcriptPanel" class="hidden lg:col-span-2 bg-surface-container rounded-2xl border border-outline-variant/30 flex flex-col gap-3 p-lg max-h-[460px]">
+    <div id="transcriptPanel" class="hidden lg:col-span-2 bg-surface-container rounded-2xl border border-outline-variant/40 flex flex-col gap-3 p-lg max-h-[460px]">
       <div class="flex items-center justify-between gap-2">
         <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
           <span class="material-symbols-outlined text-[20px] text-primary">subtitles</span>Lời thoại
@@ -161,7 +161,7 @@
       <div class="relative">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
         <input id="transcriptSearch" type="search" placeholder="Tìm trong lời thoại..."
-          class="w-full bg-background border border-outline-variant text-on-surface font-body-md text-body-md pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:border-primary placeholder-outline">
+          class="input pl-10">
       </div>
       <div id="transcriptList" class="flex-1 overflow-y-auto flex flex-col gap-0.5 -mx-2"></div>
       <p id="transcriptEmpty" class="hidden font-body-md text-body-md text-on-surface-variant text-center py-4">
@@ -171,14 +171,14 @@
   </div>
 
   {# Thời gian từng bước — dữ liệu thật, không phải ước lượng #}
-  {% set steps = [('Tách audio', job.extract_sec, '#8c947d'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
+  {% set steps = [('Tách audio', job.extract_sec, '#7d868c'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
                   ('Dịch', job.translate_sec, '#9bd93c'), ('Tổng hợp giọng', job.tts_sec, '#ffbfac'),
                   ('Ghép video', job.compose_sec, '#c2c7cb')] %}
   {% set measured = steps | selectattr('1') | list %}
   {% if measured %}
   {% set total = measured | map(attribute=1) | sum %}
-  <div class="bg-surface-container rounded-2xl p-lg border border-outline-variant/30 flex flex-col gap-3">
-    <p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Thời gian từng bước</p>
+  <div class="bg-surface-container rounded-2xl p-lg border border-outline-variant/40 flex flex-col gap-3">
+    <p class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Thời gian từng bước</p>
     <div class="w-full h-3 rounded-full overflow-hidden flex bg-surface-container-high">
       {% for label, value, colour in measured %}
       <div style="width: {{ (value / total * 100) | round(1) }}%; background: {{ colour }}" title="{{ label }}"></div>
@@ -199,7 +199,7 @@
 
 {# ── Thất bại ──────────────────────────────────────────── #}
 <section id="failCard"
-  class="{% if job.status not in ['failed', 'interrupted'] %}hidden {% endif %}bg-error-container/20 rounded-3xl p-lg border border-error/50 flex flex-col gap-3 mb-lg">
+  class="{% if job.status not in ['failed', 'interrupted'] %}hidden {% endif %}bg-error-container/20 rounded-2xl p-lg border border-error/50 flex flex-col gap-3 mb-lg">
   <h3 class="font-headline-md text-headline-md text-error flex items-center gap-2">
     <span class="material-symbols-outlined">error</span>
     {% if job.status == 'interrupted' %}Bị gián đoạn{% else %}Không xử lý được{% endif %}
@@ -207,20 +207,20 @@
   <p id="failMessage" class="font-body-md text-body-md text-on-error-container">{{ job.message }}</p>
   {% if job.error %}
   <details class="mt-1">
-    <summary class="cursor-pointer font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
+    <summary class="cursor-pointer font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">
       Chi tiết kỹ thuật
     </summary>
     <pre class="mt-2 p-3 rounded-xl bg-background border border-outline-variant/50 text-[12px] leading-relaxed text-on-surface-variant overflow-x-auto whitespace-pre-wrap">{{ job.error }}</pre>
   </details>
   {% endif %}
   <a href="{{ url_for('main.script_reader') if job.is_script else url_for('main.index') }}"
-    class="self-start border border-error/60 text-error font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
+    class="self-start btn-danger">
     Thử lại
   </a>
 </section>
 
 {# ── Thông tin ─────────────────────────────────────────── #}
-<section class="bg-surface-container rounded-3xl p-lg border border-outline-variant/30">
+<section class="card">
   <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Thông tin</h3>
   <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     {% if job.is_script %}
@@ -251,7 +251,7 @@
     {% endif %}
     {% for label, value in rows %}
     <div class="flex flex-col gap-1">
-      <dt class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">{{ label }}</dt>
+      <dt class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">{{ label }}</dt>
       <dd class="font-body-md text-body-md text-on-surface tabular">{{ value }}</dd>
     </div>
     {% endfor %}

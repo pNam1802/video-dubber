@@ -11,7 +11,7 @@
 <body
   class="bg-background text-on-surface min-h-screen flex items-center justify-center font-body-md selection:bg-primary-container selection:text-on-primary">
 
-  <div class="w-full max-w-[1280px] min-h-screen md:min-h-[720px] flex flex-col md:flex-row border border-outline-variant bg-surface-container-low mx-auto md:my-8">
+  <div class="w-full max-w-[1280px] min-h-screen md:min-h-[720px] flex flex-col md:flex-row md:border border-outline-variant md:rounded-3xl overflow-hidden bg-surface-container-low mx-auto md:my-8 md:shadow-2xl md:shadow-black/40">
 
     {# ── Trái: giới thiệu sản phẩm ─────────────────────────── #}
     <div class="w-full md:w-1/2 p-xl flex flex-col justify-between border-b md:border-b-0 md:border-r border-outline-variant relative overflow-hidden bg-background">
@@ -43,9 +43,9 @@
       </div>
 
       <div class="relative z-10 mt-xl">
-        <div class="inline-flex items-center gap-sm bg-surface-container-high px-md py-sm border border-outline-variant">
+        <div class="inline-flex items-center gap-sm bg-surface-container-high px-md py-sm border border-outline-variant rounded-full">
           <span class="material-symbols-outlined text-primary text-[18px]">speed</span>
-          <span class="text-label-sm font-label-sm uppercase tracking-wider text-on-surface">
+          <span class="text-label-sm font-label-sm tracking-normal font-medium text-on-surface">
             Video 86 giây → xong trong 23 giây
           </span>
         </div>
@@ -70,7 +70,7 @@
         {% if messages %}
         <div class="flex flex-col gap-2 mb-lg">
           {% for category, message in messages %}
-          <div class="border-l-4 p-md flex items-start gap-md font-body-md text-body-md
+          <div class="rounded-xl border p-md flex items-start gap-md font-body-md text-body-md
             {% if category == 'danger' %}bg-error-container/30 border-error text-error
             {% elif category == 'success' %}bg-primary/10 border-primary text-primary
             {% else %}bg-surface-container border-outline text-on-surface-variant{% endif %}">
@@ -86,7 +86,7 @@
 
         {% if google_enabled %}
         <a href="{{ url_for('oauth.login') }}"
-          class="w-full flex items-center justify-center gap-sm border border-outline-variant bg-background hover:bg-surface-container-high transition-colors py-md text-body-md font-body-md text-on-surface mb-lg">
+          class="btn-secondary w-full py-3 mb-lg font-medium">
           <svg class="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true">
             <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h11.8c-.5 2.8-2 5.1-4.4 6.7v5.6h7.1c4.2-3.8 6.6-9.5 6.6-16.3z"/>
             <path fill="#34A853" d="M24 46c6 0 11-2 14.6-5.2l-7.1-5.6c-2 1.3-4.5 2.1-7.5 2.1-5.8 0-10.7-3.9-12.4-9.1H4.2v5.8C7.8 41.2 15.3 46 24 46z"/>
@@ -98,14 +98,14 @@
 
         <div class="flex items-center gap-md mb-lg">
           <div class="h-px flex-1 bg-outline-variant"></div>
-          <span class="text-label-sm font-label-sm uppercase text-on-surface-variant">hoặc</span>
+          <span class="text-label-sm font-label-sm text-on-surface-variant">hoặc</span>
           <div class="h-px flex-1 bg-outline-variant"></div>
         </div>
         {% endif %}
 
         {% block form %}{% endblock %}
 
-        <div class="mt-xl pt-md border-t border-outline-variant flex flex-wrap gap-md text-label-sm font-label-sm uppercase tracking-wider">
+        <div class="mt-xl pt-md border-t border-outline-variant flex flex-wrap gap-md text-label-sm font-label-sm tracking-normal font-medium">
           <a href="{{ url_for('main.privacy') }}" class="text-on-surface-variant hover:text-primary">Chính sách bảo mật</a>
           <a href="{{ url_for('main.terms') }}" class="text-on-surface-variant hover:text-primary">Điều khoản</a>
         </div>

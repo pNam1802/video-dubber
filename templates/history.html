@@ -3,21 +3,21 @@
 
 {% block content %}
 <div class="mb-lg flex flex-wrap items-center justify-between gap-md">
-  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+  <h2 class="page-title">
     <span class="material-symbols-outlined text-[32px] text-primary">history</span>Lịch sử lồng tiếng
   </h2>
   <a href="{{ url_for('main.index') }}"
-    class="bg-primary-container text-on-primary-container font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 font-bold flex items-center gap-2">
+    class="btn-primary flex items-center gap-2">
     <span class="material-symbols-outlined text-[18px]">add</span>Tạo mới
   </a>
 </div>
 
 {# ── Thanh lọc ─────────────────────────────────────────── #}
-<div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-md flex flex-wrap items-center gap-md mb-lg">
+<div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-md flex flex-wrap items-center gap-md mb-lg">
   <div class="relative flex-1 min-w-[220px]">
     <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
     <input id="search" type="search" placeholder="Tìm theo tên video..."
-      class="w-full bg-background border border-outline-variant text-on-surface font-body-md text-body-md pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:border-primary placeholder-outline">
+      class="input pl-10">
   </div>
 
   <div class="flex flex-wrap gap-2" id="statusChips">
@@ -31,7 +31,7 @@
   </div>
 
   <select id="engineFilter"
-    class="bg-background border border-outline-variant text-on-surface font-body-md text-body-md px-3 py-2 rounded-xl focus:outline-none focus:border-primary">
+    class="input w-auto">
     <option value="all">Mọi công cụ</option>
     <option value="marian">MarianMT</option>
     <option value="deepseek">DeepSeek</option>
@@ -41,13 +41,13 @@
 </div>
 
 {# ── Bảng ──────────────────────────────────────────────── #}
-<div class="bg-surface-container rounded-2xl border border-outline-variant/30 overflow-hidden">
+<div class="bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full min-w-[820px]">
       <thead>
         <tr class="bg-surface-container-high">
           {% for label in ['Video', 'Trạng thái', 'Công cụ', 'Thời gian xử lý', 'Chi phí', 'Ngày tạo', ''] %}
-          <th class="text-left px-4 py-3 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">{{ label }}</th>
+          <th class="text-left px-4 py-3 font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">{{ label }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -62,11 +62,11 @@
       Thử ngay video đầu tiên của bạn.
     </p>
     <a href="{{ url_for('main.index') }}" id="emptyAction"
-      class="mt-2 bg-primary text-on-primary font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full font-bold">
+      class="mt-2 btn-primary">
       Tạo bản lồng tiếng
     </a>
     <button type="button" id="clearFilters"
-      class="hidden mt-2 border border-outline-variant text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider px-4 py-2 rounded-full">
+      class="hidden mt-2 btn-secondary">
       Xoá bộ lọc
     </button>
   </div>
@@ -191,7 +191,7 @@
         const fallback = job.fallback_used
           ? ' <span class="material-symbols-outlined text-[14px] text-tertiary align-middle" title="Đã tự chuyển engine">swap_horiz</span>'
           : "";
-        return '<tr class="border-t border-outline-variant/30 hover:bg-surface-container-high/60 transition-colors">' +
+        return '<tr class="border-t border-outline-variant/40 hover:bg-surface-container-high/60 transition-colors">' +
           '<td class="px-4 py-3 max-w-[280px]">' +
             '<a href="/job/' + job.id + '" class="font-body-md text-body-md text-on-surface hover:text-primary truncate block" title="' +
             escapeHtml(job.source_filename) + '">' +
@@ -298,7 +298,12 @@
     rows.addEventListener("click", async function (e) {
       const btn = e.target.closest("[data-delete]");
       if (!btn) return;
-      if (!window.confirm("Xoá video này? Cả video và phụ đề sẽ bị xoá vĩnh viễn.")) return;
+      const ok = await Nora.confirm({
+        title: "Xoá bản lồng tiếng này?",
+        message: "Cả video và phụ đề sẽ bị xoá vĩnh viễn, không khôi phục được.",
+        confirmLabel: "Xoá vĩnh viễn"
+      });
+      if (!ok) return;
       btn.disabled = true;
       try {
         const res = await fetch("/api/jobs/" + btn.dataset.delete, {
@@ -307,10 +312,11 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Không xoá được.");
+        Nora.toast("Đã xoá.", "success");
         load();
       } catch (err) {
         btn.disabled = false;
-        window.alert(err.message);
+        Nora.toast(err.message, "error");
       }
     });
 

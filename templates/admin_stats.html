@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="mb-lg">
-  <h2 class="font-headline-xl text-headline-xl text-on-surface flex items-center gap-3">
+  <h2 class="page-title">
     <span class="material-symbols-outlined text-[32px] text-primary">monitoring</span>Thống kê
   </h2>
   <p class="font-body-md text-body-md text-on-surface-variant mt-1">Toàn hệ thống</p>
@@ -17,8 +17,8 @@
   {% for key, label in [('jobs','Tổng job'), ('success_rate','Tỉ lệ thành công'), ('gpu_seconds','Giây GPU'),
                         ('estimated_cost_usd','Chi phí máy chủ'), ('translate_cost_usd','Chi phí dịch (API)'),
                         ('avg_seconds_per_job','TB mỗi job'), ('users','Người dùng')] %}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-4 flex flex-col gap-1">
-    <span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">{{ label }}</span>
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-4 flex flex-col gap-1">
+    <span class="font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">{{ label }}</span>
     <span data-tile="{{ key }}" class="tabular text-headline-lg font-headline-lg text-on-surface">—</span>
   </div>
   {% endfor %}
@@ -26,7 +26,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg mb-lg">
   {# ── Job theo ngày ───────────────────────────────────── #}
-  <div class="lg:col-span-2 bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-md">
+  <div class="lg:col-span-2 bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-md">
     <div class="flex items-baseline justify-between">
       <h3 class="font-headline-md text-headline-md text-on-surface">Job theo ngày</h3>
       <span class="font-label-sm text-label-sm text-on-surface-variant">14 ngày gần nhất</span>
@@ -43,7 +43,7 @@
   </div>
 
   {# ── Theo công cụ dịch ───────────────────────────────── #}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-md">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-md">
     <h3 class="font-headline-md text-headline-md text-on-surface">Theo công cụ dịch</h3>
     <div class="relative h-[240px]">
       <canvas id="engineChart"></canvas>
@@ -57,7 +57,7 @@
 </div>
 
 {# ── Sức khoẻ công cụ dịch ─────────────────────────────── #}
-<div class="bg-surface-container rounded-2xl border border-outline-variant/30 overflow-hidden mb-lg">
+<div class="bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden mb-lg">
   <div class="px-lg py-md border-b border-outline-variant/40">
     <h3 class="font-headline-md text-headline-md text-on-surface">Sức khoẻ công cụ dịch</h3>
   </div>
@@ -67,7 +67,7 @@
       <thead>
         <tr class="bg-surface-container-high">
           {% for label in ['Công cụ', 'Số job', 'Hoàn tất', 'Thất bại', 'Tỷ lệ lỗi', 'Thời gian dịch TB'] %}
-          <th class="text-left px-4 py-2 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">{{ label }}</th>
+          <th class="text-left px-4 py-2 font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">{{ label }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -82,7 +82,7 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
   {# ── Thời gian từng bước ─────────────────────────────── #}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-md">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-md">
     <h3 class="font-headline-md text-headline-md text-on-surface">Thời gian trung bình từng bước</h3>
     <div class="relative h-[220px]">
       <canvas id="stepChart"></canvas>
@@ -95,7 +95,7 @@
   </div>
 
   {# ── Tốn nhiều nhất ──────────────────────────────────── #}
-  <div class="bg-surface-container rounded-2xl border border-outline-variant/30 p-lg flex flex-col gap-md">
+  <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-md">
     <h3 class="font-headline-md text-headline-md text-on-surface">Tốn nhiều nhất</h3>
     <div id="topUsers" class="flex flex-col gap-2">
       {% for _ in range(5) %}
@@ -125,7 +125,7 @@
 
     //: Chỉ một chuỗi số liệu thì màu không mang thông tin gì — dùng màu thương hiệu.
     const BRAND = "#bdfd5d";
-    const INK = "#c2c9b1";                  // on-surface-variant
+    const INK = "#a9b2b8";                  // on-surface-variant
     const GRID = "rgba(66, 73, 55, 0.5)";   // outline-variant, làm mờ đi
 
     const STEP_LABELS = {
@@ -139,7 +139,7 @@
     Chart.defaults.color = INK;
     Object.assign(Chart.defaults.plugins.tooltip, {
       backgroundColor: "#272b2d",
-      borderColor: "#424937",
+      borderColor: "#353c41",
       borderWidth: 1,
       titleColor: "#e0e3e5",
       bodyColor: "#e0e3e5",
@@ -332,7 +332,7 @@
         const pending = row.unfinished
           ? '<span class="font-label-sm text-label-sm text-on-surface-variant"> · ' + row.unfinished + " chưa xong</span>"
           : "";
-        return '<tr class="border-t border-outline-variant/30">' +
+        return '<tr class="border-t border-outline-variant/40">' +
           '<td class="px-4 py-3 font-body-md text-body-md text-on-surface">' + escapeHtml(name) + "</td>" +
           '<td class="px-4 py-3 text-on-surface-variant"><span class="tabular">' + row.total + "</span>" + pending + "</td>" +
           '<td class="px-4 py-3 tabular text-primary">' + row.done + "</td>" +
@@ -409,7 +409,7 @@
       const tone = stale ? "text-on-surface-variant" : "text-error";
 
       const head = document.createElement("div");
-      head.className = "font-label-sm text-label-sm uppercase tracking-wider " + tone;
+      head.className = "font-label-sm text-label-sm tracking-normal font-medium " + tone;
       head.textContent = "Lỗi gần nhất · " + info.engine + " · job #" + info.job_id +
         " · " + timeAgo(info.at);
 
