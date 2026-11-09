@@ -17,7 +17,7 @@ def test_clone_voice_has_no_static_preview():
 
 def test_index_links_previews(as_user):
     html = as_user.get("/").get_data(as_text=True)
-    assert 'id="voicePreviewBtn"' in html
+    assert 'id="voiceGrid"' in html  # mỗi thẻ giọng có nút nghe thử riêng
     assert "/static/voices/vieneu/female.mp3" in html
     assert "/static/voices/edge-tts/male.mp3" in html
 
