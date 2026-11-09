@@ -53,7 +53,7 @@
         Số lượt mỗi ngày
       </label>
       <input id="quotaInput" type="number" min="0"
-        class="input tabular">
+        class="input tabular-mono">
       <p class="font-label-sm text-label-sm text-on-surface-variant">
         Để trống để dùng hạn mức mặc định của hệ thống.
       </p>
@@ -132,11 +132,11 @@
             (u.is_active ? "border-primary/50 text-primary bg-primary/10" : "border-error/50 text-error bg-error/10") + '">' +
             (u.is_active ? "Hoạt động" : "Đã khoá") + "</button></td>" +
 
-          '<td class="px-4 py-3"><span class="tabular text-on-surface-variant">' + jobs.used + "/" + jobs.limit + "</span>" +
+          '<td class="px-4 py-3"><span class="tabular-mono text-on-surface-variant">' + jobs.used + "/" + jobs.limit + "</span>" +
             bar(jobs.used, jobs.limit) + "</td>" +
-          '<td class="px-4 py-3 tabular text-on-surface-variant">' + u.usage.gpu_seconds.used + "s</td>" +
-          '<td class="px-4 py-3 tabular text-on-surface-variant">$' + u.usage.estimated_cost_usd.toFixed(4) + "</td>" +
-          '<td class="px-4 py-3 tabular text-on-surface-variant">' +
+          '<td class="px-4 py-3 tabular-mono text-on-surface-variant">' + u.usage.gpu_seconds.used + "s</td>" +
+          '<td class="px-4 py-3 tabular-mono text-on-surface-variant">$' + u.usage.estimated_cost_usd.toFixed(4) + "</td>" +
+          '<td class="px-4 py-3 tabular-mono text-on-surface-variant">' +
             (u.created_at ? u.created_at.slice(0, 10) : "—") + "</td>" +
           '<td class="px-4 py-3 text-right"><button type="button" data-quota="' + u.id +
             '" class="text-on-surface-variant hover:text-primary p-1" title="Đặt hạn mức riêng">' +

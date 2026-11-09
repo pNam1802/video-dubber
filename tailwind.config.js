@@ -71,7 +71,7 @@ module.exports = {
       fontSize: {
         "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
         "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
-        "label-sm": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "500" }],
+        "label-sm": ["12px", { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "500" }],
         "headline-md": ["20px", { lineHeight: "28px", fontWeight: "600" }],
         "headline-lg": ["24px", { lineHeight: "32px", fontWeight: "600" }],
         "headline-xl": ["32px", { lineHeight: "40px", letterSpacing: "-0.02em", fontWeight: "700" }],

@@ -37,8 +37,14 @@
     outline-offset: 2px;
   }
 
-  /* Chữ số thẳng cột trong bảng và biểu đồ. */
+  /* Con số ở trang người dùng: giữ font chữ thường (Be Vietnam Pro) cho liền
+     tông. Bản Google Fonts của nó không có số đều nhau (tnum) nên dòng
+     font-variant-numeric chỉ có tác dụng khi rơi về font dự phòng. */
   .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* Bảng số liệu trang quản trị cần chữ số thẳng cột thật: dùng font mono. */
+  .tabular-mono {
     font-family: "JetBrains Mono", monospace;
     font-variant-numeric: tabular-nums;
   }
