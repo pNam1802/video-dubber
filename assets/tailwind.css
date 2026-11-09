@@ -115,7 +115,7 @@
   /* Nền trang trí của trang tạo mới: lấp hai bên trống quanh cột form giữa.
      Cố định theo khung nhìn (trừ sidebar + header), không nhận chuột. */
   .page-backdrop {
-    @apply pointer-events-none fixed inset-0 top-16 lg:left-[240px] overflow-hidden;
+    @apply pointer-events-none fixed inset-0 top-14 lg:left-[240px] overflow-hidden;
     z-index: 0;
   }
   /* Lưới chấm chỉ hiện ở hai mép, tắt dần vào giữa nơi có form. */
