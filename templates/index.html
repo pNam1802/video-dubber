@@ -19,11 +19,12 @@
 {% endmacro %}
 
 {# ── Nền trang trí: lưới chấm + quầng sáng + sóng âm hai bên ── #}
-{% set wave = [14, 30, 48, 26, 64, 92, 58, 120, 84, 136, 100, 70, 44, 22] %}
+{# Độ cao tương đối (0–100) — đổi ra vh để sóng dài theo chiều cao màn hình. #}
+{% set wave = [8, 16, 26, 14, 34, 50, 30, 62, 44, 78, 56, 92, 70, 100, 64, 84, 48, 66, 36, 52, 24, 38, 18, 10] %}
 {% macro wave_bars(heights, reverse=False) %}
-<div class="flex items-center gap-1.5 opacity-[0.18]">
+<div class="flex items-center gap-1 opacity-[0.18]">
   {% for h in (heights | reverse | list if reverse else heights) %}
-  <span class="wave-bar" style="height: {{ h * 2 }}px; animation-delay: -{{ (loop.index0 * 0.31) | round(2) }}s"></span>
+  <span class="wave-bar" style="height: {{ (h * 0.62) | round(1) }}vh; animation-delay: -{{ (loop.index0 * 0.29) | round(2) }}s"></span>
   {% endfor %}
 </div>
 {% endmacro %}
@@ -31,8 +32,8 @@
   <div class="page-backdrop-dots"></div>
   <div class="page-backdrop-glow -top-32 left-[6%] w-[420px] h-[420px] bg-primary/[0.07]"></div>
   <div class="page-backdrop-glow bottom-[-160px] right-[4%] w-[480px] h-[480px] bg-tertiary/[0.06]"></div>
-  <div class="hidden min-[1400px]:flex absolute inset-y-0 left-8 items-center">{{ wave_bars(wave) }}</div>
-  <div class="hidden min-[1400px]:flex absolute inset-y-0 right-8 items-center">{{ wave_bars(wave, True) }}</div>
+  <div class="hidden min-[1440px]:flex absolute inset-y-0 left-0 w-[calc((100%-48rem)/2)] items-center justify-center">{{ wave_bars(wave) }}</div>
+  <div class="hidden min-[1440px]:flex absolute inset-y-0 right-0 w-[calc((100%-48rem)/2)] items-center justify-center">{{ wave_bars(wave, True) }}</div>
 </div>
 
 <div class="relative z-10 max-w-3xl mx-auto w-full">
