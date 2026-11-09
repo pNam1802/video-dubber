@@ -18,7 +18,8 @@
   'interrupted':      ('Gián đoạn',      'text-error',              'warning')
 } %}
 
-<div class="flex flex-wrap items-start justify-between gap-md mb-xl">
+<div class="max-w-5xl mx-auto w-full">
+<div class="flex flex-wrap items-start justify-between gap-md mb-lg">
   <div class="min-w-0">
     <a href="{{ url_for('main.script_reader') if job.is_script else url_for('main.index') }}"
       class="inline-flex items-center gap-1 text-on-surface-variant hover:text-primary font-label-sm text-label-sm tracking-normal font-medium mb-2">
@@ -139,7 +140,7 @@
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-5 gap-lg items-start">
-    <div class="lg:col-span-3 flex flex-col gap-md">
+    <div id="videoCol" class="lg:col-span-5 flex flex-col gap-md">
       {# Job kịch bản không có ảnh minh hoạ: video_url là file mp3. Giữ id
          resultVideo — phần lời thoại bên cạnh tua theo phần tử này, audio hay
          video đều như nhau. #}
@@ -190,31 +191,6 @@
     </div>
   </div>
 
-  {# Thời gian từng bước — dữ liệu thật, không phải ước lượng #}
-  {% set steps = [('Tách audio', job.extract_sec, '#7d868c'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
-                  ('Dịch', job.translate_sec, '#9bd93c'), ('Tổng hợp giọng', job.tts_sec, '#ffbfac'),
-                  ('Ghép video', job.compose_sec, '#c2c7cb')] %}
-  {% set measured = steps | selectattr('1') | list %}
-  {% if measured %}
-  {% set total = measured | map(attribute=1) | sum %}
-  <div class="bg-surface-container rounded-2xl p-lg border border-outline-variant/40 flex flex-col gap-3">
-    <p class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Thời gian từng bước</p>
-    <div class="w-full h-3 rounded-full overflow-hidden flex bg-surface-container-high">
-      {% for label, value, colour in measured %}
-      <div style="width: {{ (value / total * 100) | round(1) }}%; background: {{ colour }}" title="{{ label }}"></div>
-      {% endfor %}
-    </div>
-    <div class="flex flex-wrap gap-x-5 gap-y-1 font-label-sm text-label-sm text-on-surface-variant">
-      {% for label, value, colour in measured %}
-      <span class="flex items-center gap-1">
-        <span class="w-2 h-2 rounded-full" style="background: {{ colour }}"></span>
-        {{ label }} <span class="tabular text-on-surface">{{ '%.1f' % value }}s</span>
-        <span class="tabular">({{ (value / total * 100) | round | int }}%)</span>
-      </span>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
 </section>
 
 {# ── Thất bại ──────────────────────────────────────────── #}
@@ -239,44 +215,94 @@
   </a>
 </section>
 
-{# ── Thông tin ─────────────────────────────────────────── #}
-<section class="card">
-  <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Thông tin</h3>
-  <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    {% if job.is_script %}
-    {% set rows = [
-      ('Loại', 'Đọc kịch bản'),
-      ('Ngôn ngữ', {'vi': 'Tiếng Việt', 'en': 'English'}.get(job.target_language, job.target_language)),
-      ('Giọng đọc', job.tts_engine or '—'),
-      ('Số câu', job.segment_count or '—'),
-      ('Thời lượng', ('%d:%02d' % (job.duration_sec // 60, job.duration_sec % 60)) if job.duration_sec else '—'),
-      ('Thời gian xử lý', ('%.1f giây' % job.elapsed_sec) if job.elapsed_sec else '—'),
-      ('Chi phí máy chủ (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
-      ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
-      ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
-    ] %}
-    {% else %}
-    {% set rows = [
-      ('Công cụ dịch', job.translator_actual or job.translator_engine or '—'),
-      ('Mô hình Whisper', job.whisper_model or '—'),
-      ('Giọng đọc', job.tts_engine or '—'),
-      ('Số câu', job.segment_count or '—'),
-      ('Thời gian xử lý', ('%.1f giây' % job.elapsed_sec) if job.elapsed_sec else '—'),
-      ('Dung lượng gốc', ('%.1f MB' % (job.file_size / 1048576)) if job.file_size else '—'),
-      ('Chi phí máy chủ (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
-      ('Chi phí dịch (API)', ('$%.4f' % job.translate_cost_usd) if job.translate_cost_usd else '—'),
-      ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
-      ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
-    ] %}
-    {% endif %}
-    {% for label, value in rows %}
-    <div class="flex flex-col gap-1">
-      <dt class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">{{ label }}</dt>
-      <dd class="font-body-md text-body-md text-on-surface tabular">{{ value }}</dd>
+{# ── Thông tin: mục dễ hiểu hiện sẵn, số liệu kỹ thuật gập lại ── #}
+{% set LANG = {'vi': 'Tiếng Việt', 'en': 'English', 'ja': '日本語', 'zh': '中文', 'ko': '한국어'} %}
+{% set duration = ('%d:%02d' % (job.duration_sec // 60, job.duration_sec % 60)) if job.duration_sec else '—' %}
+{% set elapsed = ('%.1f giây' % job.elapsed_sec) if job.elapsed_sec else '—' %}
+{% if job.is_script %}
+{% set rows = [
+  ('Loại', 'Đọc kịch bản'),
+  ('Ngôn ngữ', LANG.get(job.target_language, job.target_language)),
+  ('Thời lượng', duration),
+  ('Thời gian xử lý', elapsed)
+] %}
+{% set tech = [
+  ('Bộ giọng', job.tts_engine or '—'),
+  ('Giọng', job.tts_voice or '—'),
+  ('Số câu', job.segment_count or '—'),
+  ('Chi phí máy chủ (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
+  ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
+  ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
+] %}
+{% else %}
+{% set rows = [
+  ('Ngôn ngữ', (LANG.get(job.source_language, 'Tự nhận biết') if job.source_language and job.source_language != 'auto' else 'Tự nhận biết') ~ ' → ' ~ LANG.get(job.target_language, job.target_language)),
+  ('Thời lượng', duration),
+  ('Thời gian xử lý', elapsed),
+  ('Dung lượng gốc', ('%.1f MB' % (job.file_size / 1048576)) if job.file_size else '—')
+] %}
+{% set tech = [
+  ('Công cụ dịch', job.translator_actual or job.translator_engine or '—'),
+  ('Mô hình Whisper', job.whisper_model or '—'),
+  ('Bộ giọng', job.tts_engine or '—'),
+  ('Giọng', job.tts_voice or '—'),
+  ('Số câu', job.segment_count or '—'),
+  ('Chi phí máy chủ (ước tính)', ('$%.4f' % job.estimated_cost_usd) if job.estimated_cost_usd else '—'),
+  ('Chi phí dịch (API)', ('$%.4f' % job.translate_cost_usd) if job.translate_cost_usd else '—'),
+  ('Bắt đầu', job.started_at.strftime('%H:%M:%S') if job.started_at else '—'),
+  ('Kết thúc', job.finished_at.strftime('%H:%M:%S') if job.finished_at else '—')
+] %}
+{% endif %}
+{% macro info_grid(items) %}
+<dl class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  {% for label, value in items %}
+  <div class="flex flex-col gap-1 min-w-0">
+    <dt class="font-label-sm text-label-sm text-on-surface-variant tracking-normal">{{ label }}</dt>
+    <dd class="font-body-md text-body-md text-on-surface tabular truncate">{{ value }}</dd>
+  </div>
+  {% endfor %}
+</dl>
+{% endmacro %}
+<section class="card flex flex-col gap-md">
+  <h3 class="font-headline-md text-headline-md text-on-surface">Thông tin</h3>
+  {{ info_grid(rows) }}
+  <details class="group/tech border-t border-outline-variant/40 pt-md">
+    <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none flex items-center gap-2 font-body-md text-body-md text-on-surface-variant hover:text-on-surface">
+      <span class="material-symbols-outlined text-[18px]">settings</span>
+      <span class="flex-1">Chi tiết kỹ thuật</span>
+      <span class="flex transition-transform group-open/tech:rotate-180"><span class="material-symbols-outlined text-[18px]">expand_more</span></span>
+    </summary>
+    <div class="pt-md flex flex-col gap-md">
+      {{ info_grid(tech) }}
+  {# Thời gian từng bước — dữ liệu thật, không phải ước lượng #}
+  {% set steps = [('Tách audio', job.extract_sec, '#747474'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
+                  ('Dịch', job.translate_sec, '#9bd93c'), ('Tổng hợp giọng', job.tts_sec, '#ffbfac'),
+                  ('Ghép video', job.compose_sec, '#c2c7cb')] %}
+  {% set measured = steps | selectattr('1') | list %}
+  {% if measured %}
+  {% set total = measured | map(attribute=1) | sum %}
+  <div class="flex flex-col gap-3">
+    <p class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Thời gian từng bước</p>
+    <div class="w-full h-3 rounded-full overflow-hidden flex bg-surface-container-high">
+      {% for label, value, colour in measured %}
+      <div style="width: {{ (value / total * 100) | round(1) }}%; background: {{ colour }}" title="{{ label }}"></div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </dl>
+    <div class="flex flex-wrap gap-x-5 gap-y-1 font-label-sm text-label-sm text-on-surface-variant">
+      {% for label, value, colour in measured %}
+      <span class="flex items-center gap-1">
+        <span class="w-2 h-2 rounded-full" style="background: {{ colour }}"></span>
+        {{ label }} <span class="tabular text-on-surface">{{ '%.1f' % value }}s</span>
+        <span class="tabular">({{ (value / total * 100) | round | int }}%)</span>
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+    </div>
+  </details>
 </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -401,6 +427,7 @@
           document.getElementById("transcriptCount").textContent = segments.length + " câu";
           renderRows();
           panel.classList.remove("hidden");
+          document.getElementById("videoCol").classList.replace("lg:col-span-5", "lg:col-span-3");
         } catch (err) {
           // Lời thoại là tính năng phụ trợ — lỗi thì im lặng bỏ qua, đừng
           // làm phiền người dùng vì một thứ không ảnh hưởng tới video chính.

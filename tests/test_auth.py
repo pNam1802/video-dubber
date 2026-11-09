@@ -285,3 +285,60 @@ def test_username_collision_gets_suffix(app, client, google):
     with app.app_context():
         created = User.query.filter_by(google_sub="g-555").first()
         assert created.username.startswith("nam-")
+
+
+# ── Đổi mật khẩu ─────────────────────────────────────────────
+def _change(client, current, new, confirm=None):
+    return client.post("/doi-mat-khau", data={
+        "current_password": current, "new_password": new,
+        "confirm_password": new if confirm is None else confirm,
+    }, follow_redirects=True)
+
+
+def _password_works(app, username, password):
+    from werkzeug.security import check_password_hash
+    with app.app_context():
+        return check_password_hash(User.query.filter_by(username=username).first().password_hash, password)
+
+
+def test_change_password_success(app, as_user):
+    html = _change(as_user, PASSWORD, "mat-khau-moi-123").get_data(as_text=True)
+    assert "Đã đổi mật khẩu." in html
+    assert _password_works(app, "alice", "mat-khau-moi-123")
+
+
+@pytest.mark.parametrize("current, new, confirm, message", [
+    ("sai-mat-khau", "mat-khau-moi-123", None, "Mật khẩu hiện tại không đúng."),
+    (PASSWORD, "ngan", None, "tối thiểu 8 ký tự"),
+    (PASSWORD, "mat-khau-moi-123", "khac-han-1234", "chưa khớp"),
+    (PASSWORD, PASSWORD, None, "phải khác mật khẩu hiện tại"),
+])
+def test_change_password_rejects(app, as_user, current, new, confirm, message):
+    html = _change(as_user, current, new, confirm).get_data(as_text=True)
+    assert message in html
+    assert _password_works(app, "alice", PASSWORD)
+
+
+def test_change_password_requires_login(client):
+    response = client.post("/doi-mat-khau", data={"current_password": "x", "new_password": "y" * 8})
+    assert response.status_code in (302, 401)
+    assert "/login" in response.headers.get("Location", "")
+
+
+def test_settings_shows_password_form_only_for_password_accounts(app, as_user):
+    assert 'action="/doi-mat-khau"' in as_user.get("/cai-dat").get_data(as_text=True)
+
+
+def test_google_account_has_no_password_to_change(app, client):
+    with app.app_context():
+        uid = make_user("gg", google=True, google_sub="g-pw").id
+    with client.session_transaction() as sess:
+        sess["_user_id"] = str(uid)
+        sess["_fresh"] = True
+    page = client.get("/cai-dat").get_data(as_text=True)
+    assert 'action="/doi-mat-khau"' not in page
+    assert "đăng nhập bằng Google nên không có mật khẩu riêng" in page
+    html = _change(client, "", "mat-khau-moi-123").get_data(as_text=True)
+    assert "không có mật khẩu để đổi" in html
+    with app.app_context():
+        assert db.session.get(User, uid).password_hash is None

@@ -4,8 +4,40 @@
 {% block content %}
 {# Trang này phục vụ hai chế độ dùng chung một form (cùng phần chọn giọng):
    "/" lồng tiếng video, "/doc-kich-ban" đọc kịch bản. Phần tử chỉ thuộc một
-   chế độ mang data-mode-only; xem setMode(). #}
-<div class="mb-xl flex items-center justify-between">
+   chế độ mang data-mode-only; xem setMode().
+
+   Bố cục một cột ở giữa: người dùng chỉ cần quyết định ba thứ (video, ngôn
+   ngữ, giọng). Mọi thiết lập kỹ thuật dồn vào "Tuỳ chọn thêm", tóm tắt chi
+   phí + nút bắt đầu nằm trên thanh dính ở đáy. #}
+{% set field_class = "input" %}
+{% set label_class = "field-label" %}
+{% macro step_title(n, text, id='') %}
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-3">
+  <span class="bg-primary/15 text-primary w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">{{ n }}</span>
+  <span {% if id %}id="{{ id }}"{% endif %}>{{ text }}</span>
+</h3>
+{% endmacro %}
+
+{# ── Nền trang trí: lưới chấm + quầng sáng + sóng âm hai bên ── #}
+{% set wave = [14, 30, 48, 26, 64, 92, 58, 120, 84, 136, 100, 70, 44, 22] %}
+{% macro wave_bars(heights, reverse=False) %}
+<div class="flex items-center gap-1.5 opacity-[0.18]">
+  {% for h in (heights | reverse | list if reverse else heights) %}
+  <span class="wave-bar" style="height: {{ h * 2 }}px; animation-delay: -{{ (loop.index0 * 0.31) | round(2) }}s"></span>
+  {% endfor %}
+</div>
+{% endmacro %}
+<div class="page-backdrop" aria-hidden="true">
+  <div class="page-backdrop-dots"></div>
+  <div class="page-backdrop-glow -top-32 left-[6%] w-[420px] h-[420px] bg-primary/[0.07]"></div>
+  <div class="page-backdrop-glow bottom-[-160px] right-[4%] w-[480px] h-[480px] bg-tertiary/[0.06]"></div>
+  <div class="hidden min-[1400px]:flex absolute inset-y-0 left-8 items-center">{{ wave_bars(wave) }}</div>
+  <div class="hidden min-[1400px]:flex absolute inset-y-0 right-8 items-center">{{ wave_bars(wave, True) }}</div>
+</div>
+
+<div class="relative z-10 max-w-3xl mx-auto w-full">
+
+<div class="mb-lg">
   <h2 class="page-title">
     {% if mode == 'script' %}
     <span class="material-symbols-outlined text-[32px] text-primary">record_voice_over</span>Đọc kịch bản
@@ -13,209 +45,131 @@
     <span class="material-symbols-outlined text-[32px] text-primary">campaign</span>Tạo bản lồng tiếng
     {% endif %}
   </h2>
+  <p class="mt-2 font-body-lg text-body-lg text-on-surface-variant">
+    {% if mode == 'script' %}
+    Dán kịch bản, chọn nhân vật và giọng đọc — nhận video kiểu Manhwa recap kèm phụ đề.
+    {% else %}
+    Tải video lên, chọn ngôn ngữ và giọng đọc — Nora lo phần dịch, lồng tiếng và phụ đề.
+    {% endif %}
+  </p>
 </div>
 
-<form id="uploadForm" novalidate class="grid grid-cols-1 lg:grid-cols-12 gap-lg items-start">
+<form id="uploadForm" novalidate class="flex flex-col gap-lg">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  {# Preset ghi vào hai trường thật này; "Tuỳ chỉnh nâng cao" sửa trực tiếp #}
+  {# Preset ghi vào hai trường thật này; "Thiết lập kỹ thuật" sửa trực tiếp #}
   <input type="hidden" name="translator_engine" id="translator_engine" value="deepseek">
   <input type="hidden" name="whisper_model" id="whisper_model" value="small">
 
-  <div class="lg:col-span-8 flex flex-col gap-lg">
-
-    {# ── Bước 1 (đọc kịch bản): dán văn bản ──────────────── #}
-    <section data-mode-only="script" class="hidden card flex flex-col gap-md">
-      <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-        <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
-        Dán kịch bản
-      </h3>
-      <textarea name="script" id="script" rows="12" maxlength="{{ script_max_chars }}"
-        placeholder="Dán nội dung cần đọc vào đây. Mỗi lần xuống dòng là một đoạn — giọng đọc sẽ nghỉ lâu hơn ở chỗ xuống dòng."
-        class="input resize-y"></textarea>
-      <p class="font-label-sm text-label-sm text-on-surface-variant tabular">
-        <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
-        <span id="scriptLength"></span>
-      </p>
-      <p class="font-label-sm text-label-sm text-on-surface-variant">
-        Đọc nguyên văn theo ngôn ngữ bạn chọn ở bước 2 (không dịch). Kết quả: một file mp3 và file phụ đề SRT.
-      </p>
-      <fieldset class="flex flex-col gap-2">
-        <legend class="field-label">Ảnh minh hoạ</legend>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {% for value, label, hint in [
-            ('none', 'Không có ảnh', 'Chỉ file mp3 + SRT'),
-            ('few', '3–5 ảnh lặp lại', 'Vài ảnh cho cả kịch bản, chiếu lần lượt rồi lặp lại'),
-            ('scenes', 'Ảnh theo từng cảnh', 'Mỗi ~12 giây một ảnh riêng, sát nội dung hơn'),
-            ('manga', 'Trang manga', 'Truyện tranh đen trắng nhiều khung, có nhân vật và bối cảnh'),
-            ('recap', 'Manhwa recap', 'Ảnh webtoon màu ~6 giây đổi một lần, khung dọc trên nền mờ, zoom chậm')
-          ] %}
-          <label class="flex items-start gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 cursor-pointer has-[:checked]:border-primary">
-            <input type="radio" name="script_images" value="{{ value }}" {% if value == 'none' %}checked{% endif %} class="w-4 h-4 mt-1 accent-primary">
+  {# ── Bước 1 (đọc kịch bản): dán văn bản ──────────────── #}
+  <section data-mode-only="script" class="hidden card flex flex-col gap-md">
+    {{ step_title(1, 'Dán kịch bản') }}
+    <textarea name="script" id="script" rows="10" maxlength="{{ script_max_chars }}"
+      placeholder="Dán nội dung cần đọc vào đây. Mỗi lần xuống dòng là một đoạn — giọng đọc sẽ nghỉ lâu hơn ở chỗ xuống dòng."
+      class="input resize-y"></textarea>
+    <p class="font-label-sm text-label-sm text-on-surface-variant tabular">
+      <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
+      <span id="scriptLength"></span>
+    </p>
+    {# Đọc kịch bản luôn ra video kiểu Manhwa recap — chỉ còn chọn kiểu nhân vật. #}
+    <input type="hidden" name="script_images" value="recap">
+    <div id="recapStyles" class="flex flex-col gap-2">
+      <span class="field-label !mb-0">Kiểu nhân vật</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {% for value, label, hint in [
+          ('sunflower', 'Cô gái hướng dương (mặc định)', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc'),
+          ('dreamy', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI đặt theo kịch bản')
+        ] %}
+        <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
             <span class="flex flex-col">
               <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
               <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
             </span>
           </label>
-          {% endfor %}
+          <details class="group">
+            <summary class="font-label-sm text-label-sm text-primary cursor-pointer select-none">Xem mẫu</summary>
+            <img src="{{ url_for('static', filename='recap_styles/' ~ value ~ '.jpg') }}" alt="Ảnh mẫu kiểu {{ label }}"
+              loading="lazy" width="480" height="600" class="mt-2 w-full max-w-[240px] rounded-lg">
+          </details>
         </div>
-        {# Chỉ hiện khi chọn Manhwa recap — xem syncRecapStyle(). Ảnh mẫu ở static/recap_styles/. #}
-        <div id="recapStyles" class="hidden flex flex-col gap-2 mt-2">
-          <span class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Kiểu nhân vật</span>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {% for value, label, hint in [
-              ('sunflower', 'Cô gái hướng dương (mặc định)', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc'),
-              ('dreamy', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI đặt theo kịch bản')
-            ] %}
-            <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary">
-              <label class="flex items-start gap-2 cursor-pointer">
-                <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1 accent-primary">
-                <span class="flex flex-col">
-                  <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
-                  <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
-                </span>
-              </label>
-              <details class="group">
-                <summary class="font-label-sm text-label-sm text-primary cursor-pointer select-none">Xem mẫu</summary>
-                <img src="{{ url_for('static', filename='recap_styles/' ~ value ~ '.jpg') }}" alt="Ảnh mẫu kiểu {{ label }}"
-                  loading="lazy" width="480" height="600" class="mt-2 w-full max-w-[240px] rounded-lg">
-              </details>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-        <p class="font-label-sm text-label-sm text-on-surface-variant">
-          Có ảnh thì kết quả là video mp4 (ảnh do AI vẽ theo nội dung kịch bản) kèm phụ đề SRT.
-        </p>
-      </fieldset>
-    </section>
-
-    {# ── Bước 1: chọn video ───────────────────────────── #}
-    <section data-mode-only="video" class="card flex flex-col gap-md">
-      <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-        <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">1</span>
-        Chọn video
-      </h3>
-
-      <input type="file" name="video" id="video" accept=".mp4,.mov,.avi,.mkv,.webm" class="hidden">
-
-      <label for="video" id="dropzone"
-        class="border-2 border-dashed border-outline-variant hover:border-primary/50 transition-colors rounded-2xl p-xl flex flex-col items-center justify-center gap-4 bg-surface-variant/20 cursor-pointer group">
-        <div class="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center group-hover:bg-primary/10 transition-colors">
-          <span class="material-symbols-outlined text-[32px] text-on-surface-variant group-hover:text-primary transition-colors">upload_file</span>
-        </div>
-        <div class="text-center">
-          <p class="font-body-lg text-body-lg text-on-surface mb-1">
-            Kéo thả file vào đây hoặc <span class="text-primary underline decoration-primary/50 underline-offset-4">duyệt qua máy tính</span>
-          </p>
-          <p class="font-label-sm text-label-sm text-on-surface-variant">
-            Hỗ trợ MP4, MOV, AVI, MKV, WEBM (tối đa <span class="tabular">{{ max_upload_mb }} MB</span>)
-          </p>
-        </div>
-      </label>
-
-      <div id="filePreview"
-        class="hidden bg-surface-container-high rounded-2xl p-4 flex items-center justify-between border border-outline-variant/50">
-        <div class="flex items-center gap-4 min-w-0">
-          <div class="w-16 h-16 rounded-xl bg-background flex items-center justify-center border border-outline-variant/40 flex-shrink-0">
-            <span class="material-symbols-outlined text-on-surface-variant">movie</span>
-          </div>
-          <div class="flex flex-col min-w-0">
-            <span id="fileName" class="font-body-md text-body-md text-on-surface font-medium truncate"></span>
-            <div class="flex items-center gap-3 text-on-surface-variant mt-1">
-              <span class="flex items-center gap-1 font-label-sm text-label-sm">
-                <span class="material-symbols-outlined text-[14px]">timer</span><span id="fileDuration" class="tabular">--:--</span>
-              </span>
-              <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
-              <span class="flex items-center gap-1 font-label-sm text-label-sm">
-                <span class="material-symbols-outlined text-[14px]">sd_storage</span><span id="fileSize" class="tabular"></span>
-              </span>
-            </div>
-          </div>
-        </div>
-        <button type="button" id="clearFile"
-          class="btn-danger btn-sm border-transparent">
-          <span class="material-symbols-outlined text-[18px]">delete</span><span class="hidden sm:inline">Xoá</span>
-        </button>
-      </div>
-
-      {# Bắt lỗi ngay khi chọn file, trước khi tải lên — chọn nhầm định dạng
-         hay file quá to thì biết ngay, khỏi đợi tải xong mới bị server từ chối. #}
-      <p id="fileValidationError" class="hidden items-center gap-2 font-body-md text-body-md text-error">
-        <span class="material-symbols-outlined text-[18px]">error</span>
-        <span id="fileValidationMessage"></span>
-      </p>
-    </section>
-
-    {# ── Bước 2: chất lượng ───────────────────────────── #}
-    <section class="card flex flex-col gap-md">
-      <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-        <span class="bg-primary/20 text-primary w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">2</span>
-        <span id="step2Title">Chất lượng</span>
-      </h3>
-
-      {# Dời lên đây từ khối "nâng cao" phía dưới — dropdown Ngôn ngữ đích ở
-         ngay trên cần dùng field_class trước khi khối đó được render. #}
-      {% set field_class = "input" %}
-      {% set label_class = "field-label" %}
-
-      <div class="max-w-xs">
-        <label class="field-label" for="target_language"
-          id="targetLanguageLabel">Ngôn ngữ đích</label>
-        <select name="target_language" id="target_language" class="{{ field_class }}">
-          <option value="vi" selected>Tiếng Việt</option>
-          <option value="en">English</option>
-          <option value="ja" data-mode-only="video">日本語</option>
-          <option value="zh" data-mode-only="video">中文</option>
-          <option value="ko" data-mode-only="video">한국어</option>
-        </select>
-      </div>
-
-      <div data-mode-only="video" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {# Cả ba đều dịch bằng DeepSeek — khác nhau ở mô hình Whisper (đánh đổi
-           tốc độ/độ chính xác nhận dạng), không còn khác nhau ở công cụ
-           dịch như trước (MarianMT đã bị khoá khỏi lựa chọn). #}
-        {% set presets = [
-          ('fast', 'speed', 'Nhanh', 'Nhận dạng nhanh, hợp video giọng rõ', 'base', 'deepseek', ''),
-          ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng cho hầu hết video', 'small', 'deepseek', 'MẶC ĐỊNH'),
-          ('best', 'diamond', 'Tốt nhất', 'Nhận dạng chính xác hơn, chậm hơn', 'medium', 'deepseek', '')
-        ] %}
-        {% for key, icon, name, desc, whisper, engine, badge in presets %}
-        <button type="button" class="preset relative overflow-hidden rounded-2xl p-4 flex flex-col items-start gap-2 transition-all text-left group
-            bg-surface-container-high border border-outline-variant/50 hover:border-primary/50"
-          data-preset="{{ key }}" data-whisper="{{ whisper }}" data-engine="{{ engine }}">
-          {% if badge %}
-          <div class="preset-badge absolute top-0 right-0 bg-primary text-on-primary font-label-sm text-[10px] px-2 py-0.5 rounded-bl-lg font-bold">{{ badge }}</div>
-          {% endif %}
-          <span class="material-symbols-outlined text-on-surface-variant transition-colors">{{ icon }}</span>
-          <span class="font-body-lg text-body-lg font-medium text-on-surface mt-2">{{ name }}</span>
-          <span class="font-label-sm text-label-sm text-on-surface-variant">{{ desc }}</span>
-        </button>
         {% endfor %}
       </div>
+      <p class="font-label-sm text-label-sm text-on-surface-variant">
+        Kết quả là video kiểu Manhwa recap: ảnh webtoon màu do AI vẽ theo nội dung kịch bản, có giọng đọc và phụ đề SRT.
+      </p>
+    </div>
+  </section>
 
-      <button type="button" id="toggleAdvanced" data-mode-only="video"
-        class="mt-2 text-primary flex items-center gap-1 font-label-sm text-label-sm hover:underline decoration-primary/50 underline-offset-4 self-start">
-        <span class="material-symbols-outlined text-[16px]">tune</span>Tuỳ chỉnh nâng cao
-      </button>
+  {# ── Bước 1: chọn video ───────────────────────────── #}
+  <section data-mode-only="video" class="card flex flex-col gap-md">
+    {{ step_title(1, 'Chọn video') }}
 
-      {# ── Tuỳ chọn thô: đúng tên trường backend đang đọc ── #}
-      <div id="advanced" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/40">
-        <div data-mode-only="video">
-          <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="source_language">Ngôn ngữ nguồn</label>
-            <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
-              data-tip="sourceLangTip" aria-expanded="false" aria-label="Giải thích ngôn ngữ nguồn">
-              <span class="material-symbols-outlined text-[16px]">info</span>
-            </button>
+    <input type="file" name="video" id="video" accept=".mp4,.mov,.avi,.mkv,.webm" class="hidden">
+
+    <label for="video" id="dropzone"
+      class="border-2 border-dashed border-outline-variant hover:border-primary/60 hover:bg-primary/5 transition-colors rounded-2xl py-12 px-lg flex flex-col items-center justify-center gap-4 bg-surface-variant/20 cursor-pointer group">
+      <div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+        <span class="material-symbols-outlined text-[32px] text-primary">upload</span>
+      </div>
+      <div class="text-center">
+        <p class="font-body-lg text-body-lg text-on-surface font-medium mb-1">
+          Kéo thả video vào đây hoặc <span class="text-primary underline decoration-primary/50 underline-offset-4">chọn từ máy</span>
+        </p>
+        <p class="font-label-sm text-label-sm text-on-surface-variant">
+          MP4, MOV, AVI, MKV, WEBM · tối đa <span class="tabular">{{ max_upload_mb }} MB</span>
+        </p>
+      </div>
+    </label>
+
+    <div id="filePreview"
+      class="hidden bg-surface-container-high rounded-2xl p-3 flex items-center justify-between gap-3 border border-outline-variant/50">
+      <div class="flex items-center gap-4 min-w-0">
+        <div class="w-24 aspect-video rounded-lg bg-background flex items-center justify-center border border-outline-variant/40 flex-shrink-0 overflow-hidden">
+          <video id="fileThumb" muted playsinline preload="metadata" class="hidden w-full h-full object-cover"></video>
+          <span id="fileThumbIcon" class="material-symbols-outlined text-on-surface-variant">movie</span>
+        </div>
+        <div class="flex flex-col min-w-0">
+          <span id="fileName" class="font-body-md text-body-md text-on-surface font-medium truncate"></span>
+          <div class="flex items-center gap-3 text-on-surface-variant mt-1">
+            <span class="flex items-center gap-1 font-label-sm text-label-sm">
+              <span class="material-symbols-outlined text-[14px]">timer</span><span id="fileDuration" class="tabular">--:--</span>
+            </span>
+            <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+            <span class="flex items-center gap-1 font-label-sm text-label-sm">
+              <span class="material-symbols-outlined text-[14px]">sd_storage</span><span id="fileSize" class="tabular"></span>
+            </span>
           </div>
-          <p id="sourceLangTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
-            Để "Tự động nhận dạng" trong hầu hết trường hợp — Whisper đoán ngôn ngữ khá chính xác từ
-            đoạn âm thanh đầu video. Chỉ chọn tay khi tự nhận dạng đoán sai, ví dụ video mở đầu bằng
-            nhạc nền dài hoặc giọng nói không rõ ở những giây đầu.
-          </p>
-          <select name="source_language" id="source_language" class="{{ field_class }}">
-            <option value="auto" selected>Tự động nhận dạng</option>
+        </div>
+      </div>
+      <button type="button" id="clearFile" class="btn-ghost btn-sm">
+        <span class="material-symbols-outlined text-[18px]">swap_horiz</span><span class="hidden sm:inline">Đổi video</span>
+      </button>
+    </div>
+
+    {# Bắt lỗi ngay khi chọn file, trước khi tải lên — chọn nhầm định dạng
+       hay file quá to thì biết ngay, khỏi đợi tải xong mới bị server từ chối. #}
+    <p id="fileValidationError" class="hidden items-center gap-2 font-body-md text-body-md text-error">
+      <span class="material-symbols-outlined text-[18px]">error</span>
+      <span id="fileValidationMessage"></span>
+    </p>
+  </section>
+
+  {# Bước 2–3 + tuỳ chọn: ở chế độ video chỉ hiện sau khi đã chọn file hợp
+     lệ — người mới vào chỉ thấy một ô tải lên, biết ngay phải làm gì. #}
+  <div id="configSteps" class="flex flex-col gap-lg">
+
+    {# ── Bước 2: ngôn ngữ ─────────────────────────────── #}
+    <section class="card flex flex-col gap-md">
+      {{ step_title(2, 'Ngôn ngữ', 'step2Title') }}
+      {# Ngôn ngữ nguồn hiếm khi phải đổi: thu gọn thành một dòng. #}
+      <div data-mode-only="video" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <label class="font-body-md text-body-md text-on-surface-variant" for="source_language">Video đang nói</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-primary pointer-events-none">translate</span>
+          <select name="source_language" id="source_language" class="{{ field_class }} !w-auto !py-1.5 !pl-10 !pr-9">
+            <option value="auto" selected>Tự nhận biết</option>
             <option value="en">English</option>
             <option value="vi">Tiếng Việt</option>
             <option value="ja">日本語</option>
@@ -223,275 +177,325 @@
             <option value="ko">한국어</option>
           </select>
         </div>
+      </div>
 
-        <div data-mode-only="video">
-          <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="whisper_model_select">Mô hình Whisper</label>
-            <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
-              data-tip="whisperTip" aria-expanded="false" aria-label="Giải thích các mô hình Whisper">
-              <span class="material-symbols-outlined text-[16px]">info</span>
-            </button>
-          </div>
-          <p id="whisperTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
-            Mô hình càng lớn thì nhận dạng giọng nói càng chính xác — nhất là với thuật ngữ chuyên ngành,
-            giọng vùng miền, hay video có tạp âm — nhưng xử lý càng lâu. Tiny và Base hợp video giọng rõ,
-            nói chậm; Medium và Large hợp bài giảng nhiều thuật ngữ khó hoặc âm thanh không tốt.
-          </p>
-          <select id="whisper_model_select" class="{{ field_class }}">
-            {% for value, text in [('tiny','Tiny — nhanh nhất'), ('base','Base'), ('small','Small'), ('medium','Medium'), ('large','Large — chính xác nhất')] %}
-            <option value="{{ value }}">{{ text }}</option>
-            {% endfor %}
-          </select>
-        </div>
+      <div class="flex flex-col gap-2">
+        <p class="font-body-md text-body-md text-on-surface-variant" id="targetLanguageLabel">Dịch sang</p>
+        {# Ô chọn thật mà form gửi đi; hàng thẻ bên dưới chỉ là giao diện — xem renderLanguageChips(). #}
+        <select name="target_language" id="target_language" class="hidden" aria-hidden="true" tabindex="-1">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="ja" data-mode-only="video">日本語</option>
+          <option value="zh" data-mode-only="video">中文</option>
+          <option value="ko" data-mode-only="video">한국어</option>
+        </select>
+        <div id="languageChips" role="radiogroup" aria-labelledby="targetLanguageLabel" class="flex flex-wrap gap-2"></div>
+      </div>
+    </section>
 
-        <div data-mode-only="video">
-          <div class="flex items-center gap-1.5 mb-1">
-            <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium" for="translator_engine_select">Công cụ dịch</label>
-            <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
-              data-tip="engineTip" aria-expanded="false" aria-label="Giải thích các công cụ dịch">
-              <span class="material-symbols-outlined text-[16px]">info</span>
-            </button>
-          </div>
-          <p id="engineTip" class="hidden font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 mb-2 leading-relaxed">
-            DeepSeek, Gemini và OpenAI đều dịch tự nhiên và hỗ trợ đủ các ngôn ngữ đích; DeepSeek rẻ nhất.
-            Cần bạn tự có API key, tính phí theo lượng chữ. Nếu một bên gặp lỗi, hệ thống tự
-            chuyển sang bên còn lại để bản lồng tiếng không bị hỏng giữa chừng.
-          </p>
-          <select id="translator_engine_select" class="{{ field_class }}">
-            <option value="deepseek">DeepSeek{% if not deepseek_key_exists %} — cần API key{% endif %}</option>
-            <option value="gemini">Gemini{% if not gemini_key_exists %} — cần API key{% endif %}</option>
-            <option value="openai">OpenAI{% if not openai_key_exists %} — cần API key{% endif %}</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="{{ label_class }}" for="tts_engine">Giọng đọc</label>
-          <select name="tts_engine" id="tts_engine" class="{{ field_class }}">
-            <option value="vieneu" selected>VieNeu — tự nhiên, clone giọng (miễn phí)</option>
-            <option value="chatterbox">Chatterbox — clone giọng tiếng Anh (miễn phí)</option>
-            <option value="edge-tts">Edge-TTS — miễn phí</option>
+    {# ── Bước 3: giọng đọc ────────────────────────────── #}
+    <section class="card flex flex-col gap-md">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        {{ step_title(3, 'Giọng đọc', 'step3Title') }}
+        <div class="flex items-center gap-2">
+          <label class="font-label-sm text-label-sm text-on-surface-variant whitespace-nowrap" for="tts_engine">Bộ giọng</label>
+          <select name="tts_engine" id="tts_engine" class="{{ field_class }} !w-auto !py-1.5 !pr-9">
+            <option value="vieneu" selected>VieNeu — tự nhiên nhất</option>
+            <option value="chatterbox">Chatterbox — tiếng Anh</option>
+            <option value="edge-tts">Edge — cơ bản</option>
             {% if gemini_key_exists %}<option value="gemini">Gemini — có cảm xúc (tính phí)</option>{% endif %}
-            <option value="gtts">gTTS — đơn giản</option>
+            <option value="gtts">Google — đơn giản</option>
           </select>
+        </div>
+      </div>
+
+      {# Ô chọn thật mà form gửi đi; lưới thẻ bên dưới chỉ là giao diện cho nó — xem renderVoiceCards(). #}
+      <select name="tts_voice" id="tts_voice" class="hidden" aria-hidden="true" tabindex="-1"></select>
+      {# Icon do renderVoiceCards() dựng bằng JS — khai ở đây để test icon_names thấy chúng. #}
+      <template id="voiceCardIcons"><span class="material-symbols-outlined">play_circle</span><span class="material-symbols-outlined">stop_circle</span></template>
+      <div id="voiceGrid" role="radiogroup" aria-label="Chất giọng" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+
+      {# Tải giọng mẫu ngay tại đây khi chọn "Giọng của bạn". Các ô KHÔNG có
+         name: không được đi kèm form tạo job, gửi riêng qua /api/voice-sample. #}
+      <div id="voiceSamplePanel" class="hidden rounded-xl border border-outline-variant/60 bg-surface-container-low p-4 flex flex-col gap-2">
+        {# Nội dung theo ngôn ngữ giọng mẫu của engine đang chọn — xem paintSamplePanel(). #}
+        <p id="voiceSampleStatus" class="font-label-sm text-label-sm text-on-surface-variant"></p>
+        {# Thu bằng mic: đọc to đoạn gợi ý, dừng tự động ở voice_max_sec. #}
+        <div id="voiceRecorder" class="hidden flex flex-col gap-2">
+          <p class="font-label-sm text-label-sm text-on-surface-variant">
+            Bấm <b>Thu bằng mic</b> rồi đọc to, tự nhiên đoạn sau (khoảng 10 giây):
+          </p>
+          <blockquote id="voiceRecordPrompt" class="font-body-md text-body-md text-on-surface border-l-2 border-primary pl-3"></blockquote>
+          <div class="flex items-center gap-3">
+            <button type="button" id="voiceRecordBtn"
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface hover:border-primary hover:text-primary font-label-sm text-label-sm transition-colors">
+              <span id="voiceRecordIconMic" class="flex"><span class="material-symbols-outlined text-[18px]">mic</span></span>
+              <span id="voiceRecordIconStop" class="flex hidden"><span class="material-symbols-outlined text-[18px] text-error">stop</span></span>
+              <span id="voiceRecordLabel">Thu bằng mic</span>
+            </button>
+            <span id="voiceRecordTimer" class="hidden tabular font-label-sm text-label-sm text-error">0:00</span>
+          </div>
+          <audio id="voiceRecordPlayback" controls class="hidden w-full"></audio>
+          <p class="font-label-sm text-label-sm text-on-surface-variant">hoặc chọn file ghi âm có sẵn:</p>
+        </div>
+        <input id="voiceSampleFile" type="file"
+               accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
+               class="w-full font-label-sm text-label-sm text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-3 file:py-1.5 file:text-on-surface">
+        <label class="flex items-start gap-2 font-label-sm text-label-sm text-on-surface cursor-pointer">
+          <input id="voiceSampleConsent" type="checkbox" class="w-4 h-4 mt-0.5 rounded">
+          <span>Tôi xác nhận đây là giọng của tôi, hoặc đã được chủ giọng đồng ý cho dùng, và sẽ không dùng để mạo danh hay lừa đảo.</span>
+        </label>
+        <button type="button" id="voiceSampleUpload"
+                class="self-start btn-primary btn-sm">
+          <span class="material-symbols-outlined text-[18px]">upload_file</span>
+          <span id="voiceSampleUploadLabel">Lưu giọng mẫu</span>
+        </button>
+        <p id="voiceSampleError" class="hidden font-label-sm text-label-sm text-error"></p>
+      </div>
+    </section>
+
+    {# ── Tuỳ chọn thêm: chỉ những gì người dùng hiểu được ── #}
+    <details id="moreOptions" data-mode-only="video" class="card !p-0 group/more">
+      <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none flex items-center gap-3 px-lg py-md">
+        <span class="material-symbols-outlined text-on-surface-variant">tune</span>
+        <span class="flex-1 min-w-0">
+          <span class="block font-body-lg text-body-lg text-on-surface font-medium">Tuỳ chọn thêm</span>
+          <span id="moreOptionsSummary" class="block font-label-sm text-label-sm text-on-surface-variant truncate">Phụ đề, âm lượng nhạc gốc, độ chính xác</span>
+        </span>
+        <span class="flex transition-transform group-open/more:rotate-180"><span class="material-symbols-outlined text-on-surface-variant">expand_more</span></span>
+      </summary>
+
+      <div class="px-lg pb-lg pt-sm flex flex-col gap-md border-t border-outline-variant/40">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-md pt-md">
+          <div>
+            <label class="{{ label_class }}" for="subtitle_mode">Phụ đề</label>
+            <select name="subtitle_mode" id="subtitle_mode" class="{{ field_class }}">
+              <option value="bilingual">Song ngữ (gốc + Tiếng Việt)</option>
+              <option value="target">Chỉ tiếng Việt</option>
+              <option value="source">Chỉ ngôn ngữ gốc</option>
+              <option value="none">Không phụ đề</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="{{ label_class }}" for="original_volume">
+              Âm thanh gốc giữ lại — <span id="volumeValue" class="tabular text-primary">10</span>%
+            </label>
+            <input type="range" name="original_volume" id="original_volume" min="0" max="50" value="10"
+              class="w-full accent-primary mt-2">
+          </div>
         </div>
 
         <div>
-          <label class="{{ label_class }}" for="tts_voice">Chất giọng</label>
-          <div class="flex gap-2">
-            <select name="tts_voice" id="tts_voice" class="{{ field_class }} flex-1 min-w-0"></select>
-            <button type="button" id="voicePreviewBtn" title="Nghe thử giọng này"
-                    class="hidden flex-shrink-0 btn-secondary px-3">
-              <span id="voicePreviewPlay" class="flex"><span class="material-symbols-outlined text-[20px]">play_arrow</span></span>
-              <span id="voicePreviewStop" class="flex hidden"><span class="material-symbols-outlined text-[20px]">stop</span></span>
-              <span class="font-label-sm text-label-sm">Nghe thử</span>
+          <span class="field-label">Độ chính xác nhận giọng nói</span>
+          {# Cả ba đều dịch bằng DeepSeek — khác nhau ở mô hình Whisper (đánh đổi
+             tốc độ/độ chính xác nhận dạng). #}
+          {% set presets = [
+            ('fast', 'speed', 'Nhanh', 'Giọng rõ, ít tạp âm', 'base', 'deepseek'),
+            ('balanced', 'balance', 'Cân bằng', 'Khuyên dùng', 'small', 'deepseek'),
+            ('best', 'diamond', 'Chính xác', 'Chậm hơn', 'medium', 'deepseek')
+          ] %}
+          <div class="grid grid-cols-3 gap-2">
+            {% for key, icon, name, desc, whisper, engine in presets %}
+            <button type="button" class="preset rounded-xl px-3 py-2.5 flex items-center gap-2 transition-all text-left
+                bg-surface-container-high border border-outline-variant/50 hover:border-primary/50"
+              data-preset="{{ key }}" data-whisper="{{ whisper }}" data-engine="{{ engine }}">
+              <span class="material-symbols-outlined text-[20px] text-on-surface-variant transition-colors">{{ icon }}</span>
+              <span class="flex flex-col min-w-0">
+                <span class="font-body-md text-body-md font-medium text-on-surface">{{ name }}</span>
+                <span class="font-label-sm text-label-sm text-on-surface-variant truncate">{{ desc }}</span>
+              </span>
             </button>
-          </div>
-          <p id="voiceCloneHint" class="font-label-sm text-label-sm text-on-surface-variant mt-1 hidden">
-            Muốn Nora đọc bằng giọng của bạn? Chọn "Giọng của bạn (clone)" ở trên.
-          </p>
-
-          {# Tải giọng mẫu ngay tại đây khi chọn "Giọng của bạn". Các ô KHÔNG có
-             name: không được đi kèm form tạo job, gửi riêng qua /api/voice-sample. #}
-          <div id="voiceSamplePanel" class="hidden mt-2 rounded-lg border border-outline-variant p-3 flex flex-col gap-2">
-            {# Nội dung theo ngôn ngữ giọng mẫu của engine đang chọn — xem paintSamplePanel(). #}
-            <p id="voiceSampleStatus" class="font-label-sm text-label-sm text-on-surface-variant"></p>
-            {# Thu bằng mic: đọc to đoạn gợi ý, dừng tự động ở voice_max_sec. #}
-            <div id="voiceRecorder" class="hidden flex flex-col gap-2">
-              <p class="font-label-sm text-label-sm text-on-surface-variant">
-                Bấm <b>Thu bằng mic</b> rồi đọc to, tự nhiên đoạn sau (khoảng 10 giây):
-              </p>
-              <blockquote id="voiceRecordPrompt" class="font-body-md text-body-md text-on-surface border-l-2 border-primary pl-3"></blockquote>
-              <div class="flex items-center gap-3">
-                <button type="button" id="voiceRecordBtn"
-                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-outline-variant text-on-surface hover:border-primary hover:text-primary font-label-sm text-label-sm transition-colors">
-                  <span id="voiceRecordIconMic" class="flex"><span class="material-symbols-outlined text-[18px]">mic</span></span>
-                  <span id="voiceRecordIconStop" class="flex hidden"><span class="material-symbols-outlined text-[18px] text-error">stop</span></span>
-                  <span id="voiceRecordLabel">Thu bằng mic</span>
-                </button>
-                <span id="voiceRecordTimer" class="hidden tabular font-label-sm text-label-sm text-error">0:00</span>
-              </div>
-              <audio id="voiceRecordPlayback" controls class="hidden w-full"></audio>
-              <p class="font-label-sm text-label-sm text-on-surface-variant">hoặc chọn file ghi âm có sẵn:</p>
-            </div>
-            <input id="voiceSampleFile" type="file"
-                   accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
-                   class="w-full font-label-sm text-label-sm text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-3 file:py-1.5 file:text-on-surface">
-            <label class="flex items-start gap-2 font-label-sm text-label-sm text-on-surface cursor-pointer">
-              <input id="voiceSampleConsent" type="checkbox" class="w-4 h-4 mt-0.5 accent-primary">
-              <span>Tôi xác nhận đây là giọng của tôi, hoặc đã được chủ giọng đồng ý cho dùng, và sẽ không dùng để mạo danh hay lừa đảo.</span>
-            </label>
-            <button type="button" id="voiceSampleUpload"
-                    class="self-start inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm font-bold disabled:opacity-50">
-              <span class="material-symbols-outlined text-[18px]">upload_file</span>
-              <span id="voiceSampleUploadLabel">Lưu giọng mẫu</span>
-            </button>
-            <p id="voiceSampleError" class="hidden font-label-sm text-label-sm text-error"></p>
+            {% endfor %}
           </div>
         </div>
 
-        <div data-mode-only="video">
-          <label class="{{ label_class }}" for="subtitle_mode">Phụ đề</label>
-          <select name="subtitle_mode" id="subtitle_mode" class="{{ field_class }}">
-            <option value="bilingual">Song ngữ (gốc + Tiếng Việt)</option>
-            <option value="target">Chỉ tiếng Việt</option>
-            <option value="source">Chỉ ngôn ngữ gốc</option>
-            <option value="none">Không phụ đề</option>
-          </select>
-        </div>
-
-        <div data-mode-only="video">
-          <label class="{{ label_class }}" for="compute_device">Thiết bị xử lý</label>
-          <select name="compute_device" id="compute_device" class="{{ field_class }}">
-            <option value="auto">Tự động</option>
-            <option value="cuda">CUDA (GPU)</option>
-            <option value="cpu">CPU</option>
-          </select>
-        </div>
-
-        <div data-mode-only="video" class="sm:col-span-2">
-          <label class="{{ label_class }}" for="original_volume">
-            Âm lượng gốc — <span id="volumeValue" class="tabular text-primary">10</span>%
-          </label>
-          <input type="range" name="original_volume" id="original_volume" min="0" max="50" value="10"
-            class="w-full accent-primary">
-        </div>
-
-        <label data-mode-only="video" class="sm:col-span-2 flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
-          <input type="checkbox" name="retime_video" id="retime_video" checked class="w-4 h-4 mt-1 accent-primary">
-          <span>Tua nhanh hình ở khoảng lặng (tối đa 2×)
+        <label class="flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
+          <input type="checkbox" name="retime_video" id="retime_video" checked class="w-4 h-4 mt-1 rounded">
+          <span>Tua nhanh hình ở khoảng lặng cho khớp giọng (tối đa 2×)
             <span class="block font-label-sm text-label-sm text-on-surface-variant">
-              Giọng Việt thường ngắn hơn lời gốc: tua hình cho khớp giọng thay vì để khoảng nghỉ. Video ra sẽ ngắn hơn bản gốc.
+              Giọng Việt thường ngắn hơn lời gốc: tua hình thay vì để khoảng nghỉ. Video ra sẽ ngắn hơn bản gốc.
             </span>
           </span>
         </label>
 
-        <div id="deepseekKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="{{ label_class }}" for="deepseek_model">Model DeepSeek</label>
-            <input type="text" name="deepseek_model" id="deepseek_model" value="{{ default_deepseek_model }}" class="{{ field_class }} tabular">
-          </div>
-          <div>
-            <label class="{{ label_class }}" for="deepseek_api_key">DeepSeek API key</label>
-            <input type="password" name="deepseek_api_key" id="deepseek_api_key" class="{{ field_class }}"
-              placeholder="{% if deepseek_key_exists %}Dùng key của hệ thống{% else %}sk-...{% endif %}">
-          </div>
-        </div>
+        {# ── Thiết lập kỹ thuật: đúng tên trường backend đang đọc ── #}
+        <details id="expertOptions" class="group/expert rounded-xl border border-outline-variant/50 bg-surface-container-low">
+          <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none flex items-center gap-2 px-4 py-3 font-body-md text-body-md text-on-surface">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant">settings</span>
+            <span class="flex-1">Thiết lập kỹ thuật <span class="text-on-surface-variant">(cho người dùng nâng cao)</span></span>
+            <span class="flex transition-transform group-open/expert:rotate-180"><span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span></span>
+          </summary>
+          <div class="px-4 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal" for="whisper_model_select">Mô hình Whisper</label>
+                <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
+                  data-tip="whisperTip" aria-expanded="false" aria-label="Giải thích các mô hình Whisper">
+                  <span class="material-symbols-outlined text-[16px]">info</span>
+                </button>
+              </div>
+              <select id="whisper_model_select" class="{{ field_class }}">
+                {% for value, text in [('tiny','Tiny — nhanh nhất'), ('base','Base'), ('small','Small'), ('medium','Medium'), ('large','Large — chính xác nhất')] %}
+                <option value="{{ value }}"{% if value == "small" %} selected{% endif %}>{{ text }}</option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div id="geminiKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="{{ label_class }}" for="gemini_model">Model Gemini</label>
-            <input type="text" name="gemini_model" id="gemini_model" value="{{ default_gemini_model }}" class="{{ field_class }} tabular">
-          </div>
-          <div>
-            <label class="{{ label_class }}" for="gemini_api_key">Gemini API key</label>
-            <input type="password" name="gemini_api_key" id="gemini_api_key" class="{{ field_class }}"
-              placeholder="{% if gemini_key_exists %}Dùng key của hệ thống{% else %}AIza...{% endif %}">
-          </div>
-        </div>
+            <div>
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal" for="translator_engine_select">Công cụ dịch</label>
+                <button type="button" class="info-toggle text-on-surface-variant hover:text-primary transition-colors flex items-center"
+                  data-tip="engineTip" aria-expanded="false" aria-label="Giải thích các công cụ dịch">
+                  <span class="material-symbols-outlined text-[16px]">info</span>
+                </button>
+              </div>
+              <select id="translator_engine_select" class="{{ field_class }}">
+                <option value="deepseek">DeepSeek{% if not deepseek_key_exists %} — cần API key{% endif %}</option>
+                <option value="gemini">Gemini{% if not gemini_key_exists %} — cần API key{% endif %}</option>
+                <option value="openai">OpenAI{% if not openai_key_exists %} — cần API key{% endif %}</option>
+              </select>
+            </div>
 
-        <div id="openaiKeyGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="{{ label_class }}" for="openai_model">Model OpenAI</label>
-            <input type="text" name="openai_model" id="openai_model" value="{{ default_openai_model }}" class="{{ field_class }} tabular">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <label class="font-label-sm text-label-sm text-on-surface-variant tracking-normal" for="compute_device">Thiết bị xử lý</label>
+              </div>
+              <select name="compute_device" id="compute_device" class="{{ field_class }}">
+                <option value="auto">Tự động</option>
+                <option value="cuda">CUDA (GPU)</option>
+                <option value="cpu">CPU</option>
+              </select>
+            </div>
+
+            <p id="whisperTip" class="hidden sm:col-span-3 font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 leading-relaxed">
+              Mô hình càng lớn thì nhận dạng giọng nói càng chính xác — nhất là với thuật ngữ chuyên ngành,
+              giọng vùng miền, hay video có tạp âm — nhưng xử lý càng lâu. Tiny và Base hợp video giọng rõ,
+              nói chậm; Medium và Large hợp bài giảng nhiều thuật ngữ khó hoặc âm thanh không tốt.
+            </p>
+            <p id="engineTip" class="hidden sm:col-span-3 font-body-md text-body-md text-on-surface-variant bg-surface-container-high rounded-lg px-3 py-2 leading-relaxed">
+              DeepSeek, Gemini và OpenAI đều dịch tự nhiên và hỗ trợ đủ các ngôn ngữ đích; DeepSeek rẻ nhất.
+              Cần bạn tự có API key, tính phí theo lượng chữ. Nếu một bên gặp lỗi, hệ thống tự
+              chuyển sang bên còn lại để bản lồng tiếng không bị hỏng giữa chừng.
+            </p>
+
+            <div id="engineHint"
+              class="hidden sm:col-span-3 rounded-xl border border-tertiary/40 bg-tertiary/10 px-3 py-2 font-label-sm text-label-sm text-tertiary"></div>
+
+            {# Hầu hết người dùng chạy bằng key của hệ thống, nên khối này gập lại.
+               Tự mở khi công cụ dịch đang chọn chưa có key hệ thống — xem syncEngineHint(). #}
+            <details id="apiKeyDetails" class="sm:col-span-3 group/keys rounded-xl border border-outline-variant/50 bg-surface-container">
+              <summary class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none flex items-center gap-2 px-4 py-3 font-body-md text-body-md text-on-surface">
+                <span class="material-symbols-outlined text-[18px] text-on-surface-variant">key</span>
+                <span class="flex-1">API key riêng <span class="text-on-surface-variant">(không bắt buộc)</span></span>
+                <span class="flex transition-transform group-open/keys:rotate-180"><span class="material-symbols-outlined text-[18px] text-on-surface-variant">expand_more</span></span>
+              </summary>
+              <div class="px-4 pb-4 flex flex-col gap-3">
+                <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant">
+                  Để trống để dùng key của hệ thống. Key chỉ gửi kèm lần xử lý này, Nora không lưu lại.
+                </p>
+                {% for key, label, model_default, exists, placeholder in [
+                  ('deepseek', 'DeepSeek', default_deepseek_model, deepseek_key_exists, 'sk-...'),
+                  ('gemini', 'Gemini', default_gemini_model, gemini_key_exists, 'AIza...'),
+                  ('openai', 'OpenAI', default_openai_model, openai_key_exists, 'sk-...')
+                ] %}
+                <div id="{{ key }}KeyGroup" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label class="{{ label_class }}" for="{{ key }}_model">Model {{ label }}</label>
+                    <input type="text" name="{{ key }}_model" id="{{ key }}_model" value="{{ model_default }}" class="{{ field_class }} tabular">
+                  </div>
+                  <div>
+                    <label class="{{ label_class }}" for="{{ key }}_api_key">{{ label }} API key</label>
+                    <input type="password" name="{{ key }}_api_key" id="{{ key }}_api_key" class="{{ field_class }}"
+                      placeholder="{% if exists %}Dùng key của hệ thống{% else %}{{ placeholder }}{% endif %}">
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </details>
           </div>
-          <div>
-            <label class="{{ label_class }}" for="openai_api_key">OpenAI API key</label>
-            <input type="password" name="openai_api_key" id="openai_api_key" class="{{ field_class }}"
-              placeholder="{% if openai_key_exists %}Dùng key của hệ thống{% else %}sk-...{% endif %}">
-          </div>
-        </div>
+        </details>
       </div>
-    </section>
-
-    {# ── Bước 3: bắt đầu ──────────────────────────────── #}
-    <div class="pt-4">
-      <button type="submit" id="submitBtn" disabled
-        class="w-full bg-primary text-on-primary font-headline-md text-headline-md font-bold py-5 rounded-2xl hover:bg-primary-fixed hover:-translate-y-0.5 transition-all flex items-center justify-center gap-3 disabled:opacity-40 disabled:hover:translate-y-0 disabled:cursor-not-allowed">
-        <span class="material-symbols-outlined filled text-[28px]">play_circle</span>
-        <span id="submitLabel">Bắt đầu lồng tiếng</span>
-      </button>
-      <p id="submitHint" class="text-center font-label-sm text-label-sm text-on-surface-variant mt-2">Chọn video trước</p>
-    </div>
-
-    <p id="uploadStatus" class="hidden text-center font-body-md text-body-md text-primary tabular"></p>
-
-    {# ── Lỗi ──────────────────────────────────────────── #}
-    <section id="errorCard" class="hidden bg-error-container/20 rounded-2xl p-lg border border-error/50 flex flex-col gap-3">
-      <h3 class="font-headline-md text-headline-md text-error flex items-center gap-2">
-        <span class="material-symbols-outlined">error</span>Xử lý thất bại
-      </h3>
-      <p id="errorMessage" class="font-body-md text-body-md text-on-error-container"></p>
-      <button type="button" id="retryBtn"
-        class="self-start btn-danger">
-        Thử lại
-      </button>
-    </section>
+    </details>
   </div>
 
-  {# ── Cột phải: tóm tắt ──────────────────────────────── #}
-  <div class="lg:col-span-4">
-    <div class="sticky top-[88px] bg-surface-container-low rounded-2xl p-lg border border-outline-variant/40 flex flex-col gap-5">
-      <div class="flex items-center gap-3 pb-4 border-b border-outline-variant/50">
-        <div class="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-          <span class="material-symbols-outlined text-primary">receipt_long</span>
-        </div>
-        <div>
-          <h4 class="font-body-lg text-body-lg font-medium text-on-surface">Tổng quan</h4>
-          <p class="font-label-sm text-label-sm text-on-surface-variant">Chi tiết tác vụ</p>
-        </div>
+  {# ── Lỗi ──────────────────────────────────────────── #}
+  <section id="errorCard" class="hidden bg-error-container/20 rounded-2xl p-lg border border-error/50 flex flex-col gap-3">
+    <h3 class="font-headline-md text-headline-md text-error flex items-center gap-2">
+      <span class="material-symbols-outlined">error</span>Xử lý thất bại
+    </h3>
+    <p id="errorMessage" class="font-body-md text-body-md text-on-error-container"></p>
+    <button type="button" id="retryBtn" class="self-start btn-danger">Thử lại</button>
+  </section>
+
+  {# ── Thanh hành động dính đáy: ước tính + nút bắt đầu ── #}
+  <div class="sticky bottom-0 z-20 -mx-2 px-2 pb-4 pt-2 bg-gradient-to-t from-background via-background/95 to-transparent">
+    <div class="rounded-2xl border border-outline-variant/60 bg-surface-container-high/95 backdrop-blur shadow-xl shadow-black/30 px-4 py-3 flex items-center gap-4">
+      <div class="flex-1 min-w-0">
+        <p id="estSummary" class="hidden font-body-md text-body-md text-on-surface tabular truncate">
+          <span class="material-symbols-outlined text-[18px] align-[-4px] text-on-surface-variant">hourglass_top</span>
+          <span id="estTime">—</span>
+          <span class="text-on-surface-variant mx-1">·</span>
+          <span id="estCost">—</span>
+        </p>
+        <p id="submitHint" class="font-body-md text-body-md text-on-surface-variant truncate">Chọn video trước</p>
+        <p id="uploadStatus" class="hidden font-body-md text-body-md text-primary tabular truncate"></p>
+        <p class="font-label-sm text-label-sm text-on-surface-variant truncate">Mỗi lần bắt đầu tính một lượt, kể cả khi xử lý thất bại.</p>
       </div>
-
-      {% macro stat_row(icon, label, value, id='') %}
-      <div class="flex items-center justify-between gap-3">
-        <span class="flex items-center gap-2 font-body-md text-body-md text-on-surface-variant">
-          <span class="material-symbols-outlined text-[18px]">{{ icon }}</span>{{ label }}
-        </span>
-        <span {% if id %}id="{{ id }}" {% endif %}class="tabular text-on-surface">{{ value }}</span>
-      </div>
-      {% endmacro %}
-
-      {{ stat_row('hourglass_top', 'Thời gian', '—', 'estTime') }}
-      {{ stat_row('payments', 'Chi phí', '—', 'estCost') }}
-      {% set jobs_left = [usage.jobs.limit - usage.jobs.used, 0] | max %}
-      {{ stat_row('bolt', 'Lượt còn lại', jobs_left ~ '/' ~ usage.jobs.limit) }}
-
-      <div class="w-full h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-        {% set pct = (usage.jobs.used / usage.jobs.limit * 100) if usage.jobs.limit else 0 %}
-        <div class="h-full rounded-full {% if pct >= 100 %}bg-error{% elif pct >= 80 %}bg-tertiary{% else %}bg-primary{% endif %}"
-          style="width: {{ [pct, 100] | min }}%"></div>
-      </div>
-
-      <p class="font-label-sm text-label-sm text-on-surface-variant leading-relaxed">
-        Mỗi lần bấm bắt đầu đều tính một lượt, kể cả khi xử lý thất bại.
-      </p>
-
-      <div id="engineHint"
-        class="hidden rounded-xl border border-tertiary/40 bg-tertiary/10 px-3 py-2 font-label-sm text-label-sm text-tertiary"></div>
+      <button type="submit" id="submitBtn" disabled
+        class="btn-primary px-6 py-2.5 flex-shrink-0 disabled:opacity-40">
+        <span id="submitLabel">Bắt đầu lồng tiếng</span>
+        <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+      </button>
     </div>
   </div>
 </form>
 
 {% if outputs %}
-<section class="mt-xl">
-  <h3 class="font-headline-md text-headline-md text-on-surface mb-md">Gần đây</h3>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+<section class="mt-lg">
+  <div class="flex items-center justify-between mb-md">
+    <h3 class="font-headline-md text-headline-md text-on-surface">Gần đây</h3>
+    <a href="{{ url_for('main.history') }}" class="font-body-md text-body-md text-primary hover:underline underline-offset-4">Xem tất cả</a>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {% for item in outputs %}
-    <div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-4 flex flex-col gap-2">
-      <span class="font-body-md text-body-md text-on-surface truncate" title="{{ item.display_name }}">{{ item.display_name }}</span>
-      <span class="font-label-sm text-label-sm text-on-surface-variant tabular" data-local-time="{{ item.created_at or '' }}"></span>
-      <div class="flex items-center gap-4">
-        <a href="{{ url_for('main.job_detail', job_id=item.id) }}"
-          class="text-primary font-label-sm text-label-sm tracking-normal font-medium">Xem chi tiết</a>
-        {% if item.video_url %}
-        <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
-          class="text-on-surface-variant hover:text-primary font-label-sm text-label-sm tracking-normal font-medium">{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}</a>
+    <article class="group relative bg-surface-container rounded-2xl border border-outline-variant/40 overflow-hidden flex flex-col hover:border-outline transition-colors">
+      {# Khung hình đầu làm ảnh thu nhỏ: video ra đều có +faststart nên
+         preload="metadata" chỉ tải phần đầu file, không kéo cả video. #}
+      <div class="aspect-video bg-surface-container-lowest flex items-center justify-center overflow-hidden">
+        {% if item.video_url and not item.is_audio_only %}
+        <video src="{{ item.video_url }}#t=1" preload="metadata" muted playsinline tabindex="-1" aria-hidden="true"
+          class="w-full h-full object-cover pointer-events-none"></video>
+        {% else %}
+        <span class="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-[28px]">{{ 'graphic_eq' if item.is_audio_only else 'movie' }}</span>
+        </span>
         {% endif %}
       </div>
-    </div>
+      <div class="p-4 flex flex-col gap-1.5 min-w-0">
+        <a href="{{ url_for('main.job_detail', job_id=item.id) }}" title="{{ item.display_name }}"
+          class="font-body-md text-body-md text-on-surface font-medium truncate after:absolute after:inset-0 hover:text-primary">{{ item.display_name }}</a>
+        <div class="flex items-center gap-2 font-label-sm text-label-sm tracking-normal text-on-surface-variant">
+          <span class="material-symbols-outlined text-[16px]">{{ 'record_voice_over' if item.is_script else 'movie' }}</span>
+          <span>{{ 'Đọc kịch bản' if item.is_script else 'Lồng tiếng' }}</span>
+          <span aria-hidden="true">·</span>
+          <span class="tabular" data-local-time="{{ item.created_at or '' }}"></span>
+        </div>
+      </div>
+      {% if item.video_url %}
+      {# Nằm trên lớp link phủ cả thẻ (z-10) để bấm tải không mở trang chi tiết. #}
+      <a href="{{ item.video_url }}" download="{{ item.download_video_name }}"
+        title="{{ 'Tải âm thanh' if item.is_audio_only else 'Tải video' }}"
+        class="absolute top-2 right-2 z-10 btn-icon bg-black/60 text-white hover:bg-black/80 hover:text-white sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity">
+        <span class="material-symbols-outlined text-[20px]">download</span>
+      </a>
+      {% endif %}
+    </article>
     {% endfor %}
   </div>
 </section>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -546,7 +550,7 @@
       document.getElementById("fileValidationError").classList.replace("hidden", "flex");
       preview.classList.add("hidden");
       dropzone.classList.remove("hidden");
-      submitBtn.disabled = true;
+      syncSubmit();
       submitHint.textContent = "Chọn video khác";
     }
 
@@ -571,28 +575,38 @@
       document.getElementById("fileSize").textContent = humanSize(file.size);
       preview.classList.remove("hidden");
       dropzone.classList.add("hidden");
-      submitBtn.disabled = false;
-      submitHint.textContent = "";
+      syncSubmit();
 
-      // Đọc thời lượng để ước tính, không cần gọi server
-      const probe = document.createElement("video");
-      probe.preload = "metadata";
-      probe.onloadedmetadata = function () {
-        const d = Math.round(probe.duration);
+      // Ảnh thu nhỏ + thời lượng để ước tính, đọc ngay trên máy — không cần gọi server.
+      const thumb = document.getElementById("fileThumb");
+      if (thumb.src) URL.revokeObjectURL(thumb.src.split("#")[0]);
+      thumb.onloadedmetadata = function () {
+        const d = Math.round(thumb.duration);
         document.getElementById("fileDuration").textContent =
           String(Math.floor(d / 60)).padStart(2, "0") + ":" + String(d % 60).padStart(2, "0");
         estimate(d);
-        URL.revokeObjectURL(probe.src);
       };
-      probe.src = URL.createObjectURL(file);
+      thumb.onloadeddata = function () {
+        thumb.classList.remove("hidden");
+        document.getElementById("fileThumbIcon").classList.add("hidden");
+      };
+      thumb.classList.add("hidden");
+      document.getElementById("fileThumbIcon").classList.remove("hidden");
+      thumb.src = URL.createObjectURL(file) + "#t=1";
     }
 
     // Đo thật trên T4: video 86 giây mất ~78 giây khi dịch bằng Gemini/OpenAI.
     function estimate(durationSec) {
       if (!durationSec) return;
       const seconds = Math.max(10, Math.round(durationSec * 0.9));
-      document.getElementById("estTime").textContent = "~" + seconds + " giây";
-      document.getElementById("estCost").textContent = "~$" + (seconds * 0.000164).toFixed(3).replace(".", ",");
+      document.getElementById("estTime").textContent = "Khoảng " + (seconds < 90 ? seconds + " giây" : Math.round(seconds / 60) + " phút") + " xử lý";
+      document.getElementById("estCost").textContent = "~$" + (seconds * 0.000164).toFixed(3).replace(".", ",") + " chi phí";
+      document.getElementById("estSummary").classList.remove("hidden");
+    }
+    function clearEstimate() {
+      document.getElementById("estTime").textContent = "—";
+      document.getElementById("estCost").textContent = "—";
+      document.getElementById("estSummary").classList.add("hidden");
     }
 
     fileInput.addEventListener("change", function () {
@@ -604,8 +618,9 @@
       hideFileError();
       preview.classList.add("hidden");
       dropzone.classList.remove("hidden");
-      submitBtn.disabled = true;
-      submitHint.textContent = "Chọn video trước";
+      clearEstimate();
+      syncSubmit();
+      fileInput.click();   // "Đổi video": mở luôn hộp chọn file
     });
 
     ["dragover", "dragenter"].forEach(function (evt) {
@@ -634,6 +649,11 @@
       });
     }
 
+    const SYSTEM_KEYS = {
+      deepseek: {{ 'true' if deepseek_key_exists else 'false' }},
+      gemini: {{ 'true' if gemini_key_exists else 'false' }},
+      openai: {{ 'true' if openai_key_exists else 'false' }}
+    };
     function syncEngineHint() {
       const hint = document.getElementById("engineHint");
       const names = { deepseek: "DeepSeek", gemini: "Gemini", openai: "OpenAI" };
@@ -642,6 +662,8 @@
       Object.keys(names).forEach(function (key) {
         document.getElementById(key + "KeyGroup").classList.toggle("hidden", engine !== key);
       });
+      // Công cụ đang chọn chưa có key hệ thống thì bắt buộc nhập — mở sẵn khối key.
+      if (names[engine] && !SYSTEM_KEYS[engine]) document.getElementById("apiKeyDetails").open = true;
       if (names[engine]) {
         hint.textContent = "Nếu " + names[engine] + " gặp lỗi, hệ thống tự chuyển sang nhà cung cấp khác để bản lồng tiếng không bị hỏng.";
         hint.classList.remove("hidden");
@@ -671,9 +693,6 @@
       });
     });
 
-    document.getElementById("toggleAdvanced").addEventListener("click", function () {
-      document.getElementById("advanced").classList.toggle("hidden");
-    });
 
     // Bấm nút info để bật/tắt câu giải thích — dùng click chứ không phải hover
     // vì hover không hoạt động trên điện thoại, mà phần lớn người dùng ở đây
@@ -704,8 +723,12 @@
       } else {
         const file = fileInput.files[0];
         submitBtn.disabled = !file || Boolean(fileError(file));
-        submitHint.textContent = file ? "" : "Chọn video trước";
+        submitHint.textContent = file ? "" : "Chọn video để bắt đầu";
       }
+      // Chế độ video: bước 2–3 chỉ hiện khi đã có file hợp lệ.
+      const ready = mode === "script" || !submitBtn.disabled;
+      document.getElementById("configSteps").classList.toggle("hidden", !ready);
+      submitHint.classList.toggle("hidden", !submitHint.textContent);
     }
 
     // Đọc trung bình ~15 ký tự mỗi giây (cả tiếng Việt lẫn tiếng Anh).
@@ -719,14 +742,6 @@
     }
     scriptInput.addEventListener("input", syncScriptCount);
 
-    // "Kiểu nhân vật" chỉ áp dụng cho chế độ ảnh Manhwa recap.
-    function syncRecapStyle() {
-      document.getElementById("recapStyles").classList.toggle("hidden", form.elements["script_images"].value !== "recap");
-    }
-    form.querySelectorAll('input[name="script_images"]').forEach(function (el) {
-      el.addEventListener("change", syncRecapStyle);
-    });
-    syncRecapStyle();
 
     function setMode(next) {
       mode = next;
@@ -736,14 +751,11 @@
         el.classList.toggle("hidden", off);
         if (el.tagName === "OPTION") { el.hidden = off; el.disabled = off; }
       });
-      // Giọng đọc nằm trong khối "nâng cao" — đọc kịch bản thì luôn mở khối đó.
-      if (script) document.getElementById("advanced").classList.remove("hidden");
       if (targetLanguageSelect.selectedOptions[0].disabled) targetLanguageSelect.value = "vi";
-      document.getElementById("step2Title").textContent = script ? "Giọng đọc" : "Chất lượng";
-      document.getElementById("targetLanguageLabel").textContent = script ? "Ngôn ngữ của kịch bản" : "Ngôn ngữ đích";
+      renderLanguageChips();
+      document.getElementById("targetLanguageLabel").textContent = script ? "Kịch bản viết bằng" : "Dịch sang";
       document.getElementById("submitLabel").textContent = script ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
-      document.getElementById("estTime").textContent = "—";
-      document.getElementById("estCost").textContent = "—";
+      clearEstimate();
       syncEngineHint();
       syncEngines();
       syncSubmit();
@@ -878,6 +890,39 @@
       paint();
     })();
 
+    // Thẻ ngôn ngữ đích: dựng từ các option đang bật của ô chọn ẩn.
+    function renderLanguageChips() {
+      const box = document.getElementById("languageChips");
+      box.innerHTML = "";
+      Array.from(targetLanguageSelect.options).forEach(function (option) {
+        if (option.disabled) return;
+        const selected = option.value === targetLanguageSelect.value;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.setAttribute("role", "radio");
+        chip.setAttribute("aria-checked", String(selected));
+        chip.className = "inline-flex items-center gap-2.5 rounded-xl border pl-2 pr-4 py-2 transition-colors " +
+          (selected ? "border-primary bg-primary/10 ring-1 ring-primary text-on-surface"
+                    : "border-outline-variant/50 bg-surface-container-high text-on-surface-variant hover:border-primary/50 hover:text-on-surface");
+        const code = document.createElement("span");
+        code.className = "tabular text-[11px] font-bold w-8 h-6 rounded-md flex items-center justify-center " +
+          (selected ? "bg-primary text-on-primary" : "bg-surface-container-highest text-on-surface-variant");
+        code.textContent = option.value.toUpperCase();
+        const name = document.createElement("span");
+        name.className = "font-body-md text-body-md font-medium";
+        name.textContent = option.textContent.trim();
+        chip.appendChild(code);
+        chip.appendChild(name);
+        chip.addEventListener("click", function () {
+          if (targetLanguageSelect.value === option.value) return;
+          targetLanguageSelect.value = option.value;
+          targetLanguageSelect.dispatchEvent(new Event("change"));
+        });
+        box.appendChild(chip);
+      });
+    }
+    targetLanguageSelect.addEventListener("change", renderLanguageChips);
+
     function languageVoiceLabels() {
       return (VOICE_LABELS_BY_LANGUAGE[targetLanguageSelect.value] || {})[ttsEngineSelect.value] || {};
     }
@@ -915,23 +960,95 @@
 
     // ── Nghe thử: mọi giọng đọc cùng một câu (core/voice_previews.py) ──
     const PREVIEW_URLS = {{ voice_preview_urls | tojson }};
-    const previewBtn = document.getElementById("voicePreviewBtn");
     const previewAudio = new Audio();
-    function paintPreview(playing) {
-      document.getElementById("voicePreviewPlay").classList.toggle("hidden", playing);
-      document.getElementById("voicePreviewStop").classList.toggle("hidden", !playing);
+    let playingKey = null;   // giọng đang phát nghe thử
+    function previewUrl(key) {
+      if (languageVoiceLabels()[key]) return "";
+      return (PREVIEW_URLS[ttsEngineSelect.value] || {})[key] || "";
     }
-    function previewUrl() {
-      if (languageVoiceLabels()[ttsVoiceSelect.value]) return "";
-      return (PREVIEW_URLS[ttsEngineSelect.value] || {})[ttsVoiceSelect.value] || "";
+
+    // Lưới thẻ giọng: mỗi thẻ là một lựa chọn của ô <select id="tts_voice"> ẩn,
+    // kèm nút nghe thử riêng. Tên/mô tả tách từ nhãn "Tên — mô tả".
+    const voiceGrid = document.getElementById("voiceGrid");
+    function icon(name, extra) {
+      const el = document.createElement("span");
+      el.className = "material-symbols-outlined " + (extra || "");
+      el.textContent = name;
+      return el;
     }
+    function renderVoiceCards() {
+      voiceGrid.innerHTML = "";
+      Array.from(ttsVoiceSelect.options).forEach(function (option) {
+        const key = option.value;
+        const selected = key === ttsVoiceSelect.value;
+        const parts = option.textContent.split(" — ");
+        const mine = key === "mine";
+        const name = mine ? "Giọng của bạn" : parts[0];
+        const desc = mine ? "Nhân bản từ một đoạn ghi âm ngắn" : parts.slice(1).join(" — ");
+
+        const card = document.createElement("div");
+        card.className = "relative flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors " +
+          (selected ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-outline-variant/50 bg-surface-container-high hover:border-primary/50");
+
+        const avatar = document.createElement("span");
+        avatar.className = "w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-semibold " +
+          (selected ? "bg-primary text-on-primary" : "bg-surface-container-highest text-on-surface-variant");
+        if (mine) avatar.appendChild(icon("mic", "text-[20px]"));
+        else avatar.textContent = name.trim().charAt(0).toUpperCase();
+
+        // Nút chọn phủ cả thẻ; nút nghe thử nằm trên nó (z-10).
+        const pick = document.createElement("button");
+        pick.type = "button";
+        pick.setAttribute("role", "radio");
+        pick.setAttribute("aria-checked", String(selected));
+        pick.className = "flex-1 min-w-0 text-left after:absolute after:inset-0 after:rounded-xl focus:outline-none";
+        const title = document.createElement("span");
+        title.className = "block font-body-md text-body-md text-on-surface font-medium truncate";
+        title.textContent = name;
+        pick.appendChild(title);
+        if (desc) {
+          const sub = document.createElement("span");
+          sub.className = "block font-label-sm text-label-sm text-on-surface-variant truncate";
+          sub.textContent = desc;
+          pick.appendChild(sub);
+        }
+        pick.addEventListener("click", function () {
+          if (ttsVoiceSelect.value === key) return;
+          ttsVoiceSelect.value = key;
+          ttsVoiceSelect.dispatchEvent(new Event("change"));
+        });
+
+        card.appendChild(avatar);
+        card.appendChild(pick);
+
+        const url = previewUrl(key);
+        if (url) {
+          const playing = playingKey === key && !previewAudio.paused;
+          const play = document.createElement("button");
+          play.type = "button";
+          play.title = playing ? "Dừng" : "Nghe thử " + name;
+          play.setAttribute("aria-label", play.title);
+          play.className = "relative z-10 btn-icon flex-shrink-0 " + (playing ? "text-primary" : "");
+          play.appendChild(icon(playing ? "stop_circle" : "play_circle", "text-[26px]"));
+          play.addEventListener("click", function () {
+            if (playing) { previewAudio.pause(); return; }
+            playingKey = key;
+            previewAudio.src = url;
+            previewAudio.currentTime = 0;
+            previewAudio.play().catch(function () {});
+          });
+          card.appendChild(play);
+        }
+        voiceGrid.appendChild(card);
+      });
+    }
+
     function syncPreview() {
       previewAudio.pause();
-      previewBtn.classList.toggle("hidden", !previewUrl());
+      renderVoiceCards();
       const mine = CLONE_ENGINES.indexOf(ttsEngineSelect.value) !== -1 && ttsVoiceSelect.value === "mine";
       document.getElementById("voiceSamplePanel").classList.toggle("hidden", !mine);
       if (mine) paintSamplePanel();
-      document.getElementById("voiceCloneHint").classList.toggle("hidden", ttsEngineSelect.value !== "vieneu" || mine);
     }
 
     // ── Tải giọng mẫu ngay trong form (giọng "Giọng của bạn") ──
@@ -955,7 +1072,7 @@
       const text = SAMPLE_TEXT[lang];
       document.getElementById("voiceRecordPrompt").textContent = text.prompt;
       document.getElementById("voiceSampleStatus").textContent = VOICE_SAMPLES[lang]
-        ? "Đang dùng giọng mẫu " + text.name + " bạn đã lưu — bấm \"Nghe thử\" để nghe lại, hoặc tải file khác để thay."
+        ? "Đang dùng giọng mẫu " + text.name + " bạn đã lưu — bấm ▶ trên thẻ để nghe lại, hoặc tải file khác để thay."
         : "Tải lên một đoạn ghi âm " + VOICE_MIN_SEC + "–" + VOICE_MAX_SEC + " giây giọng bạn đọc bằng " + text.name +
           ": đọc rõ, không nhạc nền, không tiếng ồn — giọng mẫu thế nào thì bản lồng tiếng nghe thế ấy.";
     }
@@ -1070,7 +1187,7 @@
         });
         const saved =
           "Đã lưu giọng mẫu " + SAMPLE_TEXT[body.language].name + " (" + body.seconds +
-          " giây). Bấm \"Nghe thử\" để nghe lại, rồi bắt đầu lồng tiếng như bình thường.";
+          " giây). Bấm ▶ trên thẻ để nghe lại, rồi bắt đầu như bình thường.";
         sampleFileInput.value = "";
         recordedFile = null;
         recordPlayback.classList.add("hidden");
@@ -1086,15 +1203,8 @@
         document.getElementById("voiceSampleUploadLabel").textContent = "Lưu giọng mẫu";
       }
     });
-    previewAudio.addEventListener("play", function () { paintPreview(true); });
-    previewAudio.addEventListener("pause", function () { paintPreview(false); });
-    previewAudio.addEventListener("ended", function () { paintPreview(false); });
-    previewBtn.addEventListener("click", function () {
-      if (!previewAudio.paused) { previewAudio.pause(); return; }
-      const url = previewUrl();
-      if (previewAudio.getAttribute("src") !== url) previewAudio.src = url;
-      previewAudio.currentTime = 0;
-      previewAudio.play().catch(function () {});
+    ["play", "pause", "ended"].forEach(function (evt) {
+      previewAudio.addEventListener(evt, renderVoiceCards);
     });
     ttsVoiceSelect.addEventListener("change", syncPreview);
 

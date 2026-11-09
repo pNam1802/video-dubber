@@ -18,9 +18,12 @@
   }
 
   body {
-    background-color: #101416;
-    color: #e0e3e5;
-    font-family: "Be Vietnam Pro", sans-serif;
+    background-color: #0b0b0b;
+    color: #ececec;
+    font-family: "Inter", sans-serif;
+    /* Inter: số 1 có chân, chữ hoa cân hơn ở cỡ nhỏ. */
+    font-feature-settings: "cv05", "cv08";
+    -webkit-font-smoothing: antialiased;
   }
 
   /* Viền nổi khi đi bằng bàn phím (Tab), không hiện khi bấm chuột. Đặt một
@@ -37,9 +40,14 @@
     outline-offset: 2px;
   }
 
-  /* Chữ số thẳng cột trong bảng và biểu đồ. */
+  /* Con số ở trang người dùng: cùng font chữ (Inter), bật số đều nhau để
+     bộ đếm, phần trăm, ngày giờ không xê dịch khi đổi số. */
   .tabular {
-    font-family: "JetBrains Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Bảng số liệu trang quản trị cần chữ số thẳng cột thật: dùng font mono. */
+  .tabular-mono {
+    font-family: "DM Mono", monospace;
     font-variant-numeric: tabular-nums;
   }
 }
@@ -56,8 +64,8 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2
-      font-body-md text-body-md font-semibold whitespace-nowrap
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2
+      font-body-md text-body-md font-medium whitespace-nowrap
       transition-colors duration-150
       disabled:opacity-50 disabled:cursor-not-allowed;
   }
@@ -65,13 +73,13 @@
     @apply px-3 py-1.5 text-label-sm;
   }
   .btn-lg {
-    @apply px-6 py-4 text-headline-md rounded-2xl;
+    @apply px-6 py-3 text-body-lg;
   }
   .btn-primary {
-    @apply btn bg-primary text-on-primary hover:bg-primary-fixed-dim;
+    @apply btn bg-on-surface text-background hover:bg-white;
   }
   .btn-secondary {
-    @apply btn border border-outline-variant text-on-surface hover:bg-surface-container-high hover:border-outline;
+    @apply btn border border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high hover:border-outline;
   }
   .btn-danger {
     @apply btn border border-error/40 text-error hover:bg-error/10;
@@ -104,6 +112,33 @@
     @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-full border font-label-sm text-label-sm transition-colors;
   }
 
+  /* Nền trang trí của trang tạo mới: lấp hai bên trống quanh cột form giữa.
+     Cố định theo khung nhìn (trừ sidebar + header), không nhận chuột. */
+  .page-backdrop {
+    @apply pointer-events-none fixed inset-0 top-14 lg:left-[240px] overflow-hidden;
+    z-index: 0;
+  }
+  /* Lưới chấm chỉ hiện ở hai mép, tắt dần vào giữa nơi có form. */
+  .page-backdrop-dots {
+    @apply absolute inset-0;
+    background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 30%, transparent 70%, #000 100%);
+    mask-image: linear-gradient(to right, #000 0%, transparent 30%, transparent 70%, #000 100%);
+  }
+  .page-backdrop-glow {
+    @apply absolute rounded-full blur-3xl;
+  }
+  /* Sóng âm: mỗi vạch co giãn lệch pha nhau (animation-delay đặt inline). */
+  .wave-bar {
+    @apply w-1 rounded-full bg-primary;
+    transform-origin: center;
+    animation: wave-pulse 3.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wave-bar { animation: none; }
+  }
+
   .page-title {
     @apply font-headline-xl text-headline-xl text-on-surface flex items-center gap-3;
   }
@@ -112,12 +147,27 @@
 /* Chrome tự điền mật khẩu sẽ tô nền ô nhập màu trắng xanh, lạc tông nền tối.
    Không đổi được background khi autofill, nên phủ bóng đổ bên trong thay. */
 @layer base {
+  /* Checkbox/radio theo màu chủ đạo ở mọi trang (plugin forms mặc định xanh dương). */
+  [type="checkbox"],
+  [type="radio"] {
+    @apply text-primary bg-surface-container-high border-outline-variant
+      focus:ring-primary focus:ring-offset-0;
+  }
+  [type="checkbox"] {
+    @apply rounded;
+  }
+
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
-    -webkit-text-fill-color: #e0e3e5;
-    -webkit-box-shadow: 0 0 0 1000px #272b2d inset;
+    -webkit-text-fill-color: #ececec;
+    -webkit-box-shadow: 0 0 0 1000px #1e1e1e inset;
     caret-color: #e0e3e5;
     transition: background-color 9999s ease-out 0s;
   }
+}
+
+@keyframes wave-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.55); }
 }

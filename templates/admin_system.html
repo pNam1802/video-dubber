@@ -94,7 +94,7 @@
     function row(label, value) {
       return '<div class="flex items-center justify-between gap-3">' +
         '<dt class="font-body-md text-body-md text-on-surface-variant">' + label + "</dt>" +
-        '<dd class="tabular font-body-md text-body-md text-on-surface">' + value + "</dd></div>";
+        '<dd class="tabular-mono font-body-md text-body-md text-on-surface">' + value + "</dd></div>";
     }
 
     function renderEngines(engines) {
@@ -110,7 +110,7 @@
         return '<div class="bg-surface-container rounded-2xl border border-outline-variant/40 p-lg flex flex-col gap-2">' +
           '<div class="flex items-center justify-between gap-2">' +
           '<span class="font-body-lg text-body-lg text-on-surface">' + (ENGINE_NAMES[key] || key) + "</span>" + badge + "</div>" +
-          '<p class="font-label-sm text-label-sm text-on-surface-variant tabular">Model: ' + escapeHtml(engine.model) + "</p>" +
+          '<p class="font-label-sm text-label-sm text-on-surface-variant tabular-mono">Model: ' + escapeHtml(engine.model) + "</p>" +
           keyLine +
           '<p class="font-body-md text-body-md text-on-surface-variant mt-2 leading-relaxed">' +
           (ENGINE_NOTES[key] || "") + "</p></div>";

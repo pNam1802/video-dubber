@@ -29,34 +29,25 @@
 
   {# ── Thanh điều hướng trái ─────────────────────────────── #}
   {# Dưới 1024px thanh này trượt ra ngoài màn hình; nút ☰ ở thanh trên kéo nó vào. #}
+  {# Thanh trên chạy suốt chiều ngang (kiểu Modal) — sidebar nằm bên dưới nó,
+     cùng nền với trang và không có viền dọc, nên chỉ còn một đường kẻ ngang
+     duy nhất, không có hai đường cắt nhau ở góc. #}
   <nav id="sidebar" aria-label="Điều hướng chính"
-    class="w-[240px] h-screen flex flex-col border-r border-outline-variant bg-surface-container-lowest fixed left-0 top-0 z-50
+    class="w-[240px] h-[calc(100vh-3.5rem)] flex flex-col bg-background fixed left-0 top-14 z-40
+           max-lg:border-r max-lg:border-outline-variant
            -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
-    <a href="{{ url_for('main.index') }}" class="h-16 px-5 border-b border-outline-variant flex items-center gap-3">
-      <span class="w-9 h-9 rounded-xl bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-          <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
-          <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
-          <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
-        </svg>
-      </span>
-      <span>
-        <span class="block font-headline-md text-headline-md font-bold text-on-surface tracking-tight leading-6">Nora</span>
-        <span class="block font-label-sm text-label-sm text-on-surface-variant tracking-normal">Lồng tiếng bài giảng</span>
-      </span>
-    </a>
 
     {% macro nav_link(endpoint, icon, label) %}
     <li>
       <a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page" {% endif %}
-        class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-xl font-body-md text-body-md transition-colors
-               {% if request.endpoint == endpoint %}text-primary bg-primary/10 font-medium{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
+        class="flex items-center gap-3 mx-3 px-3 py-2 rounded-lg font-body-md text-body-md transition-colors
+               {% if request.endpoint == endpoint %}text-on-surface bg-surface-container-high font-medium [&>span]:text-primary{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
         <span class="material-symbols-outlined text-[20px]">{{ icon }}</span>{{ label }}
       </a>
     </li>
     {% endmacro %}
 
-    <ul class="flex-1 overflow-y-auto py-4 flex flex-col gap-0.5">
+    <ul class="flex-1 overflow-y-auto py-3 flex flex-col gap-0.5">
       {% for endpoint, icon, label in nav_items %}{{ nav_link(endpoint, icon, label) }}{% endfor %}
 
       {% if current_user.is_admin %}
@@ -65,7 +56,7 @@
       {% endif %}
     </ul>
 
-    <div class="p-md border-t border-outline-variant">
+    <div class="mx-3 mb-3 p-3 rounded-xl border border-outline-variant bg-surface-container-low">
       <div class="flex items-center gap-3 min-w-0">
         <span class="w-9 h-9 rounded-full bg-surface-container-highest text-on-surface font-semibold flex items-center justify-center flex-shrink-0" aria-hidden="true">{{ initial }}</span>
         <div class="min-w-0">
@@ -92,29 +83,30 @@
     </div>
   </nav>
 
-  <main class="lg:ml-[240px] w-full min-w-0 flex flex-col min-h-screen">
-    {# ── Thanh trên ──────────────────────────────────────── #}
-    <header
-      class="w-full h-16 flex items-center justify-between gap-md px-lg border-b border-outline-variant bg-surface-container-lowest/90 backdrop-blur sticky top-0 z-30">
-      <div class="flex items-center gap-3 lg:hidden">
-        <button type="button" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Mở menu"
-          class="btn-icon -ml-2">
-          <span class="material-symbols-outlined">menu</span>
-        </button>
-        <a href="{{ url_for('main.index') }}" class="flex items-center gap-2 font-headline-md text-headline-md font-bold tracking-tight">
-          <span class="w-6 h-6 rounded-md bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none">
-              <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
-              <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
-              <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
-            </svg>
-          </span>Nora
-        </a>
-      </div>
+  {# ── Thanh trên ──────────────────────────────────────── #}
+  <header
+    class="fixed top-0 inset-x-0 h-14 z-50 flex items-center gap-md pl-3 pr-lg border-b border-outline-variant bg-background/90 backdrop-blur">
+    <div class="flex items-center gap-2 lg:w-[228px] flex-shrink-0">
+      <button type="button" id="navToggle" aria-controls="sidebar" aria-expanded="false" aria-label="Mở menu"
+        class="btn-icon lg:hidden">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <span class="lg:pl-3"><a href="{{ url_for('main.index') }}" class="flex items-center gap-2.5 font-body-lg text-body-lg font-semibold tracking-tight text-on-surface">
+        <span class="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+            <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
+            <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
+            <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
+          </svg>
+        </span>Nora
+      </a></span>
+    </div>
 
+    <div class="flex-1 min-w-0 flex items-center justify-between gap-md">
       {# Vị trí hiện tại. Trang con ghi đè block crumbs (ví dụ trang chi tiết:
          Lịch sử / tên video); mặc định lấy nhãn của mục menu đang mở. #}
       <nav aria-label="Vị trí" class="max-lg:hidden flex items-center gap-2 min-w-0 font-body-md text-body-md text-on-surface-variant">
+        <span class="text-outline-variant select-none" aria-hidden="true">/</span>
         {% block crumbs %}
         {% for endpoint, icon, label in nav_items + admin_items %}
         {% if request.endpoint == endpoint %}<span class="text-on-surface font-medium">{{ label }}</span>{% endif %}
@@ -151,8 +143,10 @@
           </form>
         </div>
       </details>
-    </header>
+    </div>
+  </header>
 
+  <main class="pt-14 lg:ml-[240px] w-full min-w-0 flex flex-col min-h-screen">
     <div class="flex-1 p-lg flex justify-center">
       <div class="w-full max-w-7xl">
         {% block content %}{% endblock %}

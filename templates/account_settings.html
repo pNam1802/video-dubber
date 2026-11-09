@@ -9,6 +9,7 @@
 </div>
 
 <div class="grid grid-cols-1 xl:grid-cols-2 gap-lg items-start">
+<div class="flex flex-col gap-lg">
 <section class="card flex flex-col gap-md">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
@@ -55,6 +56,43 @@
     </button>
   </form>
 </section>
+
+<section id="mat-khau" class="card flex flex-col gap-md">
+  <div>
+    <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary">key</span>Đổi mật khẩu
+    </h3>
+    {% if not current_user.password_hash %}
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+      Tài khoản này đăng nhập bằng Google nên không có mật khẩu riêng. Đổi mật khẩu trong tài khoản Google của bạn.
+    </p>
+    {% endif %}
+  </div>
+  {% if current_user.password_hash %}
+  <form method="post" action="{{ url_for('auth.change_password') }}" class="flex flex-col gap-md">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {# Gợi ý trình quản lý mật khẩu đúng tài khoản nào đang đổi. #}
+    <input type="text" name="username" value="{{ current_user.username }}" autocomplete="username" class="hidden" aria-hidden="true" tabindex="-1">
+    <div>
+      <label class="field-label" for="current_password">Mật khẩu hiện tại</label>
+      <input id="current_password" name="current_password" type="password" required autocomplete="current-password" class="input">
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+      <div>
+        <label class="field-label" for="new_password">Mật khẩu mới</label>
+        <input id="new_password" name="new_password" type="password" required minlength="8" autocomplete="new-password"
+          placeholder="Tối thiểu 8 ký tự" class="input">
+      </div>
+      <div>
+        <label class="field-label" for="confirm_password">Nhập lại mật khẩu mới</label>
+        <input id="confirm_password" name="confirm_password" type="password" required minlength="8" autocomplete="new-password" class="input">
+      </div>
+    </div>
+    <button type="submit" class="btn-primary self-start">Đổi mật khẩu</button>
+  </form>
+  {% endif %}
+</section>
+</div>
 
 <section id="giong-cua-ban" class="card flex flex-col gap-md">
   <div>

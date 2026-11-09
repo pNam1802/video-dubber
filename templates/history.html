@@ -32,7 +32,7 @@
 
   <select id="engineFilter"
     class="input w-auto">
-    <option value="all">Mọi công cụ</option>
+    <option value="all">Mọi công cụ dịch</option>
     <option value="deepseek">DeepSeek</option>
     <option value="gemini">Gemini</option>
     <option value="openai">OpenAI</option>
@@ -46,7 +46,7 @@
     <table class="w-full min-w-[820px]">
       <thead>
         <tr class="bg-surface-container-high">
-          {% for label in ['Video', 'Trạng thái', 'Công cụ', 'Thời gian xử lý', 'Chi phí', 'Ngày tạo', ''] %}
+          {% for label in ['Video', 'Trạng thái', 'Loại', 'Thời gian xử lý', 'Chi phí', 'Ngày tạo', ''] %}
           <th class="text-left px-4 py-3 font-label-sm text-label-sm tracking-normal font-medium text-on-surface-variant">{{ label }}</th>
           {% endfor %}
         </tr>
@@ -205,20 +205,23 @@
       }).join("");
       rows.innerHTML = data.items.map(function (job) {
         const badge = STATUS[job.status] || [job.status, "text-on-surface-variant border-outline-variant"];
-        const engine = job.engine ? escapeHtml(job.engine) : "—";
-        const fallback = job.fallback_used
-          ? ' <span class="material-symbols-outlined text-[14px] text-tertiary align-middle" title="Đã tự chuyển engine">swap_horiz</span>'
+        // Người dùng cần biết đây là lồng tiếng hay đọc kịch bản; công cụ dịch
+        // chỉ để trong tooltip cho ai muốn biết.
+        const isScript = job.kind === "script";
+        const engineTip = job.engine
+          ? "Công cụ dịch: " + job.engine + (job.fallback_used ? " (đã tự chuyển sang nhà cung cấp dự phòng)" : "")
           : "";
         return '<tr class="border-t border-outline-variant/40 hover:bg-surface-container-high/60 transition-colors">' +
           '<td class="px-4 py-3 max-w-[280px]">' +
             '<a href="/job/' + job.id + '" class="font-body-md text-body-md text-on-surface hover:text-primary truncate block" title="' +
             escapeHtml(job.source_filename) + '">' +
-            (job.kind === "script" ? '<span class="material-symbols-outlined text-[16px] align-middle mr-1 text-on-surface-variant" title="Đọc kịch bản">record_voice_over</span>' : "") +
             escapeHtml(job.source_filename || "Bản #" + job.id) + "</a>" +
           "</td>" +
           '<td class="px-4 py-3"><span class="inline-block px-2 py-0.5 rounded-full border font-label-sm text-label-sm ' +
             badge[1] + '">' + badge[0] + "</span></td>" +
-          '<td class="px-4 py-3 font-body-md text-body-md text-on-surface-variant">' + engine + fallback + "</td>" +
+          '<td class="px-4 py-3 font-body-md text-body-md text-on-surface-variant whitespace-nowrap" title="' + escapeHtml(engineTip) + '">' +
+            '<span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px]">' + (isScript ? "record_voice_over" : "movie") + "</span>" +
+            (isScript ? "Đọc kịch bản" : "Lồng tiếng") + "</span></td>" +
           '<td class="px-4 py-3 tabular text-on-surface-variant">' + (job.elapsed_sec ? job.elapsed_sec + "s" : "—") + "</td>" +
           '<td class="px-4 py-3 tabular text-on-surface-variant">' +
             (job.estimated_cost_usd ? "$" + job.estimated_cost_usd.toFixed(4) : "—") + "</td>" +
