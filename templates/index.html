@@ -163,10 +163,12 @@
     {# ── Bước 2: ngôn ngữ ─────────────────────────────── #}
     <section class="card flex flex-col gap-md">
       {{ step_title(2, 'Ngôn ngữ', 'step2Title') }}
-      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-end gap-3">
-        <div data-mode-only="video">
-          <label class="{{ label_class }}" for="source_language">Video đang nói</label>
-          <select name="source_language" id="source_language" class="{{ field_class }}">
+      {# Ngôn ngữ nguồn hiếm khi phải đổi: thu gọn thành một dòng. #}
+      <div data-mode-only="video" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <label class="font-body-md text-body-md text-on-surface-variant" for="source_language">Video đang nói</label>
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-primary pointer-events-none">translate</span>
+          <select name="source_language" id="source_language" class="{{ field_class }} !w-auto !py-1.5 !pl-10 !pr-9">
             <option value="auto" selected>Tự nhận biết</option>
             <option value="en">English</option>
             <option value="vi">Tiếng Việt</option>
@@ -175,19 +177,19 @@
             <option value="ko">한국어</option>
           </select>
         </div>
-        <span data-mode-only="video" class="hidden sm:flex h-10 items-center justify-center text-on-surface-variant" aria-hidden="true">
-          <span class="material-symbols-outlined">arrow_forward</span>
-        </span>
-        <div>
-          <label class="{{ label_class }}" for="target_language" id="targetLanguageLabel">Dịch sang</label>
-          <select name="target_language" id="target_language" class="{{ field_class }}">
-            <option value="vi" selected>Tiếng Việt</option>
-            <option value="en">English</option>
-            <option value="ja" data-mode-only="video">日本語</option>
-            <option value="zh" data-mode-only="video">中文</option>
-            <option value="ko" data-mode-only="video">한국어</option>
-          </select>
-        </div>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <p class="font-body-md text-body-md text-on-surface-variant" id="targetLanguageLabel">Dịch sang</p>
+        {# Ô chọn thật mà form gửi đi; hàng thẻ bên dưới chỉ là giao diện — xem renderLanguageChips(). #}
+        <select name="target_language" id="target_language" class="hidden" aria-hidden="true" tabindex="-1">
+          <option value="vi" selected>Tiếng Việt</option>
+          <option value="en">English</option>
+          <option value="ja" data-mode-only="video">日本語</option>
+          <option value="zh" data-mode-only="video">中文</option>
+          <option value="ko" data-mode-only="video">한국어</option>
+        </select>
+        <div id="languageChips" role="radiogroup" aria-labelledby="targetLanguageLabel" class="flex flex-wrap gap-2"></div>
       </div>
     </section>
 
@@ -750,6 +752,7 @@
         if (el.tagName === "OPTION") { el.hidden = off; el.disabled = off; }
       });
       if (targetLanguageSelect.selectedOptions[0].disabled) targetLanguageSelect.value = "vi";
+      renderLanguageChips();
       document.getElementById("targetLanguageLabel").textContent = script ? "Kịch bản viết bằng" : "Dịch sang";
       document.getElementById("submitLabel").textContent = script ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
       clearEstimate();
@@ -886,6 +889,39 @@
       source.addEventListener("change", paint);
       paint();
     })();
+
+    // Thẻ ngôn ngữ đích: dựng từ các option đang bật của ô chọn ẩn.
+    function renderLanguageChips() {
+      const box = document.getElementById("languageChips");
+      box.innerHTML = "";
+      Array.from(targetLanguageSelect.options).forEach(function (option) {
+        if (option.disabled) return;
+        const selected = option.value === targetLanguageSelect.value;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.setAttribute("role", "radio");
+        chip.setAttribute("aria-checked", String(selected));
+        chip.className = "inline-flex items-center gap-2.5 rounded-xl border pl-2 pr-4 py-2 transition-colors " +
+          (selected ? "border-primary bg-primary/10 ring-1 ring-primary text-on-surface"
+                    : "border-outline-variant/50 bg-surface-container-high text-on-surface-variant hover:border-primary/50 hover:text-on-surface");
+        const code = document.createElement("span");
+        code.className = "tabular text-[11px] font-bold w-8 h-6 rounded-md flex items-center justify-center " +
+          (selected ? "bg-primary text-on-primary" : "bg-surface-container-highest text-on-surface-variant");
+        code.textContent = option.value.toUpperCase();
+        const name = document.createElement("span");
+        name.className = "font-body-md text-body-md font-medium";
+        name.textContent = option.textContent.trim();
+        chip.appendChild(code);
+        chip.appendChild(name);
+        chip.addEventListener("click", function () {
+          if (targetLanguageSelect.value === option.value) return;
+          targetLanguageSelect.value = option.value;
+          targetLanguageSelect.dispatchEvent(new Event("change"));
+        });
+        box.appendChild(chip);
+      });
+    }
+    targetLanguageSelect.addEventListener("change", renderLanguageChips);
 
     function languageVoiceLabels() {
       return (VOICE_LABELS_BY_LANGUAGE[targetLanguageSelect.value] || {})[ttsEngineSelect.value] || {};
