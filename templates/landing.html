@@ -124,7 +124,6 @@
     }
 
     /* ── Trước / sau ── */
-    .compare { padding-top: 0; }
     .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .clip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; transition: border-color .15s; }
     .clip:hover { border-color: #3b3b3b; }
@@ -139,11 +138,7 @@
     .new-pill { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 22px; padding: 5px 14px 5px 6px; border: 1px solid var(--line); border-radius: 99px; font-size: 14px; color: var(--ink-soft); text-decoration: none; }
     .new-pill:hover { border-color: var(--ink-soft); color: var(--ink); }
     .new-pill b { background: var(--accent); color: var(--accent-ink); border-radius: 99px; padding: 1px 9px; font-size: 12px; font-weight: 600; letter-spacing: .04em; }
-    .gallery { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin: 0; }
-    .gallery figure { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--card); aspect-ratio: 4 / 5; }
-    .gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
-    .gallery figure:hover img { transform: scale(1.04); }
-    .recap-detail { display: grid; grid-template-columns: 7fr 5fr; gap: 48px; align-items: start; margin-top: 72px; }
+    .recap-detail { display: grid; grid-template-columns: 7fr 5fr; gap: 48px; align-items: start; margin-top: 0; }
     .frame { margin: 0; }
     .frame img { width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); aspect-ratio: 16 / 9; object-fit: cover; }
     .frame figcaption { font-size: 14px; color: var(--ink-soft); margin-top: 12px; }
@@ -152,44 +147,16 @@
     .style-card img { width: 96px; height: 120px; object-fit: cover; border-radius: 10px; }
     .style-card h3 { font-size: 17px; margin-bottom: 4px; }
     .style-card p { margin: 0; font-size: 14px; color: var(--ink-soft); }
-    .recap-cost { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
-    .recap-cost .price-value { margin: 0; font-size: 36px; }
 
-    /* ── Các bước ── */
     .alt { background: var(--bg-alt); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
     .section-head { display: flex; justify-content: space-between; align-items: end; gap: 32px; margin-bottom: 56px; flex-wrap: wrap; }
     .section-head p { max-width: 42ch; margin: 0; }
-    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--accent); }
-    .step { padding: 28px 24px 8px 0; }
-    .step + .step { padding-left: 24px; border-left: 1px solid var(--line); }
-    .step-num { font-family: var(--mono); font-size: 14px; color: var(--accent); margin-bottom: 40px; }
-    .step h3 { margin-bottom: 10px; }
-    .step p { margin: 0; color: var(--ink-soft); font-size: 16px; }
 
-    /* ── Vì sao tự nhiên ── */
-    .why { display: grid; grid-template-columns: 5fr 7fr; gap: 64px; align-items: start; }
-    .stat { font-family: var(--mono); font-size: clamp(56px, 8vw, 96px); line-height: 1; letter-spacing: -0.04em; margin: 32px 0 12px; }
-    .stat span { color: var(--accent); }
     .points { display: grid; gap: 0; }
     .point { padding: 28px 0; border-top: 1px solid var(--line); }
     .point:last-child { border-bottom: 1px solid var(--line); }
     .point h3 { margin-bottom: 8px; }
     .point p { margin: 0; color: var(--ink-soft); }
-
-    /* ── Giọng đọc ── */
-    .voices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-    .voice .clip-meta { flex-direction: column; align-items: flex-start; gap: 6px; }
-    .voice .row { display: flex; justify-content: space-between; width: 100%; gap: 12px; align-items: baseline; }
-    .voice p { margin: 0; font-size: 15px; color: var(--ink-soft); }
-
-    /* ── Chi phí ── */
-    .prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-    .price { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 32px 28px; display: flex; flex-direction: column; }
-    .price.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-    .price-value { font-family: var(--mono); font-size: 44px; line-height: 1; margin: 20px 0 6px; letter-spacing: -0.02em; }
-    .price ul { list-style: none; padding: 0; margin: 24px 0 0; font-size: 15px; display: grid; gap: 10px; }
-    .price li::before { content: "—"; color: var(--accent); margin-right: 10px; }
-    .footnote { font-size: 14px; color: var(--ink-soft); margin-top: 24px; max-width: 80ch; }
 
     /* ── Lời kêu gọi ── */
     .cta { background: var(--dark); text-align: center; border-top: 1px solid var(--line); }
@@ -219,14 +186,8 @@
       .hero .wrap { grid-template-columns: 1fr; gap: 8px; }
       .hero-art { margin: 0 auto; max-width: 520px; }
       .nav-links { display: none; }
-      .steps { grid-template-columns: 1fr 1fr; }
-      .step:nth-child(3) { border-left: 0; padding-left: 0; }
-      .why { grid-template-columns: 1fr; gap: 32px; }
-      .gallery { grid-template-columns: repeat(3, 1fr); }
-      .gallery figure:nth-child(n+4) { display: none; }
-      .recap-detail { grid-template-columns: 1fr; gap: 32px; margin-top: 48px; }
+      .recap-detail { grid-template-columns: 1fr; gap: 32px; }
       .styles { grid-template-columns: 1fr; }
-      .prices { grid-template-columns: 1fr; }
       .foot { grid-template-columns: 1fr 1fr; }
       .foot > :first-child { grid-column: 1 / -1; }
     }
@@ -235,13 +196,7 @@
       body { font-size: 16px; }
       .hero { padding: 64px 0 48px; }
       .lead { font-size: 18px; }
-      .compare-grid, .voices { grid-template-columns: 1fr; }
-      .gallery { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-      .gallery figure:nth-child(n+4) { display: block; }
-      .gallery figure:nth-child(5) { display: none; }
-      .steps { grid-template-columns: 1fr; }
-      .step, .step + .step { border-left: 0; padding-left: 0; border-bottom: 1px solid var(--line); padding-bottom: 24px; }
-      .step-num { margin-bottom: 16px; }
+      .compare-grid { grid-template-columns: 1fr; }
       .nav-cta .btn-line { display: none; }
     }
   </style>
@@ -266,10 +221,8 @@
         Nora
       </a>
       <nav class="nav-links" aria-label="Mục lục">
+        <a href="#nghe-thu">Lồng tiếng video</a>
         <a href="#doc-kich-ban">Kịch bản → video</a>
-        <a href="#cach-hoat-dong">Cách hoạt động</a>
-        <a href="#giong-doc">Giọng đọc</a>
-        <a href="#chi-phi">Chi phí</a>
         <a href="https://github.com/pNam1802/video-dubber" rel="noopener">GitHub</a>
       </nav>
       <div class="nav-cta">
@@ -311,8 +264,16 @@
       </div>
     </section>
 
-    <section class="compare" id="nghe-thu">
+    <section id="nghe-thu">
       <div class="wrap">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Lồng tiếng video</p>
+            <h2>Tải video tiếng Anh lên, nhận bản lồng tiếng Việt.</h2>
+          </div>
+          <p class="muted">Nora nghe, dịch theo ngữ cảnh rồi đọc lại bằng giọng Việt tự nhiên, kèm phụ đề. Bạn
+            duyệt bản dịch trước khi giọng đọc được tạo.</p>
+        </div>
         <div class="compare-grid">
           <figure class="clip reveal" style="margin:0">
             <video controls preload="none" playsinline poster="{{ poster }}"
@@ -331,210 +292,47 @@
       </div>
     </section>
 
-    <section id="doc-kich-ban">
+    <section class="alt" id="doc-kich-ban">
       <div class="wrap">
         <div class="section-head">
           <div>
-            <p class="eyebrow">Mới · Đọc kịch bản</p>
+            <p class="eyebrow">Đọc kịch bản → video</p>
             <h2>Dán kịch bản, nhận video truyện tranh có lời kể.</h2>
           </div>
-          <p class="muted">Nora đọc kịch bản bằng giọng tự nhiên, AI vẽ tranh minh hoạ cho từng cảnh rồi dựng
-            thành video kiểu manhwa recap, kèm phụ đề SRT.</p>
+          <p class="muted">Nora đọc kịch bản bằng giọng tự nhiên, AI vẽ tranh manhwa cho từng cảnh rồi dựng thành
+            video, kèm phụ đề.</p>
         </div>
-
-        <div class="gallery">
-          {% for file, alt in [
-            ('sunflower-smile.jpg', 'Cô gái tóc dài cầm hoa hướng dương cười rạng rỡ bên biển lúc hoàng hôn'),
-            ('sunflower-tears.jpg', 'Cô gái ngước nhìn bầu trời hoàng hôn, nước mắt lăn trên má'),
-            ('duo-street.jpg', 'Đôi bạn đi cạnh nhau trên con phố vắng, nắng chiều rọi phía sau'),
-            ('hero-boy.jpg', 'Chàng trai đeo kính, áo khoác jean, đứng sững trong tầng hầm ngập nắng'),
-            ('sunflower-walk.jpg', 'Cô gái áo sơ mi trắng rộng bước đi trên phố, tóc bay trong gió'),
-          ] %}
-          <figure class="reveal"><img src="{{ asset('img/landing/recap/' ~ file) }}" alt="{{ alt }}" width="480" height="600" loading="lazy"></figure>
-          {% endfor %}
-        </div>
-        <p class="credit">Toàn bộ tranh trên do Nora vẽ tự động từ một kịch bản dài 5 phút, không chỉnh sửa tay.</p>
 
         <div class="recap-detail">
           <figure class="frame reveal">
             <img src="{{ asset('img/landing/recap/video-frame.jpg') }}" alt="Một khung hình trong video: tranh dọc ở giữa, hai bên là nền mờ" width="960" height="540" loading="lazy">
-            <figcaption>Khung hình trong video: tranh dọc ở giữa, hai bên là nền mờ, mỗi tranh zoom chậm và đổi cảnh
-              khoảng 6 giây một lần, khớp với lời kể.</figcaption>
+            <figcaption>Khung hình trong video: tranh dọc ở giữa, nền mờ hai bên, đổi cảnh khoảng 6 giây một lần
+              khớp với lời kể.</figcaption>
           </figure>
-          <div class="points">
-            <div class="point reveal">
-              <h3>Hiểu cả câu chuyện</h3>
-              <p>Gemini đọc toàn bộ kịch bản, lập danh sách nhân vật và bối cảnh cố định, nên nhân vật giữ nguyên
-                ngoại hình từ cảnh đầu đến cảnh cuối.</p>
-            </div>
-            <div class="point reveal">
-              <h3>Tranh màu nước manhwa</h3>
-              <p>Nắng hoàng hôn rọi sau lưng, tóc trong suốt bắt sáng, da ửng hồng, tông hồng đào. Mỗi tranh được
-                chỉnh màu và tạo quầng sáng tự động.</p>
-            </div>
-            <div class="point reveal">
-              <h3>Giọng Việt và giọng Anh</h3>
-              <p>Đọc kịch bản tiếng Việt hoặc tiếng Anh, có thêm giọng kể chuyện tiếng Anh trầm ấm cho truyện.</p>
-            </div>
-          </div>
-        </div>
-
-        <p class="eyebrow" style="margin-top:56px">Chọn kiểu nhân vật</p>
-        <div class="styles" style="margin-top:0">
-          {% for file, name, note in [
-            ('recap_styles/sunflower.jpg', 'Cô gái hướng dương', 'Mặc định. Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc.'),
-            ('recap_styles/dreamy.jpg', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI thiết kế theo kịch bản.'),
-          ] %}
-          <div class="style-card reveal">
-            <img src="{{ asset(file) }}" alt="Ảnh mẫu kiểu nhân vật {{ name }}" width="96" height="120" loading="lazy">
-            <div><h3>{{ name }}</h3><p>{{ note }}</p></div>
-          </div>
-          {% endfor %}
-        </div>
-
-        <div class="recap-cost reveal">
-          <div class="price-value">≈ $0,03</div>
-          <p class="muted" style="margin:0">mỗi phút video manhwa recap. Video 5 phút khoảng $0,19, đã gồm giọng
-            đọc, lập cảnh, vẽ tranh và dựng video.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="alt" id="cach-hoat-dong">
-      <div class="wrap">
-        <div class="section-head">
           <div>
-            <p class="eyebrow">Cách hoạt động</p>
-            <h2>Bốn bước, và bạn có tiếng nói ở bước quan trọng nhất.</h2>
-          </div>
-          <p class="muted">Tải video lên rồi để Nora làm việc. Bạn chỉ cần quay lại ở bước duyệt bản dịch.</p>
-        </div>
-        <div class="steps">
-          <div class="step reveal">
-            <div class="step-num">01</div>
-            <h3>Nghe</h3>
-            <p>Whisper chép lời kèm mốc thời gian của từng từ, rồi tách thành câu trọn vẹn.</p>
-          </div>
-          <div class="step reveal">
-            <div class="step-num">02</div>
-            <h3>Dịch</h3>
-            <p>DeepSeek dịch theo ngữ cảnh, giữ xưng hô nhất quán. Gemini và OpenAI làm dự phòng.</p>
-          </div>
-          <div class="step reveal">
-            <div class="step-num">03</div>
-            <h3>Bạn duyệt</h3>
-            <p>Đọc lại, sửa câu chưa ưng ý. Chưa có giọng nào được tạo cho tới khi bạn đồng ý.</p>
-          </div>
-          <div class="step reveal">
-            <div class="step-num">04</div>
-            <h3>Lồng tiếng</h3>
-            <p>Giọng đọc được xếp liền mạch lên video, kèm file phụ đề SRT để tải về.</p>
+            <div class="points">
+              <div class="point reveal">
+                <h3>Nhân vật nhất quán</h3>
+                <p>AI đọc cả câu chuyện, giữ nguyên ngoại hình nhân vật từ cảnh đầu đến cảnh cuối.</p>
+              </div>
+              <div class="point reveal">
+                <h3>Tiếng Việt và tiếng Anh</h3>
+                <p>Đọc kịch bản bằng một trong hai ngôn ngữ, chọn giọng có sẵn hoặc giọng của chính bạn.</p>
+              </div>
+            </div>
+            <div class="styles">
+              {% for file, name, note in [
+                ('recap_styles/sunflower.jpg', 'Cô gái hướng dương', 'Nữ chính tóc dài gợn sóng, áo sơ mi trắng.'),
+                ('recap_styles/dreamy.jpg', 'Mơ màng', 'Ngoại hình nhân vật do AI thiết kế theo kịch bản.'),
+              ] %}
+              <div class="style-card reveal">
+                <img src="{{ asset(file) }}" alt="Ảnh mẫu kiểu nhân vật {{ name }}" width="96" height="120" loading="lazy">
+                <div><h3>{{ name }}</h3><p>{{ note }}</p></div>
+              </div>
+              {% endfor %}
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap why">
-        <div class="reveal">
-          <p class="eyebrow">Vì sao nghe tự nhiên</p>
-          <h2>Đọc trọn câu, không ngắt quãng.</h2>
-          <div class="stat">57 <span>→</span> 8</div>
-          <p class="muted">Số khoảng lặng dài hơn 0,8 giây trong một video 11 phút, trước và sau khi xếp giọng
-            liền mạch.</p>
-        </div>
-        <div class="points">
-          <div class="point reveal">
-            <h3>Cắt câu đúng chỗ</h3>
-            <p>Câu được cắt tại dấu chấm theo từng từ, không theo đoạn âm thanh. Giọng đọc không còn hạ giọng như
-              hết câu ngay giữa ý.</p>
-          </div>
-          <div class="point reveal">
-            <h3>Nối tiếp liền mạch</h3>
-            <p>Câu sau vào ngay khi câu trước đọc xong. Một tốc độ chung cho cả video, không bao giờ chồng giọng.
-            </p>
-          </div>
-          <div class="point reveal">
-            <h3>Đổi tốc độ không méo giọng</h3>
-            <p>Khi cần đọc nhanh hoặc chậm hơn, giọng được tạo lại hoặc co giãn nhẹ, không bị méo như tua băng.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="alt" id="giong-doc">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Giọng đọc</p>
-            <h2>Chọn giọng hợp với video của bạn.</h2>
-          </div>
-          <p class="muted">Cùng một đoạn 2,5 phút, chỉ khác giọng đọc. Giọng Gemini có cảm xúc; giọng edge-tts
-            miễn phí.</p>
-        </div>
-        <div class="voices">
-          {% for file, name, kind, note, cost in [
-            ('1_Gemini_Leda_nu.mp4', 'Leda', 'Gemini · nữ', 'Kể chuyện có cảm xúc, liền mạch nhất.', '≈ $0,035'),
-            ('2_Gemini_Charon_nam.mp4', 'Charon', 'Gemini · nam', 'Giọng trầm, hợp phim và truyện hành động.', '≈ $0,033'),
-            ('3_Edge_HoaiMy_nu.mp4', 'Hoài My', 'edge-tts · nữ', 'Rõ ràng, chuẩn giọng Bắc.', 'Miễn phí'),
-            ('4_Edge_Florian_nam.mp4', 'Florian', 'edge-tts · nam', 'Giọng đa ngôn ngữ, đọc được tiếng Việt.', 'Miễn phí'),
-          ] %}
-          <figure class="clip voice reveal" style="margin:0">
-            <video controls preload="none" playsinline poster="{{ poster }}"
-              src="{{ url_for('main.demo_media', filename=file) }}"></video>
-            <figcaption class="clip-meta">
-              <div class="row"><h3>{{ name }}</h3><span class="tag{{ ' accent' if cost == 'Miễn phí' else '' }}">{{ cost }}</span></div>
-              <p>{{ kind }} — {{ note }}</p>
-            </figcaption>
-          </figure>
-          {% endfor %}
-        </div>
-      </div>
-    </section>
-
-    <section id="chi-phi">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow">Chi phí</p>
-            <h2>Rẻ hơn một cốc trà đá.</h2>
-          </div>
-          <p class="muted">Chi phí thật cho một video 11 phút, tính theo giá API công bố.</p>
-        </div>
-        <div class="prices">
-          <div class="price reveal">
-            <h3>Tiết kiệm</h3>
-            <p class="muted" style="margin:6px 0 0">DeepSeek + edge-tts</p>
-            <div class="price-value">$0,004</div>
-            <p class="muted" style="margin:0">mỗi video, chưa tính máy chủ</p>
-            <ul>
-              <li>Giọng Hoài My, Florian và 3 giọng khác</li>
-              <li>Dịch theo ngữ cảnh, duyệt trước khi lồng</li>
-            </ul>
-          </div>
-          <div class="price featured reveal">
-            <h3>Có cảm xúc</h3>
-            <p class="muted" style="margin:6px 0 0">DeepSeek + Gemini TTS</p>
-            <div class="price-value">≈ $0,10</div>
-            <p class="muted" style="margin:0">mỗi video, chưa tính máy chủ</p>
-            <ul>
-              <li>Giọng Leda và Charon biểu cảm</li>
-              <li>Tự rơi về edge-tts nếu Gemini lỗi</li>
-            </ul>
-          </div>
-          <div class="price reveal">
-            <h3>Máy chủ</h3>
-            <p class="muted" style="margin:6px 0 0">GPU nhận dạng + CPU ghép video</p>
-            <div class="price-value">≈ $0,015</div>
-            <p class="muted" style="margin:0">mỗi video, cộng thêm</p>
-            <ul>
-              <li>Chỉ dùng GPU ở bước nhận dạng</li>
-              <li>Tắt máy khi không có việc</li>
-            </ul>
-          </div>
-        </div>
-        <p class="footnote">Ước tính theo bảng giá năm 2026. Giá giọng Gemini dự kiến tăng gấp đôi từ năm 2027.
-          Đọc kịch bản thành video manhwa recap: khoảng $0,03 mỗi phút video, đã gồm máy chủ và GPU vẽ tranh.</p>
       </div>
     </section>
 
@@ -561,10 +359,8 @@
         <div>
           <h4>Sản phẩm</h4>
           <ul>
+            <li><a href="#nghe-thu">Lồng tiếng video</a></li>
             <li><a href="#doc-kich-ban">Kịch bản → video</a></li>
-            <li><a href="#cach-hoat-dong">Cách hoạt động</a></li>
-            <li><a href="#giong-doc">Giọng đọc</a></li>
-            <li><a href="#chi-phi">Chi phí</a></li>
             <li><a href="{{ start_url }}">{{ start_label }}</a></li>
           </ul>
         </div>
