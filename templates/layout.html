@@ -49,8 +49,8 @@
     {% macro nav_link(endpoint, icon, label) %}
     <li>
       <a href="{{ url_for(endpoint) }}" {% if request.endpoint == endpoint %}aria-current="page" {% endif %}
-        class="flex items-center gap-3 mx-3 px-3 py-2.5 rounded-xl font-body-md text-body-md transition-colors
-               {% if request.endpoint == endpoint %}text-primary bg-primary/10 font-medium{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
+        class="flex items-center gap-3 mx-3 px-3 py-2 rounded-lg font-body-md text-body-md transition-colors
+               {% if request.endpoint == endpoint %}text-on-surface bg-surface-container-high font-medium [&>span]:text-primary{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
         <span class="material-symbols-outlined text-[20px]">{{ icon }}</span>{{ label }}
       </a>
     </li>

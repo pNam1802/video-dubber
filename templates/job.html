@@ -275,7 +275,7 @@
     <div class="pt-md flex flex-col gap-md">
       {{ info_grid(tech) }}
   {# Thời gian từng bước — dữ liệu thật, không phải ước lượng #}
-  {% set steps = [('Tách audio', job.extract_sec, '#7d868c'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
+  {% set steps = [('Tách audio', job.extract_sec, '#747474'), ('Nhận dạng', job.transcribe_sec, '#bdfd5d'),
                   ('Dịch', job.translate_sec, '#9bd93c'), ('Tổng hợp giọng', job.tts_sec, '#ffbfac'),
                   ('Ghép video', job.compose_sec, '#c2c7cb')] %}
   {% set measured = steps | selectattr('1') | list %}
