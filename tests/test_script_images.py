@@ -206,8 +206,9 @@ def test_pipeline_keeps_mp3_when_images_fail(monkeypatch, tmp_path):
 def test_script_job_passes_image_mode(as_user, monkeypatch):
     response, captured = _post_script(as_user, monkeypatch, script_images="scenes")
     assert response.status_code == 202 and captured["config"].script_images == "scenes"
+    # Giá trị lạ (hoặc không gửi) thì về mặc định của hệ thống: Manhwa recap.
     _, captured = _post_script(as_user, monkeypatch, script_images="lots")
-    assert captured["config"].script_images == "none"
+    assert captured["config"].script_images == "recap"
 
 
 def test_script_job_passes_recap_character_style(as_user, monkeypatch):
@@ -243,7 +244,11 @@ def test_illustrated_script_job_shows_video(app, as_user, monkeypatch, tmp_path)
     assert '<video id="resultVideo"' in page and "Tải video" in page
 
 
-def test_script_page_offers_image_modes(as_user):
+def test_script_page_always_uses_recap_with_character_choice(as_user):
+    """Trang đọc kịch bản không còn cho chọn chế độ ảnh — luôn Manhwa recap,
+    chỉ chọn kiểu nhân vật."""
     html = as_user.get("/doc-kich-ban").get_data(as_text=True)
-    for mode in script_images.MODES:
-        assert f'name="script_images" value="{mode}"' in html
+    assert '<input type="hidden" name="script_images" value="recap">' in html
+    assert 'type="radio" name="script_images"' not in html
+    for style in script_images.RECAP_CHARACTER_STYLES:
+        assert f'name="recap_style" value="{style}"' in html

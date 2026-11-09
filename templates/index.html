@@ -47,7 +47,7 @@
   </h2>
   <p class="mt-2 font-body-lg text-body-lg text-on-surface-variant">
     {% if mode == 'script' %}
-    Dán kịch bản, chọn giọng đọc — nhận file mp3 kèm phụ đề, hoặc video có ảnh minh hoạ.
+    Dán kịch bản, chọn nhân vật và giọng đọc — nhận video kiểu Manhwa recap kèm phụ đề.
     {% else %}
     Tải video lên, chọn ngôn ngữ và giọng đọc — Nora lo phần dịch, lồng tiếng và phụ đề.
     {% endif %}
@@ -71,54 +71,35 @@
       <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
       <span id="scriptLength"></span>
     </p>
-    <fieldset class="flex flex-col gap-2">
-      <legend class="field-label">Ảnh minh hoạ</legend>
+    {# Đọc kịch bản luôn ra video kiểu Manhwa recap — chỉ còn chọn kiểu nhân vật. #}
+    <input type="hidden" name="script_images" value="recap">
+    <div id="recapStyles" class="flex flex-col gap-2">
+      <span class="field-label !mb-0">Kiểu nhân vật</span>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {% for value, label, hint in [
-          ('none', 'Không có ảnh', 'Chỉ file mp3 + SRT'),
-          ('few', '3–5 ảnh lặp lại', 'Vài ảnh cho cả kịch bản, chiếu lần lượt rồi lặp lại'),
-          ('scenes', 'Ảnh theo từng cảnh', 'Mỗi ~12 giây một ảnh riêng, sát nội dung hơn'),
-          ('manga', 'Trang manga', 'Truyện tranh đen trắng nhiều khung, có nhân vật và bối cảnh'),
-          ('recap', 'Manhwa recap', 'Ảnh webtoon màu ~6 giây đổi một lần, khung dọc trên nền mờ, zoom chậm')
+          ('sunflower', 'Cô gái hướng dương (mặc định)', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc'),
+          ('dreamy', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI đặt theo kịch bản')
         ] %}
-        <label class="flex items-start gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-          <input type="radio" name="script_images" value="{{ value }}" {% if value == 'none' %}checked{% endif %} class="w-4 h-4 mt-1">
-          <span class="flex flex-col">
-            <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
-            <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
-          </span>
-        </label>
+        <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
+            <span class="flex flex-col">
+              <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
+              <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
+            </span>
+          </label>
+          <details class="group">
+            <summary class="font-label-sm text-label-sm text-primary cursor-pointer select-none">Xem mẫu</summary>
+            <img src="{{ url_for('static', filename='recap_styles/' ~ value ~ '.jpg') }}" alt="Ảnh mẫu kiểu {{ label }}"
+              loading="lazy" width="480" height="600" class="mt-2 w-full max-w-[240px] rounded-lg">
+          </details>
+        </div>
         {% endfor %}
       </div>
-      {# Chỉ hiện khi chọn Manhwa recap — xem syncRecapStyle(). Ảnh mẫu ở static/recap_styles/. #}
-      <div id="recapStyles" class="hidden flex flex-col gap-2 mt-2">
-        <span class="font-label-sm text-label-sm text-on-surface-variant tracking-normal font-medium">Kiểu nhân vật</span>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {% for value, label, hint in [
-            ('sunflower', 'Cô gái hướng dương (mặc định)', 'Nữ chính tóc dài gợn sóng vàng–đen, áo sơ mi trắng rộng, dây chuyền xanh ngọc'),
-            ('dreamy', 'Mơ màng', 'Cùng nét vẽ, ngoại hình nhân vật do AI đặt theo kịch bản')
-          ] %}
-          <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary">
-            <label class="flex items-start gap-2 cursor-pointer">
-              <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
-              <span class="flex flex-col">
-                <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
-                <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
-              </span>
-            </label>
-            <details class="group">
-              <summary class="font-label-sm text-label-sm text-primary cursor-pointer select-none">Xem mẫu</summary>
-              <img src="{{ url_for('static', filename='recap_styles/' ~ value ~ '.jpg') }}" alt="Ảnh mẫu kiểu {{ label }}"
-                loading="lazy" width="480" height="600" class="mt-2 w-full max-w-[240px] rounded-lg">
-            </details>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
       <p class="font-label-sm text-label-sm text-on-surface-variant">
-        Có ảnh thì kết quả là video mp4 (ảnh do AI vẽ theo nội dung kịch bản) kèm phụ đề SRT.
+        Kết quả là video kiểu Manhwa recap: ảnh webtoon màu do AI vẽ theo nội dung kịch bản, có giọng đọc và phụ đề SRT.
       </p>
-    </fieldset>
+    </div>
   </section>
 
   {# ── Bước 1: chọn video ───────────────────────────── #}
@@ -759,14 +740,6 @@
     }
     scriptInput.addEventListener("input", syncScriptCount);
 
-    // "Kiểu nhân vật" chỉ áp dụng cho chế độ ảnh Manhwa recap.
-    function syncRecapStyle() {
-      document.getElementById("recapStyles").classList.toggle("hidden", form.elements["script_images"].value !== "recap");
-    }
-    form.querySelectorAll('input[name="script_images"]').forEach(function (el) {
-      el.addEventListener("change", syncRecapStyle);
-    });
-    syncRecapStyle();
 
     function setMode(next) {
       mode = next;
