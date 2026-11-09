@@ -100,15 +100,30 @@
     .nav-cta .btn { padding: 7px 16px; font-size: 14px; }
 
     /* ── Hero ── */
-    .hero { padding: 112px 0 80px; text-align: center; position: relative; overflow: hidden; }
-    .hero::before {   /* quầng sáng mờ phía sau tiêu đề */
-      content: ""; position: absolute; left: 50%; top: -220px; width: 900px; height: 520px; transform: translateX(-50%);
-      background: radial-gradient(closest-side, rgba(189, 253, 93, .10), transparent); pointer-events: none;
+    /* Hero hai cột: chữ bên trái, ảnh 3D (render từ Blender) bên phải. */
+    .hero { padding: 56px 0 56px; position: relative; overflow: hidden; }
+    .hero::before {   /* quầng sáng mờ phía sau ảnh 3D */
+      content: ""; position: absolute; right: -120px; top: -80px; width: 900px; height: 760px;
+      background: radial-gradient(closest-side, rgba(189, 253, 93, .09), transparent); pointer-events: none;
     }
-    .hero .wrap { position: relative; }
-    .hero h1 { max-width: 17ch; margin: 0 auto; }
-    .hero .lead { margin: 28px auto 36px; }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .hero .wrap { position: relative; display: grid; grid-template-columns: 1fr 1.05fr; align-items: center; gap: 24px; }
+    .hero h1 { font-size: clamp(38px, 4.4vw, 58px); max-width: 15ch; }
+    .hero .lead { margin: 24px 0 32px; font-size: 18px; }
+    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    /* Nền ảnh render gần đen tuyệt đối: "lighten" lấy màu nền trang ở chỗ tối,
+       mask làm mờ mép — ảnh hoà vào trang, không lộ khung chữ nhật. Phải đặt
+       blend ở lớp ngoài cùng: lớp .float có animation transform tạo nhóm
+       riêng, blend đặt bên trong sẽ chỉ trộn với nền trong suốt. */
+    .hero-art { position: relative; margin: -24px -24px -24px 0; mix-blend-mode: lighten; }
+    .hero-art img {
+      width: 100%; height: auto;
+      -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent);
+      mask-image: radial-gradient(closest-side, #000 72%, transparent);
+      transform: translate3d(var(--px, 0), var(--py, 0), 0);
+      transition: transform .4s ease-out;
+    }
+    .hero-art .float { animation: hero-float 7s ease-in-out infinite; }
+    @keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
     /* ── Trước / sau ── */
     .compare { padding-top: 0; }
@@ -198,11 +213,14 @@
     .js .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
+      .hero-art .float { animation: none; }
       .js .reveal { opacity: 1; transform: none; transition: none; }
     }
 
     @media (max-width: 900px) {
       section { padding: 72px 0; }
+      .hero .wrap { grid-template-columns: 1fr; gap: 8px; }
+      .hero-art { margin: 0 auto; max-width: 520px; }
       .nav-links { display: none; }
       .steps { grid-template-columns: 1fr 1fr; }
       .step:nth-child(3) { border-left: 0; padding-left: 0; }
@@ -271,6 +289,7 @@
   <main>
     <section class="hero">
       <div class="wrap">
+        <div class="hero-copy">
         <a class="new-pill" href="#doc-kich-ban"><b>MỚI</b> Dán kịch bản, nhận video truyện tranh có lời kể →</a>
         <p class="eyebrow">Lồng tiếng tự động · Anh → Việt · Kịch bản → video</p>
         <h1>Video tiếng Anh, giọng Việt <span class="hl">liền mạch</span> như người đọc thật.</h1>
@@ -280,7 +299,18 @@
         <div class="hero-actions">
           <a class="btn btn-dark" href="{{ start_url }}">{{ start_label }}</a>
           <a class="btn btn-line" href="#nghe-thu">Nghe thử bản lồng tiếng</a>
-          <a class="btn btn-line" href="#doc-kich-ban">Xem tranh minh hoạ</a>
+        </div>
+        </div>
+        {# Dựng và render trong Blender: chồng tranh manhwa (đọc kịch bản → video)
+           và sóng âm phát sáng (lồng tiếng). Xuất WebP, xem static/img/landing/. #}
+        <div class="hero-art" id="heroArt">
+          <div class="float">
+            <img src="{{ asset('img/landing/hero-3d.webp') }}"
+              srcset="{{ asset('img/landing/hero-3d-600.webp') }} 600w, {{ asset('img/landing/hero-3d.webp') }} 1200w"
+              sizes="(max-width: 900px) 90vw, 600px"
+              width="1200" height="1100" fetchpriority="high"
+              alt="Mô hình 3D: chồng tranh manhwa bay nghiêng phía sau một dải sóng âm phát sáng xanh lá">
+          </div>
         </div>
       </div>
     </section>
@@ -567,6 +597,19 @@
       var onScroll = function () { nav.classList.toggle("scrolled", window.scrollY > 8); };
       window.addEventListener("scroll", onScroll, { passive: true });
       onScroll();
+
+      // Ảnh 3D ở hero lệch nhẹ theo chuột cho có chiều sâu.
+      var art = document.getElementById("heroArt");
+      var calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (art && !calm && window.matchMedia("(pointer: fine)").matches) {
+        var img = art.querySelector("img");
+        window.addEventListener("mousemove", function (e) {
+          var x = (e.clientX / window.innerWidth - 0.5) * -14;
+          var y = (e.clientY / window.innerHeight - 0.5) * -10;
+          img.style.setProperty("--px", x.toFixed(1) + "px");
+          img.style.setProperty("--py", y.toFixed(1) + "px");
+        }, { passive: true });
+      }
 
       // Mỗi lúc chỉ phát một video, để hai giọng không đè lên nhau.
       var videos = Array.prototype.slice.call(document.querySelectorAll("video"));
