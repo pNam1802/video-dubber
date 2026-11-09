@@ -114,7 +114,8 @@ def test_landing_shows_script_to_video_section(client):
     html = client.get("/").get_data(as_text=True)
     assert 'id="doc-kich-ban"' in html and 'href="#doc-kich-ban"' in html
     for path in ["img/landing/recap/video-frame.jpg", "recap_styles/sunflower.jpg", "recap_styles/dreamy.jpg",
-                 "img/landing/hero-3d.webm", "img/landing/hero-3d.mp4", "img/landing/hero-3d.webp"]:
+                 "img/landing/hero-ring.webm", "img/landing/hero-ring.mp4", "img/landing/hero-ring.webp",
+                 "img/landing/recap/sunflower-smile.jpg"]:
         assert f"/static/{path}?v=" in html
         assert client.get(f"/static/{path}").status_code == 200
 
