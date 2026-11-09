@@ -65,7 +65,7 @@
           ('recap', 'Manhwa recap', 'Ảnh webtoon màu ~6 giây đổi một lần, khung dọc trên nền mờ, zoom chậm')
         ] %}
         <label class="flex items-start gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-          <input type="radio" name="script_images" value="{{ value }}" {% if value == 'none' %}checked{% endif %} class="w-4 h-4 mt-1 text-primary bg-surface-container-high border-outline-variant focus:ring-primary">
+          <input type="radio" name="script_images" value="{{ value }}" {% if value == 'none' %}checked{% endif %} class="w-4 h-4 mt-1">
           <span class="flex flex-col">
             <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
             <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
@@ -83,7 +83,7 @@
           ] %}
           <div class="flex flex-col gap-2 rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary">
             <label class="flex items-start gap-2 cursor-pointer">
-              <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1 text-primary bg-surface-container-high border-outline-variant focus:ring-primary">
+              <input type="radio" name="recap_style" value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
               <span class="flex flex-col">
                 <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
                 <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
@@ -242,7 +242,7 @@
                accept=".wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,audio/*"
                class="w-full font-label-sm text-label-sm text-on-surface-variant file:mr-3 file:rounded-full file:border-0 file:bg-surface-container-high file:px-3 file:py-1.5 file:text-on-surface">
         <label class="flex items-start gap-2 font-label-sm text-label-sm text-on-surface cursor-pointer">
-          <input id="voiceSampleConsent" type="checkbox" class="w-4 h-4 mt-0.5 rounded text-primary bg-surface-container-high border-outline-variant focus:ring-primary">
+          <input id="voiceSampleConsent" type="checkbox" class="w-4 h-4 mt-0.5 rounded">
           <span>Tôi xác nhận đây là giọng của tôi, hoặc đã được chủ giọng đồng ý cho dùng, và sẽ không dùng để mạo danh hay lừa đảo.</span>
         </label>
         <button type="button" id="voiceSampleUpload"
@@ -311,7 +311,7 @@
         </div>
 
         <label class="flex items-start gap-2 font-body-md text-body-md text-on-surface cursor-pointer">
-          <input type="checkbox" name="retime_video" id="retime_video" checked class="w-4 h-4 mt-1 rounded text-primary bg-surface-container-high border-outline-variant focus:ring-primary">
+          <input type="checkbox" name="retime_video" id="retime_video" checked class="w-4 h-4 mt-1 rounded">
           <span>Tua nhanh hình ở khoảng lặng cho khớp giọng (tối đa 2×)
             <span class="block font-label-sm text-label-sm text-on-surface-variant">
               Giọng Việt thường ngắn hơn lời gốc: tua hình thay vì để khoảng nghỉ. Video ra sẽ ngắn hơn bản gốc.

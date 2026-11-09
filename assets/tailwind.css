@@ -112,6 +112,16 @@
 /* Chrome tự điền mật khẩu sẽ tô nền ô nhập màu trắng xanh, lạc tông nền tối.
    Không đổi được background khi autofill, nên phủ bóng đổ bên trong thay. */
 @layer base {
+  /* Checkbox/radio theo màu chủ đạo ở mọi trang (plugin forms mặc định xanh dương). */
+  [type="checkbox"],
+  [type="radio"] {
+    @apply text-primary bg-surface-container-high border-outline-variant
+      focus:ring-primary focus:ring-offset-0;
+  }
+  [type="checkbox"] {
+    @apply rounded;
+  }
+
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
