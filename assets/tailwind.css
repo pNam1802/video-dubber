@@ -104,6 +104,33 @@
     @apply inline-flex items-center gap-1 px-3 py-1.5 rounded-full border font-label-sm text-label-sm transition-colors;
   }
 
+  /* Nền trang trí của trang tạo mới: lấp hai bên trống quanh cột form giữa.
+     Cố định theo khung nhìn (trừ sidebar + header), không nhận chuột. */
+  .page-backdrop {
+    @apply pointer-events-none fixed inset-0 top-16 lg:left-[240px] overflow-hidden;
+    z-index: 0;
+  }
+  /* Lưới chấm chỉ hiện ở hai mép, tắt dần vào giữa nơi có form. */
+  .page-backdrop-dots {
+    @apply absolute inset-0;
+    background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: linear-gradient(to right, #000 0%, transparent 30%, transparent 70%, #000 100%);
+    mask-image: linear-gradient(to right, #000 0%, transparent 30%, transparent 70%, #000 100%);
+  }
+  .page-backdrop-glow {
+    @apply absolute rounded-full blur-3xl;
+  }
+  /* Sóng âm: mỗi vạch co giãn lệch pha nhau (animation-delay đặt inline). */
+  .wave-bar {
+    @apply w-1 rounded-full bg-primary;
+    transform-origin: center;
+    animation: wave-pulse 3.2s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wave-bar { animation: none; }
+  }
+
   .page-title {
     @apply font-headline-xl text-headline-xl text-on-surface flex items-center gap-3;
   }
@@ -130,4 +157,9 @@
     caret-color: #e0e3e5;
     transition: background-color 9999s ease-out 0s;
   }
+}
+
+@keyframes wave-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.55); }
 }

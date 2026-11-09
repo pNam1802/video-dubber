@@ -18,7 +18,24 @@
 </h3>
 {% endmacro %}
 
-<div class="max-w-3xl mx-auto w-full">
+{# ── Nền trang trí: lưới chấm + quầng sáng + sóng âm hai bên ── #}
+{% set wave = [14, 30, 48, 26, 64, 92, 58, 120, 84, 136, 100, 70, 44, 22] %}
+{% macro wave_bars(heights, reverse=False) %}
+<div class="flex items-center gap-1.5 opacity-[0.18]">
+  {% for h in (heights | reverse | list if reverse else heights) %}
+  <span class="wave-bar" style="height: {{ h * 2 }}px; animation-delay: -{{ (loop.index0 * 0.31) | round(2) }}s"></span>
+  {% endfor %}
+</div>
+{% endmacro %}
+<div class="page-backdrop" aria-hidden="true">
+  <div class="page-backdrop-dots"></div>
+  <div class="page-backdrop-glow -top-32 left-[6%] w-[420px] h-[420px] bg-primary/[0.07]"></div>
+  <div class="page-backdrop-glow bottom-[-160px] right-[4%] w-[480px] h-[480px] bg-tertiary/[0.06]"></div>
+  <div class="hidden min-[1400px]:flex absolute inset-y-0 left-8 items-center">{{ wave_bars(wave) }}</div>
+  <div class="hidden min-[1400px]:flex absolute inset-y-0 right-8 items-center">{{ wave_bars(wave, True) }}</div>
+</div>
+
+<div class="relative z-10 max-w-3xl mx-auto w-full">
 
 <div class="mb-lg">
   <h2 class="page-title">
