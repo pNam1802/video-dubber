@@ -110,18 +110,89 @@
     .hero h1 { font-size: clamp(38px, 4.4vw, 58px); max-width: 15ch; }
     .hero .lead { margin: 24px 0 32px; font-size: 18px; }
     .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    /* Nền ảnh render gần đen tuyệt đối: "lighten" lấy màu nền trang ở chỗ tối,
-       mask làm mờ mép — ảnh hoà vào trang, không lộ khung chữ nhật. Phải đặt
-       blend ở lớp ngoài cùng: lớp .float có animation transform tạo nhóm
-       riêng, blend đặt bên trong sẽ chỉ trộn với nền trong suốt. */
-    .hero-art { position: relative; margin: -24px -24px -24px 0; mix-blend-mode: lighten; }
-    .hero-art video {
-      width: 100%; height: auto;
+    /* ── Hero 3D: video vòng sóng âm (Blender) + ba tấm tranh HTML có phối cảnh ──
+       Video nền render gần đen tuyệt đối: "lighten" lấy màu nền trang ở chỗ
+       tối, mask làm mờ mép. Blend đặt trên chính <video> — không tổ tiên nào
+       của nó được có transform, nếu không nó chỉ trộn với nền trong suốt. */
+    .hero-art { position: relative; margin: -24px -24px -24px 0; aspect-ratio: 900 / 824; }
+    .hero-video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      mix-blend-mode: lighten;
       -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent);
       mask-image: radial-gradient(closest-side, #000 72%, transparent);
-      transform: translate3d(var(--px, 0), var(--py, 0), 0);
-      transition: transform .4s ease-out;
     }
+    .stage { position: absolute; inset: 0; perspective: 760px; perspective-origin: 50% 30%; pointer-events: none; }
+    /* --tx/--ty: độ nghiêng theo chuột, JS nội suy kiểu lò xo. */
+    .deck {
+      position: absolute; inset: 0; transform-style: preserve-3d;
+      transform: rotateX(calc(8deg + var(--ty, 0) * -10deg)) rotateY(calc(var(--tx, 0) * 16deg));
+    }
+    .card3d {
+      position: absolute; left: var(--x); top: var(--y); width: 25%; aspect-ratio: 4 / 5;
+      padding: 0; border: 0; background: none; cursor: zoom-in; transform-style: preserve-3d;
+      pointer-events: auto;   /* lớp .stage/.deck bỏ qua chuột: tấm lùi sâu nằm sau mặt phẳng của chúng */
+      transform: translate(-50%, -50%) translateZ(calc(var(--z) + var(--lift, 0) * 70px))
+        rotateY(var(--ry)) rotateZ(var(--rz)) scale(calc(1 + var(--lift, 0) * .06));
+      transition: transform .55s cubic-bezier(.2, .8, .2, 1), opacity .25s;
+      animation: card-bob 6s ease-in-out infinite; animation-delay: var(--delay);
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* "translate" độc lập với "transform" nên bồng bềnh không đè lên nghiêng. */
+    @keyframes card-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -9px; } }
+    .card3d .face {
+      position: absolute; inset: 0; border-radius: 10px; overflow: hidden;
+      background: #111; border: 4px solid #161616;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .07), 0 28px 50px -18px rgba(0, 0, 0, .9),
+        0 22px 40px -26px rgba(189, 253, 93, .35);
+      transition: box-shadow .4s, border-color .4s;
+    }
+    .card3d img { width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(.92); transition: filter .4s; }
+    /* Vệt bóng loáng chạy theo con trỏ (--mx/--my do JS đặt). */
+    .card3d .sheen {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+      background: radial-gradient(circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, .38), transparent 46%);
+      mix-blend-mode: soft-light;
+    }
+    .card3d:hover, .card3d:focus-visible { --lift: 1; }
+    .card3d:hover .face, .card3d:focus-visible .face {
+      border-color: #1f1f1f;
+      box-shadow: 0 0 0 1px rgba(189, 253, 93, .55), 0 40px 70px -20px rgba(0, 0, 0, .95),
+        0 0 46px -6px rgba(189, 253, 93, .45);
+    }
+    .card3d:hover img, .card3d:focus-visible img { filter: brightness(1.06); }
+    .card3d:hover .sheen { opacity: 1; }
+    .card3d:focus-visible { outline: none; }
+    .card3d.is-open { opacity: 0; }
+    .art-hint {
+      position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); white-space: nowrap;
+      font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft);
+      opacity: .7; pointer-events: none; transition: opacity .4s;
+    }
+    .hero-art:hover .art-hint { opacity: 0; }
+
+    /* ── Xem tranh phóng to ── */
+    .lightbox { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; perspective: 1400px; }
+    .lightbox[hidden] { display: none; }
+    .lb-backdrop { position: absolute; inset: 0; background: rgba(5, 5, 5, .78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+    .lb-figure { position: relative; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .lb-frame {
+      height: min(74vh, 600px); aspect-ratio: 4 / 5; border-radius: 14px; overflow: hidden;
+      border: 5px solid #161616; background: #111; transform-origin: center;
+      box-shadow: 0 0 0 1px rgba(189, 253, 93, .35), 0 50px 120px -30px rgba(0, 0, 0, .95), 0 0 80px -20px rgba(189, 253, 93, .35);
+    }
+    .lb-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lb-caption { text-align: center; max-width: 46ch; }
+    .lb-caption p { margin: 0; font-size: 15px; }
+    .lb-caption small { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 13px; }
+    .lb-btn {
+      position: absolute; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px;
+      border: 1px solid var(--line); background: rgba(21, 21, 21, .85); color: var(--ink); font-size: 22px; line-height: 1;
+      cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .lb-btn:hover { background: var(--card-hi); border-color: var(--ink-soft); }
+    .lb-close { top: 20px; right: 20px; font-size: 18px; }
+    .lb-prev { left: max(16px, calc(50% - 300px - 140px)); top: 50%; translate: 0 -50%; }
+    .lb-next { right: max(16px, calc(50% - 300px - 140px)); top: 50%; translate: 0 -50%; }
 
     /* ── Trước / sau ── */
     .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -178,13 +249,16 @@
     .js .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
+      .card3d { animation: none; transition: opacity .25s; }
       .js .reveal { opacity: 1; transform: none; transition: none; }
     }
 
     @media (max-width: 900px) {
       section { padding: 72px 0; }
       .hero .wrap { grid-template-columns: 1fr; gap: 8px; }
-      .hero-art { margin: 0 auto; max-width: 520px; }
+      .hero-art { margin: 0 auto; width: 100%; max-width: 520px; }
+      .lb-prev, .lb-next { top: auto; bottom: 20px; translate: none; }
+      .lb-prev { left: calc(50% - 56px); } .lb-next { right: calc(50% - 56px); }
       .nav-links { display: none; }
       .recap-detail { grid-template-columns: 1fr; gap: 32px; }
       .styles { grid-template-columns: 1fr; }
@@ -251,15 +325,33 @@
           <a class="btn btn-line" href="#nghe-thu">Nghe thử bản lồng tiếng</a>
         </div>
         </div>
-        {# Dựng và render trong Blender (assets/blender/landing_hero.blend): chồng
-           tranh manhwa (đọc kịch bản → video) lơ lửng trên vòng sóng âm xoay tròn
-           (lồng tiếng). Vòng lặp 8 giây liền mạch; ảnh poster là khung đầu. #}
+        {# Vòng sóng âm xoay (lồng tiếng) render trong Blender — assets/blender/
+           landing_hero.blend, collection "Cards" tắt render. Ba tấm tranh (đọc
+           kịch bản → video) là HTML có phối cảnh để nghiêng theo chuột và bấm
+           vào thì phóng to — xem script cuối trang. #}
+        {% set hero_cards = [
+          ('sunflower-walk.jpg', 'Cô gái áo sơ mi trắng bước đi trên phố, tóc bay trong gió', '75%', '35%', '-90px', '-34deg', '2deg', '-2s'),
+          ('duo-street.jpg', 'Đôi bạn đi cạnh nhau trên con phố vắng, nắng chiều rọi phía sau', '59%', '38%', '-20px', '-22deg', '1deg', '-4s'),
+          ('sunflower-smile.jpg', 'Cô gái tóc dài cầm hoa hướng dương cười rạng rỡ bên biển lúc hoàng hôn', '42%', '41%', '50px', '-10deg', '-1deg', '0s'),
+        ] %}
         <div class="hero-art" id="heroArt">
           <video class="hero-video" autoplay muted loop playsinline preload="auto" width="900" height="824"
-            poster="{{ asset('img/landing/hero-3d.webp') }}" aria-label="Mô hình 3D: chồng tranh manhwa lơ lửng trên một vòng sóng âm phát sáng xanh lá đang xoay">
-            <source src="{{ asset('img/landing/hero-3d.webm') }}" type="video/webm">
-            <source src="{{ asset('img/landing/hero-3d.mp4') }}" type="video/mp4">
+            poster="{{ asset('img/landing/hero-ring.webp') }}" aria-hidden="true">
+            <source src="{{ asset('img/landing/hero-ring.webm') }}" type="video/webm">
+            <source src="{{ asset('img/landing/hero-ring.mp4') }}" type="video/mp4">
           </video>
+          <div class="stage">
+            <div class="deck" id="heroDeck">
+              {% for file, caption, x, y, z, ry, rz, delay in hero_cards %}
+              <button type="button" class="card3d" data-src="{{ asset('img/landing/recap/' ~ file) }}" data-caption="{{ caption }}"
+                style="--x: {{ x }}; --y: {{ y }}; --z: {{ z }}; --ry: {{ ry }}; --rz: {{ rz }}; --delay: {{ delay }}"
+                aria-label="Xem tranh: {{ caption }}">
+                <span class="face"><img src="{{ asset('img/landing/recap/' ~ file) }}" alt="" width="480" height="600" loading="eager"><span class="sheen"></span></span>
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+          <span class="art-hint">Rê chuột · bấm vào tranh để xem</span>
         </div>
       </div>
     </section>
@@ -348,6 +440,17 @@
     </section>
   </main>
 
+  <div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="Xem tranh minh hoạ">
+    <div class="lb-backdrop" data-close></div>
+    <figure class="lb-figure">
+      <div class="lb-frame" id="lbFrame"><img id="lbImg" alt=""></div>
+      <figcaption class="lb-caption"><p id="lbCaption"></p><small id="lbCount"></small></figcaption>
+    </figure>
+    <button type="button" class="lb-btn lb-close" data-close aria-label="Đóng">✕</button>
+    <button type="button" class="lb-btn lb-prev" id="lbPrev" aria-label="Tranh trước">‹</button>
+    <button type="button" class="lb-btn lb-next" id="lbNext" aria-label="Tranh sau">›</button>
+  </div>
+
   <footer>
     <div class="wrap">
       <div class="foot">
@@ -390,21 +493,10 @@
       window.addEventListener("scroll", onScroll, { passive: true });
       onScroll();
 
-      // Ảnh 3D ở hero lệch nhẹ theo chuột cho có chiều sâu.
-      var art = document.getElementById("heroArt");
+      // Người dùng bật giảm chuyển động: video vòng sóng dừng ở khung đầu.
       var calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      var heroVideo = art && art.querySelector("video");
-      // Người dùng bật giảm chuyển động: dừng ở khung đầu thay vì tự phát.
+      var heroVideo = document.querySelector(".hero-video");
       if (heroVideo && calm) { heroVideo.removeAttribute("autoplay"); heroVideo.pause(); }
-      if (art && !calm && window.matchMedia("(pointer: fine)").matches) {
-        var img = heroVideo;
-        window.addEventListener("mousemove", function (e) {
-          var x = (e.clientX / window.innerWidth - 0.5) * -14;
-          var y = (e.clientY / window.innerHeight - 0.5) * -10;
-          img.style.setProperty("--px", x.toFixed(1) + "px");
-          img.style.setProperty("--py", y.toFixed(1) + "px");
-        }, { passive: true });
-      }
 
       // Mỗi lúc chỉ phát một video, để hai giọng không đè lên nhau.
       var videos = Array.prototype.slice.call(document.querySelectorAll("video:not(.hero-video)"));
@@ -413,6 +505,8 @@
           videos.forEach(function (o) { if (o !== v) o.pause(); });
         });
       });
+
+      initHeroCards(calm);
 
       var items = document.querySelectorAll(".reveal");
       if (!("IntersectionObserver" in window)) {
@@ -426,6 +520,145 @@
       }, { rootMargin: "0px 0px -8% 0px" });
       items.forEach(function (el) { io.observe(el); });
     })();
+
+    /* ── Ba tấm tranh ở hero: nghiêng theo chuột, bấm để phóng to ──────────
+       Nghiêng: chuột trong vùng ảnh đặt đích (-1…1); mỗi khung hình giá trị
+       hiện tại đuổi theo đích một phần (lò xo tắt dần) nên chuyển động mượt
+       kể cả khi chuột giật. Phóng to: kỹ thuật FLIP — đo khung tranh ở vị trí
+       cuối (giữa màn hình) rồi chạy ngược từ chỗ tấm tranh trong chồng. */
+    function initHeroCards(calm) {
+      var art = document.getElementById("heroArt");
+      var deck = document.getElementById("heroDeck");
+      if (!art || !deck) return;
+      var cards = Array.prototype.slice.call(deck.querySelectorAll(".card3d"));
+      // Thứ tự xem: tấm trước nhất trước.
+      var order = cards.slice().reverse();
+
+      // Nghiêng theo chuột
+      if (!calm && window.matchMedia("(pointer: fine)").matches) {
+        var cur = { x: 0, y: 0 }, goal = { x: 0, y: 0 }, raf = 0;
+        var step = function () {
+          cur.x += (goal.x - cur.x) * 0.08;
+          cur.y += (goal.y - cur.y) * 0.08;
+          deck.style.setProperty("--tx", cur.x.toFixed(4));
+          deck.style.setProperty("--ty", cur.y.toFixed(4));
+          raf = (Math.abs(goal.x - cur.x) + Math.abs(goal.y - cur.y) > 0.001) ? requestAnimationFrame(step) : 0;
+        };
+        var kick = function () { if (!raf) raf = requestAnimationFrame(step); };
+        art.addEventListener("pointermove", function (e) {
+          var r = art.getBoundingClientRect();
+          goal.x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
+          goal.y = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
+          kick();
+        });
+        art.addEventListener("pointerleave", function () { goal.x = 0; goal.y = 0; kick(); });
+        cards.forEach(function (card) {
+          card.addEventListener("pointermove", function (e) {
+            var r = card.getBoundingClientRect();
+            card.style.setProperty("--mx", ((e.clientX - r.left) / r.width * 100).toFixed(1) + "%");
+            card.style.setProperty("--my", ((e.clientY - r.top) / r.height * 100).toFixed(1) + "%");
+          });
+        });
+      }
+
+      // Xem phóng to
+      var box = document.getElementById("lightbox");
+      var frame = document.getElementById("lbFrame");
+      var img = document.getElementById("lbImg");
+      var caption = document.getElementById("lbCaption");
+      var count = document.getElementById("lbCount");
+      var active = -1, opener = null, busy = false;
+      var EASE = "cubic-bezier(.2, .85, .25, 1)";
+
+      function fill(i) {
+        var card = order[i];
+        img.src = card.dataset.src;
+        caption.textContent = card.dataset.caption;
+        count.textContent = "Tranh Nora vẽ tự động từ kịch bản · " + (i + 1) + "/" + order.length;
+      }
+      // Biến đổi đưa khung tranh (đang ở giữa) về đúng chỗ tấm tranh trong chồng.
+      function fromCard(card) {
+        var a = card.getBoundingClientRect(), b = frame.getBoundingClientRect();
+        var dx = (a.left + a.width / 2) - (b.left + b.width / 2);
+        var dy = (a.top + a.height / 2) - (b.top + b.height / 2);
+        return "translate(" + dx + "px," + dy + "px) scale(" + (a.width / b.width).toFixed(4) + ") rotateY(-18deg) rotateZ(-2deg)";
+      }
+      function open(i, from) {
+        if (busy) return;
+        active = i; opener = from || order[i];
+        fill(i);
+        box.hidden = false;
+        document.documentElement.style.overflow = "hidden";
+        order[i].classList.add("is-open");
+        var parts = [box.querySelector(".lb-backdrop"), box.querySelector(".lb-caption")].concat(
+          Array.prototype.slice.call(box.querySelectorAll(".lb-btn")));
+        if (calm) {
+          box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
+        } else {
+          busy = true;
+          frame.animate([{ transform: fromCard(order[i]), opacity: .85 }, { transform: "none", opacity: 1 }],
+            { duration: 700, easing: EASE }).onfinish = function () { busy = false; };
+          parts.forEach(function (el, k) {
+            el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, delay: k ? 260 : 0, easing: "ease-out", fill: "backwards" });
+          });
+        }
+        box.querySelector(".lb-close").focus({ preventScroll: true });
+      }
+      function close() {
+        if (busy || box.hidden) return;
+        var card = order[active];
+        var done = function () {
+          box.hidden = true; busy = false;
+          card.classList.remove("is-open");
+          document.documentElement.style.overflow = "";
+          if (opener) opener.focus({ preventScroll: true });
+        };
+        if (calm) { box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160 }).onfinish = done; return; }
+        busy = true;
+        frame.animate([{ transform: "none", opacity: 1 }, { transform: fromCard(card), opacity: .9 }],
+          { duration: 520, easing: "cubic-bezier(.5, 0, .2, 1)", fill: "forwards" }).onfinish = function () {
+            frame.getAnimations().forEach(function (an) { an.cancel(); });
+            done();
+          };
+        box.querySelectorAll(".lb-backdrop, .lb-caption, .lb-btn").forEach(function (el) {
+          el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 320, easing: "ease-in", fill: "forwards" })
+            .onfinish = function () { this.cancel(); };
+        });
+      }
+      function go(dir) {
+        if (busy) return;
+        var next = (active + dir + order.length) % order.length;
+        order[active].classList.remove("is-open");
+        order[next].classList.add("is-open");
+        if (calm) { active = next; fill(next); return; }
+        busy = true;
+        frame.animate([{ transform: "none", opacity: 1 }, { transform: "translateX(" + (-60 * dir) + "px) rotateY(" + (20 * dir) + "deg)", opacity: 0 }],
+          { duration: 220, easing: "ease-in" }).onfinish = function () {
+            active = next; fill(next);
+            frame.animate([{ transform: "translateX(" + (60 * dir) + "px) rotateY(" + (-20 * dir) + "deg)", opacity: 0 }, { transform: "none", opacity: 1 }],
+              { duration: 380, easing: EASE }).onfinish = function () { busy = false; };
+          };
+      }
+
+      cards.forEach(function (card) {
+        card.addEventListener("click", function () { open(order.indexOf(card), card); });
+      });
+      box.querySelectorAll("[data-close]").forEach(function (el) { el.addEventListener("click", close); });
+      document.getElementById("lbPrev").addEventListener("click", function () { go(-1); });
+      document.getElementById("lbNext").addEventListener("click", function () { go(1); });
+      document.addEventListener("keydown", function (e) {
+        if (box.hidden) return;
+        if (e.key === "Escape") close();
+        else if (e.key === "ArrowRight") go(1);
+        else if (e.key === "ArrowLeft") go(-1);
+        else if (e.key === "Tab") {   // giữ focus trong hộp xem tranh
+          var f = Array.prototype.slice.call(box.querySelectorAll(".lb-btn"));
+          var i = f.indexOf(document.activeElement);
+          if (e.shiftKey && i <= 0) { f[f.length - 1].focus(); e.preventDefault(); }
+          else if (!e.shiftKey && i === f.length - 1) { f[0].focus(); e.preventDefault(); }
+        }
+      });
+    }
   </script>
 </body>
 
