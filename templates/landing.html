@@ -115,15 +115,13 @@
        blend ở lớp ngoài cùng: lớp .float có animation transform tạo nhóm
        riêng, blend đặt bên trong sẽ chỉ trộn với nền trong suốt. */
     .hero-art { position: relative; margin: -24px -24px -24px 0; mix-blend-mode: lighten; }
-    .hero-art img {
+    .hero-art video {
       width: 100%; height: auto;
       -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent);
       mask-image: radial-gradient(closest-side, #000 72%, transparent);
       transform: translate3d(var(--px, 0), var(--py, 0), 0);
       transition: transform .4s ease-out;
     }
-    .hero-art .float { animation: hero-float 7s ease-in-out infinite; }
-    @keyframes hero-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 
     /* ── Trước / sau ── */
     .compare { padding-top: 0; }
@@ -213,7 +211,6 @@
     .js .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
-      .hero-art .float { animation: none; }
       .js .reveal { opacity: 1; transform: none; transition: none; }
     }
 
@@ -301,16 +298,15 @@
           <a class="btn btn-line" href="#nghe-thu">Nghe thử bản lồng tiếng</a>
         </div>
         </div>
-        {# Dựng và render trong Blender: chồng tranh manhwa (đọc kịch bản → video)
-           và sóng âm phát sáng (lồng tiếng). Xuất WebP, xem static/img/landing/. #}
+        {# Dựng và render trong Blender (assets/blender/landing_hero.blend): chồng
+           tranh manhwa (đọc kịch bản → video) lơ lửng trên vòng sóng âm xoay tròn
+           (lồng tiếng). Vòng lặp 8 giây liền mạch; ảnh poster là khung đầu. #}
         <div class="hero-art" id="heroArt">
-          <div class="float">
-            <img src="{{ asset('img/landing/hero-3d.webp') }}"
-              srcset="{{ asset('img/landing/hero-3d-600.webp') }} 600w, {{ asset('img/landing/hero-3d.webp') }} 1200w"
-              sizes="(max-width: 900px) 90vw, 600px"
-              width="1200" height="1100" fetchpriority="high"
-              alt="Mô hình 3D: chồng tranh manhwa bay nghiêng phía sau một dải sóng âm phát sáng xanh lá">
-          </div>
+          <video class="hero-video" autoplay muted loop playsinline preload="auto" width="900" height="824"
+            poster="{{ asset('img/landing/hero-3d.webp') }}" aria-label="Mô hình 3D: chồng tranh manhwa lơ lửng trên một vòng sóng âm phát sáng xanh lá đang xoay">
+            <source src="{{ asset('img/landing/hero-3d.webm') }}" type="video/webm">
+            <source src="{{ asset('img/landing/hero-3d.mp4') }}" type="video/mp4">
+          </video>
         </div>
       </div>
     </section>
@@ -601,8 +597,11 @@
       // Ảnh 3D ở hero lệch nhẹ theo chuột cho có chiều sâu.
       var art = document.getElementById("heroArt");
       var calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var heroVideo = art && art.querySelector("video");
+      // Người dùng bật giảm chuyển động: dừng ở khung đầu thay vì tự phát.
+      if (heroVideo && calm) { heroVideo.removeAttribute("autoplay"); heroVideo.pause(); }
       if (art && !calm && window.matchMedia("(pointer: fine)").matches) {
-        var img = art.querySelector("img");
+        var img = heroVideo;
         window.addEventListener("mousemove", function (e) {
           var x = (e.clientX / window.innerWidth - 0.5) * -14;
           var y = (e.clientY / window.innerHeight - 0.5) * -10;
@@ -612,7 +611,7 @@
       }
 
       // Mỗi lúc chỉ phát một video, để hai giọng không đè lên nhau.
-      var videos = Array.prototype.slice.call(document.querySelectorAll("video"));
+      var videos = Array.prototype.slice.call(document.querySelectorAll("video:not(.hero-video)"));
       videos.forEach(function (v) {
         v.addEventListener("play", function () {
           videos.forEach(function (o) { if (o !== v) o.pause(); });
