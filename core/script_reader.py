@@ -84,5 +84,8 @@ def assemble(pairs: List[tuple[Segment, Path]], output_path: Path) -> List[tuple
         start = len(audio) / 1000.0
         audio += clip
         timings.append((start, len(audio) / 1000.0))
-    audio.export(str(output_path), format="mp3", bitrate="128k")
+    from config.settings import OUTPUT_LOUDNORM
+
+    # Chuẩn hoá độ to như video lồng tiếng (xem OUTPUT_LOUDNORM).
+    audio.export(str(output_path), format="mp3", bitrate="128k", parameters=["-af", OUTPUT_LOUDNORM])
     return timings

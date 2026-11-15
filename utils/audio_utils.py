@@ -38,6 +38,9 @@ def concat_audio(audio_paths: Iterable[str | Path], output_path: str | Path) -> 
 	list_file.write_text("\n".join(entries), encoding="utf-8")
 	cmd = [
 		FFMPEG_BIN,
+		"-hide_banner",
+		"-v",
+		"error",
 		"-y",
 		"-f",
 		"concat",

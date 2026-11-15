@@ -48,17 +48,103 @@ def language_name(code: str) -> str:
     return LANGUAGE_NAMES.get((code or "").strip().lower(), "tiếng Anh")
 
 
-def build_system_prompt(source_language: str = "en", target_language: str = "vi") -> str:
+#: Kiểu dịch người dùng chọn ở form. "natural": dịch theo nghĩa, tự nhiên.
+#: "localized": bản địa hoá câu đùa/tiếng lóng sang meme của nước đích.
+TRANSLATION_STYLES = ("natural", "localized")
+
+LOCALIZED_RULES = """
+Kiểu dịch: BẢN ĐỊA HOÁ kiểu mạng xã hội.
+- Tiếng lóng, meme, câu cà khịa của bản gốc thì đổi sang cách nói/câu đùa TƯƠNG ĐƯƠNG mà
+  dân mạng nói {target} thật sự hay dùng trên TikTok/YouTube (kiểu kênh recap phim), để người
+  xem bản xứ thấy buồn cười như người xem bản gốc. Không bịa thêm tình tiết, không đổi nội dung.
+- Meme của nước nguồn mà ở nước đích mang NGHĨA KHÁC hoặc không ai hiểu (vd "Skibidi" ở mạng
+  Việt là nói giảm chuyện quan hệ, còn ở Mỹ chỉ là meme "Skibidi Toilet" vô nghĩa) thì KHÔNG
+  giữ nguyên chữ: dùng cách nói bản xứ theo NGHĨA THẬT ("hook up"). Ẩn dụ chỉ có ở nước nguồn
+  cũng vậy (vd "cắm sừng"/"tặng cặp sừng" -> "cheated on him").
+- Đừng nhồi tiếng lóng vào mọi câu: câu kể bình thường thì dịch bình thường.
+"""
+
+NOTES_BLOCK = """
+NGỮ CẢNH CẢ VIDEO (đã đọc trước toàn bộ transcript) — BẮT BUỘC dùng:
+{notes}
+
+Cách dùng bảng từ trên:
+- Gặp từ có trong bảng thì dịch theo NGHĨA THẬT trong bảng, bằng cách nói tự nhiên của người bản xứ.
+- Meme, tiếng lóng, ẩn dụ của mạng xã hội nguồn KHÔNG phải tên riêng hay thương hiệu: không giữ
+  nguyên chữ khi người nghe bản dịch sẽ không hiểu đúng nghĩa đó.
+- Được dài/ngắn hơn câu gốc một chút để rõ nghĩa; giữ đúng giọng điệu của video.
+"""
+
+#: Bước ĐỌC HIỂU trước khi dịch: đọc cả transcript, tóm tắt + lập bảng từ.
+#: Đo 16/11/2026 trên đoạn review manhwa: không có bước này thì "đòi
+#: Skibidi", "tặng cặp sừng 36 mét", "nờ tờ giờ (NTR) lại" bị dịch sát chữ;
+#: có bảng từ (kèm cách dùng ở NOTES_BLOCK) thì ra "asked for a hookup",
+#: "cheated on him big time", "NTR them right back". Bật suy nghĩ (thinking)
+#: cho riêng bước này — suy ra "nờ tờ giờ" là N-T-R đọc từng chữ cần nó.
+UNDERSTAND_MAX_TOKENS = 16384
+#: Transcript dài hơn thì chỉ gửi phần đầu — đủ để nắm nhân vật/giọng điệu,
+#: và không vượt ngữ cảnh của model rẻ.
+UNDERSTAND_MAX_CHARS = 60_000
+#: Bảng từ gắn vào MỖI request dịch sau đó, nên giới hạn độ dài.
+NOTES_MAX_CHARS = 6_000
+
+
+def build_understanding_prompt(
+    texts: Sequence[str], source_language: str = "en", target_language: str = "vi", style: str = "natural"
+) -> str:
+    source_name = language_name(source_language)
+    target_name = language_name(target_language)
+    transcript = "\n".join(t.strip() for t in texts if t and t.strip())
+    if len(transcript) > UNDERSTAND_MAX_CHARS:
+        transcript = transcript[:UNDERSTAND_MAX_CHARS] + "\n[...transcript còn tiếp...]"
+    equivalent = (
+        f"tiếng lóng/meme TƯƠNG ĐƯƠNG mà dân mạng nói {target_name} thật sự dùng"
+        if style == "localized"
+        else f"cách nói tương đương tự nhiên bằng {target_name}"
+    )
+    return f"""Dưới đây là TOÀN BỘ transcript {source_name} của một video, sắp được dịch sang {target_name}.
+Transcript do máy nhận dạng giọng nói nên có thể nghe nhầm (sai dấu, nhầm từ gần âm).
+Đọc hết, hiểu câu chuyện, rồi trả về đúng hai phần, viết ngắn gọn:
+
+TÓM TẮT: 2-4 câu — chủ đề, nhân vật (tên, giới tính, quan hệ), giọng điệu của video.
+BẢNG TỪ: mỗi dòng "từ trong transcript = nghĩa thật = {equivalent}", cho mọi tiếng lóng/từ mạng,
+từ bị nghe nhầm, chữ cái bị đánh vần thành âm (vd "ét o ét" = SOS), ẩn dụ, nói giảm, câu đùa.
+- Cột cuối chỉ ghi MỘT cách nói, dùng thẳng được trong bản dịch và người bản xứ nghe hiểu ngay.
+  Ẩn dụ chỉ nước nguồn mới có thì ghi NGHĨA, không dịch hình ảnh (vd "cắm sừng" -> "cheated on",
+  không phải "horns").
+- Cách gọi người trong lời kể (vd "bà chị", "ông anh", "thanh niên", "bà thím") thường là gọi
+  vui, KHÔNG nói tuổi hay họ hàng thật — ghi đúng như vậy khi ngữ cảnh cho thấy thế.
+Suy luận từ NGỮ CẢNH câu chuyện. Từ bình thường thì bỏ qua. Không có gì thì ghi "(không có)".
+
+TRANSCRIPT:
+{{transcript}}""".replace("{transcript}", transcript)
+
+
+def clean_notes(raw: str) -> str:
+    """Bảng từ đi kèm mọi request dịch sau đó — cắt bớt nếu model viết dài."""
+    text = (raw or "").strip()
+    return text[:NOTES_MAX_CHARS]
+
+
+def build_system_prompt(
+    source_language: str = "en",
+    target_language: str = "vi",
+    style: str = "natural",
+    notes: str = "",
+) -> str:
     """Trước đây là hằng số cứng "tiếng Anh sang tiếng Việt" — giờ dựng theo
     đúng cặp ngôn ngữ thật của job (Whisper tự nhận dạng nguồn, người dùng
     tự chọn đích), để hỗ trợ thêm Nhật/Trung/Hàn.
 
     Không gắn với lĩnh vực nào: trước đây prompt chuyên AI/ML kèm danh sách
     thuật ngữ cố định, giờ video có thể là mọi chủ đề (nấu ăn, vlog, tin
-    tức, bài giảng...) nên để mô hình tự nhận ra ngữ cảnh."""
+    tức, bài giảng...) nên để mô hình tự nhận ra ngữ cảnh.
+
+    style: kiểu dịch (TRANSLATION_STYLES). notes: tóm tắt + bảng từ của bước
+    đọc hiểu (build_understanding_prompt) — có thì gắn kèm cùng cách dùng."""
     source_name = language_name(source_language)
     target_name = language_name(target_language)
-    return f"""Bạn là chuyên gia dịch thuật {source_name} sang {target_name} cho lồng tiếng video
+    prompt = f"""Bạn là chuyên gia dịch thuật {source_name} sang {target_name} cho lồng tiếng video
 thuộc mọi chủ đề (giải trí, đời sống, giáo dục, tin tức, kỹ thuật...).
 
 Quy tắc dịch:
@@ -72,7 +158,17 @@ Quy tắc dịch:
 6. Dịch ngắn gọn, độ dài gần với câu gốc, phù hợp để đọc thành lời nói.
 7. Giữ NHẤT QUÁN xưng hô (anh/cậu/cô/em...) và cách viết tên riêng xuyên suốt
    video — người xem nghe liền một mạch, đổi xưng hô giữa chừng rất khó chịu.
+8. Văn bản nguồn là bản NHẬN DẠNG GIỌNG NÓI tự động nên có thể nghe nhầm: sai
+   dấu thanh, hoặc nhầm sang từ gần âm (tiếng Việt hay gặp: "ba chị" hay "3 chị"/"bà chị",
+   "nhỏ bộ"/"nhỏ bồ", "sinh đẹp"/"xinh đẹp"). Từ nào vô lý theo ngữ cảnh thì
+   hiểu theo từ gần âm hợp lý nhất (đọc cả các câu xung quanh), rồi mới dịch.
+   Đừng dịch nguyên văn một từ nghe nhầm.
 """
+    if style == "localized":
+        prompt += LOCALIZED_RULES.format(target=target_name)
+    if notes.strip():
+        prompt += NOTES_BLOCK.format(notes=notes.strip())
+    return prompt
 
 
 #: Giới hạn token output. Trước đây 1000/lô và 500/câu — câu dài (vài trăm

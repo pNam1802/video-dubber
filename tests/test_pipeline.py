@@ -137,7 +137,7 @@ class FakeTTS:
 
 class FakeComposer:
     def compose(self, video_path, segments, tts_paths, original_volume=0.1, tts_volume=1.6, video_duration=None,
-                start_times=None, retime=None):
+                start_times=None, retime=None, content_end=None):
         out = Path(video_path).parent / "out_dubbed.mp4"
         out.write_bytes(b"fake-video")
         return out
@@ -257,6 +257,17 @@ def test_failed_command_includes_stderr():
                     timeout=10, error_message="Lệnh thất bại")
 
 
+def test_failed_command_keeps_tail_of_long_stderr():
+    """Banner dài ở đầu, lỗi thật ở cuối: phải giữ được phần cuối."""
+    script = "import sys; sys.stderr.write('banner ' * 2000 + 'LOI_THAT_O_CUOI'); sys.exit(1)"
+    with pytest.raises(RuntimeError) as info:
+        run_command([sys.executable, "-c", script], timeout=10, error_message="Lệnh thất bại")
+    message = str(info.value)
+    assert message.startswith("Lệnh thất bại")
+    assert message.endswith("LOI_THAT_O_CUOI")
+    assert len(message) < 2000
+
+
 def test_successful_command_returns_output():
     assert run_command([sys.executable, "-c", "print('xin chao')"],
                        timeout=10, error_message="x").stdout.strip() == "xin chao"
@@ -350,3 +361,52 @@ def test_deepseek_failure_falls_back_to_first_engine_with_key(fake_translators):
     _, used, fell_from, _ = DubbingPipeline(config)._translate(segments(), config, lambda p, m: None)
     assert (used, fell_from) == ("openai", "deepseek")
     assert fake_translators == ["deepseek", "openai"]
+
+
+# ── Whisper lớn hơn cho nguồn tiếng Việt ─────────────────────
+def _recording_transcriber(monkeypatch, detected: str):
+    import core.pipeline as pipeline_mod
+
+    used: list[str] = []
+
+    class Recording(FakeTranscriber):
+        def __init__(self, model_size="base", device="auto"):
+            used.append(model_size)
+
+        def transcribe(self, audio_path, language=None, sentence_resegment=True, silence_threshold=0.45):
+            return [Segment(start=0, end=1, text="Xin chào.")], language or detected
+
+    monkeypatch.setattr(pipeline_mod, "Transcriber", Recording)
+    return used
+
+
+@pytest.mark.parametrize("source, detected, expected", [
+    ("vi", "vi", ["large-v3-turbo"]),            # chọn sẵn tiếng Việt: dùng ngay model lớn
+    ("auto", "vi", ["small", "large-v3-turbo"]),  # tự nhận ra tiếng Việt: nhận dạng lại
+    ("auto", "en", ["small"]),                    # tiếng Anh: giữ model đã chọn
+    ("en", "en", ["small"]),
+])
+def test_vietnamese_source_uses_bigger_whisper(fake_collaborators, tmp_path, monkeypatch, source, detected, expected):
+    used = _recording_transcriber(monkeypatch, detected)
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"fake")
+    config = DubbingConfig(translator_engine="openai", openai_api_key="x", whisper_model="small",
+                           source_language=source, target_language="en")
+    result = DubbingPipeline(config).transcribe_and_translate(video_path)
+    assert result.success
+    assert used == expected
+    assert result.whisper_model_used == expected[-1]
+
+
+def test_user_chosen_large_model_is_kept_for_vietnamese():
+    from core.pipeline import vietnamese_whisper_model
+
+    assert vietnamese_whisper_model("large") == "large"
+    assert vietnamese_whisper_model("medium") == "large-v3-turbo"
+
+
+def test_system_prompt_warns_about_asr_mistakes():
+    from core.translator.llm_common import build_system_prompt
+
+    prompt = build_system_prompt("vi", "en")
+    assert "NHẬN DẠNG GIỌNG NÓI" in prompt and "bà chị" in prompt

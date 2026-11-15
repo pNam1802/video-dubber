@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import subprocess
 
+#: Số ký tự cuối stderr được giữ lại trong thông báo lỗi.
+STDERR_TAIL_CHARS = 1500
+
 
 def run_command(
 	cmd: list[str],
@@ -34,4 +37,10 @@ def run_command(
 		) from exc
 	except subprocess.CalledProcessError as exc:
 		detail = (exc.stderr or "").strip()
+		# Dòng lỗi thật của ffmpeg luôn nằm CUỐI stderr; phần đầu là banner
+		# phiên bản/cấu hình dài hàng nghìn ký tự. Giữ đoạn cuối để nơi hiển
+		# thị (cắt 200-300 ký tự) còn thấy được nguyên nhân — job #80 từng
+		# mất hẳn lý do lỗi vì chỉ còn lại banner.
+		if len(detail) > STDERR_TAIL_CHARS:
+			detail = "…" + detail[-STDERR_TAIL_CHARS:]
 		raise RuntimeError(f"{error_message}\n{detail}") from exc

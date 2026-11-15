@@ -18,6 +18,9 @@ from core.translator.llm_common import (
     batch_context,
     build_batch_prompt,
     build_system_prompt,
+    build_understanding_prompt,
+    clean_notes,
+    UNDERSTAND_MAX_TOKENS,
     call_with_retry,
     drop_truncated_tail,
     fill_batch_gaps,
@@ -41,8 +44,10 @@ class GeminiTranslator(BaseTranslator):
         model: str = GEMINI_MODEL,
         source_language: str = "en",
         target_language: str = "vi",
+        style: str = "natural",
     ):
         super().__init__()
+        self.style = style
         if not api_key:
             raise ValueError("GEMINI_API_KEY chưa được thiết lập!")
         self.client = genai.Client(api_key=api_key)
@@ -62,7 +67,7 @@ class GeminiTranslator(BaseTranslator):
 
     def _config(self, max_output_tokens: int, use_thinking: bool):
         kwargs = dict(
-            system_instruction=build_system_prompt(self.source_language, self.target_language),
+            system_instruction=build_system_prompt(self.source_language, self.target_language, self.style, self.notes),
             temperature=0.3,
             max_output_tokens=max_output_tokens,
         )
@@ -97,6 +102,21 @@ class GeminiTranslator(BaseTranslator):
                     continue
                 raise
         raise RuntimeError("[Gemini] Không gọi được model.")  # không bao giờ tới đây
+
+    def understand(self, texts: List[str]) -> str:
+        """Bước đọc hiểu: KHÔNG dùng system prompt dịch, và để model tự suy
+        nghĩ (không ép thinking_budget=0 như lúc dịch)."""
+        prompt = build_understanding_prompt(texts, self.source_language, self.target_language, self.style)
+        config = types.GenerateContentConfig(temperature=0.3, max_output_tokens=UNDERSTAND_MAX_TOKENS)
+        response = call_with_retry(
+            lambda: self.client.models.generate_content(model=self.model, contents=prompt, config=config),
+            what="Gemini đọc hiểu",
+        )
+        usage = getattr(response, "usage_metadata", None)
+        if usage is not None:
+            output_tokens = (usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0)
+            self._record_usage(usage.prompt_token_count, output_tokens)
+        return clean_notes(response.text or "")
 
     def translate_text(self, text: str) -> str:
         """Dịch một đoạn văn ngắn."""

@@ -12,6 +12,9 @@ from config.settings import OPENAI_API_KEY, OPENAI_MODEL
 from core.translator.base import BaseTranslator
 from core.translator.llm_common import (
     build_batch_prompt,
+    build_understanding_prompt,
+    clean_notes,
+    UNDERSTAND_MAX_TOKENS,
     BATCH_MAX_TOKENS,
     BATCH_SIZE,
     SINGLE_MAX_TOKENS,
@@ -32,6 +35,8 @@ class OpenAITranslator(BaseTranslator):
     provider = "OpenAI"
     #: Tham số riêng của nhà cung cấp gửi kèm mỗi request (extra_body).
     extra_body: dict | None = None
+    #: extra_body riêng cho bước đọc hiểu — None = mặc định của model.
+    understand_extra_body: dict | None = None
 
     def __init__(
         self,
@@ -40,8 +45,10 @@ class OpenAITranslator(BaseTranslator):
         source_language: str = "en",
         target_language: str = "vi",
         base_url: str | None = None,
+        style: str = "natural",
     ):
         super().__init__()
+        self.style = style
         if not api_key:
             raise ValueError(f"{self.provider.upper()}_API_KEY chưa được thiết lập!")
         self.client = OpenAI(api_key=api_key, base_url=base_url)
@@ -55,7 +62,22 @@ class OpenAITranslator(BaseTranslator):
         return f"{self.provider} {self.model}"
 
     def _system_prompt(self) -> str:
-        return build_system_prompt(self.source_language, self.target_language)
+        return build_system_prompt(self.source_language, self.target_language, self.style, self.notes)
+
+    def understand(self, texts: List[str]) -> str:
+        prompt = build_understanding_prompt(texts, self.source_language, self.target_language, self.style)
+        response = call_with_retry(
+            lambda: self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=UNDERSTAND_MAX_TOKENS,
+                extra_body=self.understand_extra_body,
+            ),
+            what=f"{self.provider} đọc hiểu",
+        )
+        self._record_response_usage(response)
+        return clean_notes(response.choices[0].message.content or "")
 
     def _record_response_usage(self, response) -> None:
         usage = getattr(response, "usage", None)

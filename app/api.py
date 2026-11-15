@@ -41,6 +41,7 @@ from core.script_images import RECAP_CHARACTER_STYLES
 from core.script_reader import split_script
 from core.transcriber import Segment
 from core.translator import get_translator
+from core.translator.llm_common import TRANSLATION_STYLES
 from core.translator.llm_common import estimate_llm_cost
 
 bp = Blueprint("api", __name__, url_prefix="/api")
@@ -95,6 +96,7 @@ def upload_video():
 
     translator_engine = _pick("translator_engine", ALLOWED_TRANSLATORS, "deepseek")
     target_language = _pick("target_language", ALLOWED_TARGET_LANGUAGES, "vi")
+    translation_style = _pick("translation_style", set(TRANSLATION_STYLES), "natural")
 
     openai_api_key = request.form.get("openai_api_key", "").strip() or OPENAI_API_KEY
     if translator_engine == "openai" and not openai_api_key:
@@ -130,9 +132,9 @@ def upload_video():
     max_video_speed = MAX_VIDEO_SPEED if request.form.get("retime_video") == "on" else 0.0
 
     try:
-        original_volume = float(request.form.get("original_volume", "10"))
+        original_volume = float(request.form.get("original_volume", "0"))
     except ValueError:
-        original_volume = 10.0
+        original_volume = 0.0
     original_volume = max(0.0, min(50.0, original_volume)) / 100.0
 
     # Kiem tra han muc TRUOC khi ghi file: khong de mot nguoi vuot quota
@@ -160,6 +162,7 @@ def upload_video():
         # /api/jobs (danh sach) neu can don file cua job bi bo do.
         upload_path=str(upload_path),
         translator_engine=translator_engine,
+        translation_style=translation_style,
         tts_engine=tts_engine,
         whisper_model=whisper_model,
         target_language=target_language,
@@ -185,6 +188,7 @@ def upload_video():
         whisper_model=whisper_model,
         source_language=source_language,
         target_language=target_language,
+        translation_style=translation_style,
         compute_device=compute_device,
         tts_engine=tts_engine,
         tts_voice=tts_voice,
@@ -506,7 +510,11 @@ def retranslate_segment(job_id: int, seg_id: int):
             engine, api_key=api_key, model=model,
             source_language=job.source_language or "en",
             target_language=job.target_language,
+            style=job.translation_style or "natural",
         )
+        # Bảng từ đã đọc hiểu ở giai đoạn 1: dịch lại một câu lẻ vẫn hiểu
+        # đúng tiếng lóng/ngữ cảnh cả video, không phải đọc hiểu lại.
+        translator.notes = job.translation_notes or ""
         segment.text_target = (translator.translate_text(segment.text_source) or "").strip()
     except Exception as exc:
         current_app.logger.warning("Dịch lại segment %s của job %s thất bại: %s", seg_id, job_id, exc)

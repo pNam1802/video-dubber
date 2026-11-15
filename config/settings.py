@@ -150,8 +150,10 @@ def tts_engine_supports(engine: str, language: str) -> bool:
 # File mau cua giong mac dinh "Nora": VieNeu clone tu mot doan giong do chinh
 # VieNeu tao ra (khong phai giong nguoi that).
 NORA_VOICE_REF = ROOT_DIR / "core" / "voices" / "nora.wav"
-# Giong ke chuyen tieng Anh mac dinh cua Chatterbox: 10 giay giong doc sach
-# (khong nhac nen) cat tu mot video ke truyen manhwa.
+# Giong ke chuyen tieng Anh mac dinh cua Chatterbox: 13,7 giay giong ke tom
+# tat phim (khong nhac nen, chu du an co quyen dung), chu du an nghe va chon
+# trong 3 doan ung vien, chuan hoa -18 LUFS. Thay mau cu 10 giay (chi ~6 giay
+# tieng noi, doc nhanh) ngay 16/11/2026.
 NARRATOR_VOICE_REF = ROOT_DIR / "core" / "voices" / "narrator_en.wav"
 # Giong mau nguoi dung tai len de clone: moi nguoi mot file
 # voices/user_<id>.wav tren volume du lieu.
@@ -170,6 +172,14 @@ VOICE_SAMPLE_MAX_MB = 10
 # Tua nhanh hinh o khoang lang cho khop giong doc (core/video_retime.py):
 # bat mac dinh, toi da bay nhieu lan.
 MAX_VIDEO_SPEED = 2.0
+
+# Chuan hoa do to dau ra (video long tieng + mp3 "Doc kich ban") ve muc
+# YouTube/TikTok dung: -14 LUFS, dinh -1.5 dBTP. Do that 15/11/2026: giong
+# Chatterbox ra ~-28 LUFS, video da ghep ~-24 LUFS — nghe nho hon ro rang so
+# voi video khac tren dien thoai. loudnorm xuat 192 kHz nen phai resample lai,
+# va PHAI chot aformat (fltp, stereo): ffmpeg 5.1 tren Modal khong tu chon duoc
+# channel layout giua aresample va encoder -> "Cannot select channel layout".
+OUTPUT_LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
 
 # "Doc kich ban" (core/script_reader.py): dan van ban, nhan mp3 + SRT.
 # ~20.000 ky tu ~ 20-25 phut giong doc — Chatterbox doc tung cau (~0,9 lan

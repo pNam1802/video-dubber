@@ -148,6 +148,12 @@ class Job(db.Model):
     # nao trong scope de dung nua, phai tra lai tu DB.
     upload_path = db.Column(db.String(500), nullable=True)
     translator_engine = db.Column(db.String(30), nullable=True)
+    # Kieu dich "natural" | "localized" (llm_common.TRANSLATION_STYLES).
+    # None = job cu, coi nhu "natural".
+    translation_style = db.Column(db.String(20), nullable=True)
+    # Tom tat + bang tu cua buoc doc hieu truoc khi dich — "dich lai cau nay"
+    # o buoc duyet doc lai de van hieu dung tieng long/ngu canh ca video.
+    translation_notes = db.Column(db.Text, nullable=True)
     tts_engine = db.Column(db.String(30), nullable=True)
     whisper_model = db.Column(db.String(30), nullable=True)
     # Ma ngon ngu NGUON da nhan dang/nguoi dung chon that su (vd "en", "ja").

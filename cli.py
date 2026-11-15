@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument("--silence-threshold", type=float, default=0.45)
 	parser.add_argument("--tts-engine", choices=["edge-tts", "gtts", "viettts"], default="edge-tts")
 	parser.add_argument("--tts-voice", choices=["female", "male"], default="female")
-	parser.add_argument("--original-volume", type=float, default=0.1)
+	parser.add_argument("--original-volume", type=float, default=0.0)
 	parser.add_argument("--subtitle-mode", choices=["bilingual", "vi", "en", "none"], default="bilingual")
 	return parser.parse_args()
 
