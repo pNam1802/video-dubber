@@ -137,7 +137,7 @@ class FakeTTS:
 
 class FakeComposer:
     def compose(self, video_path, segments, tts_paths, original_volume=0.1, tts_volume=1.6, video_duration=None,
-                start_times=None, retime=None):
+                start_times=None, retime=None, content_end=None):
         out = Path(video_path).parent / "out_dubbed.mp4"
         out.write_bytes(b"fake-video")
         return out

@@ -173,3 +173,42 @@ def test_continue_passes_retime(app, as_user, user, monkeypatch, tmp_path):
 def test_index_has_retime_checkbox_checked(as_user):
     html = as_user.get("/").get_data(as_text=True)
     assert 'name="retime_video"' in html and 'id="retime_video" checked' in html
+
+
+@pytest.mark.parametrize("retimed", [False, True])
+def test_composer_holds_last_frame_until_voice_finishes(tmp_path, monkeypatch, retimed):
+    """Giọng đọc xong sau khi hết hình: video phải dài ra cho đọc hết câu,
+    không bị cắt cụt (đoạn manhwa: câu cuối vào trễ 1,53 giây so với hình)."""
+    import core.video_composer as vc
+
+    monkeypatch.setattr(vc, "OUTPUT_DIR", tmp_path / "out")
+    video = tmp_path / "in.mp4"
+    _make_video(video, 6)
+    voice = tmp_path / "v.mp3"
+    _tone(voice, 3.0)
+    segs = [Segment(4, 6, "a", "x")]
+    windows = plan_retime([(4, 6)], [1.0], video_duration=6) if retimed else None
+    video_end = windows[-1].out_end if retimed else 6.0
+    start = video_end - 1.0           # bắt đầu 1 giây trước khi hết hình, đọc 3 giây
+    content_end = start + 3.0
+    out = vc.VideoComposer().compose(video, segs, [voice], original_volume=0.0, video_duration=6.0,
+                                     start_times=[start], retime=windows, content_end=content_end)
+    assert _probe(out) == pytest.approx(content_end + vc.END_HOLD_SEC, abs=0.3)
+    # Âm thanh cũng phải dài tới cuối, không chỉ hình.
+    audio = float(subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=duration",
+         "-of", "csv=p=0", str(out)], check=True, capture_output=True, text=True).stdout)
+    assert audio >= content_end
+
+
+def test_composer_keeps_length_when_voice_fits(tmp_path, monkeypatch):
+    import core.video_composer as vc
+
+    monkeypatch.setattr(vc, "OUTPUT_DIR", tmp_path / "out")
+    video = tmp_path / "in.mp4"
+    _make_video(video, 6)
+    voice = tmp_path / "v.mp3"
+    _tone(voice, 1.0)
+    out = vc.VideoComposer().compose(video, [Segment(1, 2, "a", "x")], [voice], original_volume=0.0,
+                                     video_duration=6.0, start_times=[1.0], content_end=2.0)
+    assert _probe(out) == pytest.approx(6.0, abs=0.3)

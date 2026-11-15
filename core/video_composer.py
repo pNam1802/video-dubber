@@ -16,6 +16,12 @@ from core.video_retime import Window, is_identity
 #: nguyen codec nguon sang, KHONG kiem tra co phat duoc hay khong.
 _BROWSER_SAFE_VIDEO_CODECS = {"h264"}
 
+#: Giọng đọc xong SAU khi hết hình (giọng dài hơn lời gốc, câu cuối bị đẩy
+#: trễ) thì giữ khung hình cuối đứng yên cho đọc hết câu, cộng thêm nhịp này.
+#: Trước đây -shortest + amix duration=first cắt cụt câu cuối giữa chừng
+#: (đoạn manhwa 34 giây: câu cuối vào trễ 1,53 giây so với hình).
+END_HOLD_SEC = 0.6
+
 
 class VideoComposer:
 	"""Compose final dubbed video by delaying and mixing per-segment TTS audio."""
@@ -105,9 +111,12 @@ class VideoComposer:
 		video_duration: Optional[float] = None,
 		start_times: Optional[List[float]] = None,
 		retime: Optional[Sequence[Window]] = None,
+		content_end: Optional[float] = None,
 	) -> Path:
 		"""retime: cửa sổ tua nhanh hình (core/video_retime.py). Có thì
-		start_times phải là thời điểm trên video MỚI (đã tua)."""
+		start_times phải là thời điểm trên video MỚI (đã tua).
+		content_end: lúc giọng đọc cuối cùng kết thúc (trên video mới) —
+		muộn hơn cuối hình thì kéo dài hình bằng khung cuối, xem END_HOLD_SEC."""
 		video_path = Path(video_path)
 		if not video_path.exists():
 			raise FileNotFoundError(f"Video not found: {video_path}")
@@ -141,13 +150,26 @@ class VideoComposer:
 			)
 			mix_inputs.append(f"[{label}]")
 
+		video_end = retime[-1].out_end if retimed else video_duration
+		hold = 0.0
+		if content_end and video_end:
+			hold = max(0.0, content_end + END_HOLD_SEC - video_end)
+		extend = hold > 0.05
+
 		filter_parts.append(
 			"".join(mix_inputs)
-			+ f"amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=2:normalize=0[mix_raw]"
+			+ f"amix=inputs={len(mix_inputs)}:duration={'longest' if extend else 'first'}"
+			+ ":dropout_transition=2:normalize=0[mix_raw]"
 		)
 		# Đưa độ to cả bản mix về chuẩn -14 LUFS (xem OUTPUT_LOUDNORM): mỗi
 		# engine TTS ra một mức khác nhau, riêng tts_volume không đủ bù.
-		filter_parts.append(f"[mix_raw]{OUTPUT_LOUDNORM}[mix]")
+		pad = f"apad=whole_dur={video_end + hold:.3f}," if extend else ""
+		filter_parts.append(f"[mix_raw]{pad}{OUTPUT_LOUDNORM}[mix]")
+		video_map = "[vout]" if retimed else "0:v"
+		if extend:
+			source = "[vout]" if retimed else "[0:v]"
+			filter_parts.append(f"{source}tpad=stop_mode=clone:stop_duration={hold:.3f}[vext]")
+			video_map = "[vext]"
 		filter_complex = ";".join(filter_parts)
 
 		# copy nhanh hon nhieu (khong giai ma/ma hoa lai video), nhung chi an
@@ -157,7 +179,7 @@ class VideoComposer:
 		# ra video "hoan tat" nhung bam khong xem duoc — da gap that tren
 		# production voi mot video nguon AV1.
 		source_codec = self._source_video_codec(video_path)
-		if source_codec in _BROWSER_SAFE_VIDEO_CODECS and not retimed:
+		if source_codec in _BROWSER_SAFE_VIDEO_CODECS and not retimed and not extend:
 			video_codec_args = ["-c:v", "copy"]
 		else:
 			video_codec_args = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p"]
@@ -166,7 +188,7 @@ class VideoComposer:
 			"-filter_complex",
 			filter_complex,
 			"-map",
-			"[vout]" if retimed else "0:v",
+			video_map,
 			"-map",
 			"[mix]",
 			*video_codec_args,

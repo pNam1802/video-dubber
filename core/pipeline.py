@@ -360,6 +360,10 @@ class DubbingPipeline:
                 video_duration=video_duration,
                 start_times=start_times,
                 retime=retime,
+                content_end=max(
+                    (start + tts._duration(path) for (_, path), start in zip(tts_results, start_times)),
+                    default=None,
+                ),
             )
 
             result.timings["compose"] = round(time.time() - step_started, 2)
