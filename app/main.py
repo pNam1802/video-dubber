@@ -5,7 +5,9 @@ Trang chính, phục vụ file kết quả và healthcheck.
 from __future__ import annotations
 
 import shutil
+import zlib
 from datetime import timezone
+from functools import lru_cache
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
@@ -89,14 +91,27 @@ def _tts_voice_keys() -> dict[str, list[str]]:
     return {engine: list(voices) for engine, voices in TTS_VOICES.items()}
 
 
+@lru_cache(maxsize=256)
+def _file_version(path: Path, size: int) -> str:
+    """Mã phiên bản theo NỘI DUNG file. Không dùng mtime: trên Modal file
+    mount vào có mtime 1970, đổi file cũng không đổi. Khoá theo cả size để
+    đọc lại khi file thay (file nghe thử chỉ vài chục KB)."""
+    return format(zlib.crc32(path.read_bytes()), "08x")
+
+
 def _voice_preview_urls() -> dict[str, dict[str, str]]:
     """File nghe thử của từng giọng (core/voice_previews.py) — giọng nào chưa
-    có file thì không hiện nút. "Giọng của bạn" phát lại chính file mẫu."""
+    có file thì không hiện nút. "Giọng của bạn" phát lại chính file mẫu.
+
+    Kèm ?v=: file tĩnh được cache 1 năm (SEND_FILE_MAX_AGE_DEFAULT), thiếu nó
+    thì tạo lại file nghe thử xong người dùng vẫn nghe bản cũ."""
     urls: dict[str, dict[str, str]] = {}
     for engine, key in preview_voices():
         name = preview_name(engine, key)
-        if (PREVIEW_DIR / name).is_file():
-            urls.setdefault(engine, {})[key] = url_for("static", filename=f"voices/{name}")
+        path = PREVIEW_DIR / name
+        if path.is_file():
+            version = _file_version(path, path.stat().st_size)
+            urls.setdefault(engine, {})[key] = url_for("static", filename=f"voices/{name}", v=version)
     for engine, language in CLONE_SAMPLE_LANGUAGE.items():
         if current_user.has_voice_sample_in(language):
             urls.setdefault(engine, {})["mine"] = voice_sample_url(current_user, language)

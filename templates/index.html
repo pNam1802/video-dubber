@@ -261,7 +261,7 @@
         <span class="material-symbols-outlined text-on-surface-variant">tune</span>
         <span class="flex-1 min-w-0">
           <span class="block font-body-lg text-body-lg text-on-surface font-medium">Tuỳ chọn thêm</span>
-          <span id="moreOptionsSummary" class="block font-label-sm text-label-sm text-on-surface-variant truncate">Phụ đề, âm lượng nhạc gốc, độ chính xác</span>
+          <span id="moreOptionsSummary" class="block font-label-sm text-label-sm text-on-surface-variant truncate">Phụ đề, âm lượng nhạc gốc, kiểu dịch, độ chính xác</span>
         </span>
         <span class="flex transition-transform group-open/more:rotate-180"><span class="material-symbols-outlined text-on-surface-variant">expand_more</span></span>
       </summary>
@@ -280,10 +280,18 @@
 
           <div>
             <label class="{{ label_class }}" for="original_volume">
-              Âm thanh gốc giữ lại — <span id="volumeValue" class="tabular text-primary">10</span>%
+              Âm thanh gốc giữ lại — <span id="volumeValue" class="tabular text-primary">0</span>%
             </label>
-            <input type="range" name="original_volume" id="original_volume" min="0" max="50" value="10"
+            <input type="range" name="original_volume" id="original_volume" min="0" max="50" value="0"
               class="w-full accent-primary mt-2">
+          </div>
+
+          <div class="sm:col-span-2">
+            <label class="{{ label_class }}" for="translation_style">Kiểu dịch</label>
+            <select name="translation_style" id="translation_style" class="{{ field_class }}">
+              <option value="natural" selected>Tự nhiên — dịch theo nghĩa (hợp mọi loại video)</option>
+              <option value="localized">Bản địa hoá — đổi tiếng lóng, câu đùa sang meme của nước đích (recap, giải trí)</option>
+            </select>
           </div>
         </div>
 

@@ -16,6 +16,10 @@ class DeepSeekTranslator(OpenAITranslator):
     # deepseek-flash bật thinking mặc định: tốn thêm token suy nghĩ (tính phí
     # như output), chậm hơn và bỏ qua temperature — dịch phụ đề không cần.
     extra_body = {"thinking": {"type": "disabled"}}
+    # Bước đọc hiểu thì BẬT suy nghĩ (mặc định của model): suy ra "nờ tờ giờ"
+    # là N-T-R đọc từng chữ, "đòi Skibidi" là nói giảm... cần nó. Chỉ một
+    # request mỗi job nên tốn thêm không đáng kể.
+    understand_extra_body = None
 
     def __init__(
         self,
@@ -24,9 +28,10 @@ class DeepSeekTranslator(OpenAITranslator):
         source_language: str = "en",
         target_language: str = "vi",
         base_url: str = DEEPSEEK_BASE_URL,
+        style: str = "natural",
     ):
         super().__init__(
             api_key=api_key, model=model,
             source_language=source_language, target_language=target_language,
-            base_url=base_url,
+            base_url=base_url, style=style,
         )

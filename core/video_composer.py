@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-from config.settings import FFMPEG_BIN, FFMPEG_TIMEOUT, FFPROBE_BIN, FFPROBE_TIMEOUT, OUTPUT_DIR, TEMP_DIR
+from config.settings import (
+	FFMPEG_BIN, FFMPEG_TIMEOUT, FFPROBE_BIN, FFPROBE_TIMEOUT, OUTPUT_DIR, OUTPUT_LOUDNORM, TEMP_DIR,
+)
 from utils.proc import run_command
 from core.transcriber import Segment
 from core.video_retime import Window, is_identity
@@ -55,19 +57,31 @@ class VideoComposer:
 		return rate if rate and not rate.startswith("0") else "30"
 
 	@staticmethod
+	def _pts_expr(windows: Sequence[Window]) -> str:
+		"""Hàm từng khúc T gốc -> T mới, dựng thành CÂY if() cân bằng chia đôi
+		theo mốc src_start (các cửa sổ liền nhau, phủ kín từ 0).
+
+		KHÔNG dùng tổng phẳng gte()*lt()*(...) + ... : ffmpeg 5.1 (bản
+		Debian 12 trên Modal) báo "Cannot allocate memory" khi parse biểu
+		thức đó từ khoảng 100 cửa sổ trở lên — job #80 (video 9,6 phút, 103
+		câu) hỏng ở đây. Dạng cây chạy được tới vài trăm cửa sổ, và mỗi
+		khung hình chỉ tính log2(N) phép so sánh thay vì N."""
+		if len(windows) == 1:
+			w = windows[0]
+			return f"({w.out_start:.4f}+(T-{w.src_start:.4f})/{w.speed:.4f})"
+		mid = len(windows) // 2
+		left = VideoComposer._pts_expr(windows[:mid])
+		right = VideoComposer._pts_expr(windows[mid:])
+		return f"if(lt(T,{windows[mid].src_start:.4f}),{left},{right})"
+
+	@staticmethod
 	def _retime_filters(windows: Sequence[Window], fps: str, original_volume: float) -> list[str]:
 		"""Hình: MỘT setpts theo hàm từng khúc (giải mã một lần, không cắt
 		thành nhiều luồng). Âm thanh gốc: cắt từng khúc + atempo (giữ cao độ)
 		rồi nối lại — atempo không đổi tốc độ theo thời gian được."""
-		terms = []
-		for i, w in enumerate(windows):
-			gate = f"gte(T,{w.src_start:.4f})"
-			if i + 1 < len(windows):
-				gate += f"*lt(T,{w.src_end:.4f})"
-			terms.append(f"{gate}*({w.out_start:.4f}+(T-{w.src_start:.4f})/{w.speed:.4f})")
-		# Bọc nháy đơn: dấu phẩy trong gte(T,...) nếu không sẽ bị hiểu là
-		# ranh giới giữa hai bộ lọc.
-		video = f"[0:v]setpts='({'+'.join(terms)})/TB',fps={fps}[vout]"
+		# Bọc nháy đơn: dấu phẩy trong if(...) nếu không sẽ bị hiểu là ranh
+		# giới giữa hai bộ lọc.
+		video = f"[0:v]setpts='{VideoComposer._pts_expr(windows)}/TB',fps={fps}[vout]"
 
 		parts = [video, f"[0:a]asplit={len(windows)}" + "".join(f"[as{i}]" for i in range(len(windows)))]
 		for i, w in enumerate(windows):
@@ -103,7 +117,7 @@ class VideoComposer:
 		OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 		out_path = OUTPUT_DIR / f"{video_path.stem}_dubbed.mp4"
 
-		cmd = [FFMPEG_BIN, "-y", "-i", str(video_path)]
+		cmd = [FFMPEG_BIN, "-hide_banner", "-v", "error", "-y", "-i", str(video_path)]
 		normalized_tts = [Path(p) for p in tts_paths]
 		for p in normalized_tts:
 			cmd += ["-i", str(p)]
@@ -131,8 +145,9 @@ class VideoComposer:
 			"".join(mix_inputs)
 			+ f"amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=2:normalize=0[mix_raw]"
 		)
-		# Limit peaks after boosting TTS to avoid clipping while keeping loudness stable.
-		filter_parts.append("[mix_raw]alimiter=limit=0.95[mix]")
+		# Đưa độ to cả bản mix về chuẩn -14 LUFS (xem OUTPUT_LOUDNORM): mỗi
+		# engine TTS ra một mức khác nhau, riêng tts_volume không đủ bù.
+		filter_parts.append(f"[mix_raw]{OUTPUT_LOUDNORM}[mix]")
 		filter_complex = ";".join(filter_parts)
 
 		# copy nhanh hon nhieu (khong giai ma/ma hoa lai video), nhung chi an
@@ -167,7 +182,7 @@ class VideoComposer:
 		run_command(
 			cmd,
 			timeout=FFMPEG_TIMEOUT,
-			error_message="Video compose failed. Check ffmpeg installation.",
+			error_message="Ghép video thất bại (ffmpeg):",
 		)
 		return out_path
 

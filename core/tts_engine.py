@@ -441,7 +441,7 @@ class TTSEngine:
 		ít rè hơn nhiều so với pydub.speedup)."""
 		tmp = path.with_name(path.stem + "_tempo" + path.suffix)
 		run_command(
-			[FFMPEG_BIN, "-y", "-i", str(path), "-filter:a", f"atempo={speed:.3f}", str(tmp)],
+			[FFMPEG_BIN, "-hide_banner", "-v", "error", "-y", "-i", str(path), "-filter:a", f"atempo={speed:.3f}", str(tmp)],
 			timeout=FFMPEG_TIMEOUT,
 			error_message="Đổi tốc độ giọng gTTS thất bại",
 		)

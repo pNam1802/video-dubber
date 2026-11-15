@@ -25,6 +25,19 @@ import shutil
 #: Thứ tự thử nhà cung cấp dự phòng khi engine chính lỗi — rẻ nhất trước.
 FALLBACK_ORDER = ("deepseek", "gemini", "openai")
 
+#: Whisper cho nguồn tiếng Việt. small/medium nghe sai dấu và từ gần âm rất
+#: nhiều (đo 16/11/2026 trên một đoạn review manhwa 34 giây: small sai 7 chỗ
+#: như "nhỏ bộ" thay "nhỏ bồ", "sinh đẹp" thay "xinh đẹp"; large-v3 sai 1).
+#: Bản turbo gần bằng large-v3 nhưng nhanh hơn nhiều.
+VIETNAMESE_WHISPER_MODEL = "large-v3-turbo"
+_WEAK_WHISPER_MODELS = {"tiny", "base", "small", "medium"}
+
+
+def vietnamese_whisper_model(chosen: str) -> str:
+    """Model Whisper nên dùng khi nguồn là tiếng Việt: nâng các model nhỏ lên
+    VIETNAMESE_WHISPER_MODEL, giữ nguyên nếu người dùng đã chọn model lớn."""
+    return VIETNAMESE_WHISPER_MODEL if chosen in _WEAK_WHISPER_MODELS else chosen
+
 
 @dataclass
 class DubbingConfig:
@@ -59,10 +72,12 @@ class DubbingConfig:
     script_images: str = "none"
     # Kiểu nhân vật của chế độ "recap", xem core/script_images.RECAP_CHARACTER_STYLES.
     recap_style: str = "sunflower"
-    original_volume: float = 0.1            # 0.0 – 1.0
+    original_volume: float = 0.0            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
     translator_fallback: bool = True
+    # Kiểu dịch: "natural" | "localized" (core/translator/llm_common.TRANSLATION_STYLES).
+    translation_style: str = "natural"
     output_dir: Path = field(default_factory=lambda: OUTPUT_DIR)
 
 
@@ -75,6 +90,9 @@ class DubbingResult:
     #: Ma ngon ngu THAT SU da dung de nhan dang — luon la ma cu the (vd "en"),
     #: kha nang khac config.source_language khi nguoi dung de "auto".
     source_language_detected: str = ""
+    #: Model Whisper đã dùng thật — khác config.whisper_model khi nguồn tiếng
+    #: Việt được nâng lên VIETNAMESE_WHISPER_MODEL.
+    whisper_model_used: str = ""
     elapsed_seconds: float = 0.0
     success: bool = False
     error: str = ""
@@ -94,6 +112,9 @@ class DubbingResult:
     #: So token that da dung qua API dich — xem core/translator/base.py.
     translate_prompt_tokens: int = 0
     translate_completion_tokens: int = 0
+    #: Tóm tắt + bảng từ của bước đọc hiểu trước khi dịch — lưu vào job để
+    #: "dịch lại câu này" ở bước duyệt vẫn hiểu đúng ngữ cảnh.
+    translation_notes: str = ""
     #: Phần phụ hỏng nhưng job vẫn xong (vd không vẽ được ảnh minh hoạ).
     notice: str = ""
 
@@ -151,6 +172,7 @@ class DubbingPipeline:
             return get_translator(
                 engine, api_key=api_key, model=model,
                 source_language=source_language, target_language=target,
+                style=cfg.translation_style,
             )
 
         engine = cfg.translator_engine if cfg.translator_engine in creds else "deepseek"
@@ -212,21 +234,36 @@ class DubbingPipeline:
             result.timings["extract"] = round(time.time() - step_started, 2)
 
             # ── Bước 2: Transcribe ─────────────────────────────────────
-            _progress(25, f"Nhận dạng giọng nói (Whisper {cfg.whisper_model})...")
             step_started = time.time()
-            transcriber = Transcriber(model_size=cfg.whisper_model, device=cfg.compute_device)
             whisper_language = self._whisper_language_arg(cfg.source_language)
-            segments, result.source_language_detected = transcriber.transcribe(
-                audio_path,
-                language=whisper_language,
-                sentence_resegment=cfg.sentence_resegment,
-                silence_threshold=cfg.silence_threshold,
-            )
+            model = cfg.whisper_model
+            if whisper_language == "vi":
+                model = vietnamese_whisper_model(model)
+
+            def run_whisper(model_size: str):
+                _progress(25, f"Nhận dạng giọng nói (Whisper {model_size})...")
+                return Transcriber(model_size=model_size, device=cfg.compute_device).transcribe(
+                    audio_path,
+                    language=whisper_language,
+                    sentence_resegment=cfg.sentence_resegment,
+                    silence_threshold=cfg.silence_threshold,
+                )
+
+            segments, result.source_language_detected = run_whisper(model)
+            # Tự nhận dạng ra tiếng Việt: model nhỏ nghe sai dấu rất nhiều
+            # ("bà chị" -> "ba chị" rồi dịch thành "three girls"), nhận dạng
+            # lại bằng model lớn. Lượt đầu bằng model nhỏ nên tốn thêm ít.
+            better = vietnamese_whisper_model(model)
+            if result.source_language_detected == "vi" and better != model:
+                print(f"[Whisper] Nguồn là tiếng Việt: nhận dạng lại bằng {better}.")
+                segments, result.source_language_detected = run_whisper(better)
+                model = better
+            result.whisper_model_used = model
             result.timings["transcribe"] = round(time.time() - step_started, 2)
             _progress(40, f"Tìm thấy {len(segments)} segment ({result.source_language_detected}).")
 
             # ── Bước 3: Dịch ───────────────────────────────────────────
-            _progress(45, "Đang dịch...")
+            _progress(45, "Đang đọc hiểu nội dung và dịch...")
             step_started = time.time()
             segments, result.translator_used, result.fallback_from, translator = self._translate(
                 segments, cfg, _progress, source_language=result.source_language_detected
@@ -241,6 +278,7 @@ class DubbingPipeline:
                 result.translate_model = ""
             result.translate_prompt_tokens = getattr(translator, "usage_prompt_tokens", 0)
             result.translate_completion_tokens = getattr(translator, "usage_completion_tokens", 0)
+            result.translation_notes = getattr(translator, "notes", "") or ""
             _progress(65, "Dịch hoàn tất, đang chờ duyệt.")
 
             result.segments = segments

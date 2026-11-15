@@ -87,6 +87,67 @@ def test_composer_really_shortens_video(tmp_path, monkeypatch):
     assert _probe(out) < 4.0
 
 
+def _many_windows(n: int):
+    slots = [(i * 5.0 + 1, i * 5.0 + 4) for i in range(n)]
+    durations = [1.0 + (i % 4) * 0.7 for i in range(n)]
+    return plan_retime(slots, durations, video_duration=n * 5.0 + 1)
+
+
+def test_pts_expr_matches_map_time():
+    """Cây if() phải cho đúng hàm từng khúc như map_time, kể cả ở biên."""
+    import re
+
+    from core.video_composer import VideoComposer
+
+    windows = _many_windows(120)
+    expr = VideoComposer._pts_expr(windows)
+    py = re.sub(r"\bif\(", "_if(", expr)
+    env = {"_if": lambda c, a, b: a if c else b, "lt": lambda a, b: a < b}
+    points = [0.0, 0.5] + [w.src_start for w in windows] + [w.src_end - 0.01 for w in windows]
+    for t in points:
+        assert eval(py, env, {"T": t}) == pytest.approx(map_time(windows, t), abs=1e-3)
+
+
+def test_composer_handles_many_windows(tmp_path, monkeypatch):
+    """Job #80: ~100 cửa sổ làm ffmpeg 5.1 báo "Cannot allocate memory" khi
+    parse biểu thức setpts dạng tổng phẳng. Ghép thật với 150 cửa sổ."""
+    import core.video_composer as vc
+
+    monkeypatch.setattr(vc, "OUTPUT_DIR", tmp_path / "out")
+    n = 150
+    windows = _many_windows(n)
+    video = tmp_path / "in.mp4"
+    _make_video(video, n * 5.0 + 1)
+    voice = tmp_path / "v.mp3"
+    _tone(voice, 1.0)
+    segs = [Segment(i * 5.0 + 1, i * 5.0 + 4, "a", "x") for i in range(3)]
+    starts = [map_time(windows, s.start) for s in segs]
+    out = vc.VideoComposer().compose(video, segs, [voice] * 3, start_times=starts, retime=windows)
+    assert _probe(out) == pytest.approx(windows[-1].out_end, abs=0.5)
+
+
+def _loudness(path) -> float:
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-af", "ebur128", "-f", "null", "-"],
+        capture_output=True, text=True,
+    ).stderr
+    return float(out.rsplit("I:", 1)[1].split("LUFS")[0])
+
+
+def test_composer_normalises_quiet_voice_to_target_loudness(tmp_path, monkeypatch):
+    """Giọng Chatterbox ra ~-28 LUFS: video ghép xong phải về gần -14 LUFS."""
+    import core.video_composer as vc
+
+    monkeypatch.setattr(vc, "OUTPUT_DIR", tmp_path / "out")
+    video = tmp_path / "in.mp4"
+    _make_video(video, 12)
+    voice = tmp_path / "quiet.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=220:duration=10",
+                    "-af", "volume=-30dB", str(voice)], check=True)
+    out = vc.VideoComposer().compose(video, [Segment(1, 11, "a", "x")], [voice], original_volume=0.0)
+    assert _loudness(out) == pytest.approx(-14, abs=2)
+
+
 # ── Lưu lựa chọn từ form tới giai đoạn 2 ────────────────────────
 def test_upload_retime_checked_by_default_form(app, as_user, monkeypatch):
     response, config = _upload_and_capture_config(as_user, monkeypatch, retime_video="on")

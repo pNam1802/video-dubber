@@ -27,6 +27,9 @@ class AudioExtractor:
 
 		cmd = [
 			FFMPEG_BIN,
+			"-hide_banner",
+			"-v",
+			"error",
 			"-y",
 			"-i",
 			str(video_path),

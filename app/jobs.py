@@ -225,6 +225,7 @@ def run_job(flask_app: Flask, job_id: int, video_path: Path, config: DubbingConf
         job.segment_count = len(result.segments) if result.segments else None
         job.source_language = result.source_language_detected or None
         job.translator_actual = result.translator_used or None
+        job.translation_notes = result.translation_notes or None
         job.elapsed_sec = result.elapsed_seconds
         job.estimated_cost_usd = estimate_cost(result.elapsed_seconds)
         # Chi phi dich THAT (khac estimated_cost_usd o tren, von chi la GPU-
