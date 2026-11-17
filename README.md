@@ -1,30 +1,55 @@
-# Nora — Lồng tiếng video bằng AI (Anh → Việt)
+# Nora — Lồng tiếng video & đọc kịch bản bằng AI
 
-Tải lên một video tiếng Anh, nhận lại video **đã lồng tiếng Việt** kèm phụ đề — giọng đọc liền
-mạch kiểu video review trên TikTok, có thể chọn giọng miễn phí hoặc giọng AI có cảm xúc.
+Tải lên một video, nhận lại video **đã lồng tiếng** (Việt, Anh, Nhật, Trung, Hàn) kèm phụ đề —
+giọng đọc liền mạch kiểu video review trên TikTok, có thể chọn giọng miễn phí, giọng AI có cảm
+xúc hoặc clone giọng của chính bạn. Hoặc dán một kịch bản, nhận lại file đọc mp3 hay **video
+Manhwa recap** có tranh minh hoạ vẽ tự động.
 
 **Dùng thử:** https://pnam1802--video-dubber-web.modal.run
 
 ## Sản phẩm làm được gì
 
+### Lồng tiếng video
+
 - **Lồng tiếng tự động:** nhận dạng lời nói, dịch, tạo giọng đọc và ghép lại vào video gốc.
   Video 11 phút xử lý xong trong khoảng 4–5 phút với giọng miễn phí; giọng Gemini lâu hơn
   (khoảng 10 phút) do giới hạn 10 request/phút của Gemini TTS.
-- **Dịch tự nhiên cho mọi chủ đề** (phim, truyện, vlog, bài giảng...), giữ xưng hô và tên riêng
-  nhất quán cả video. Dịch được sang tiếng Việt, Nhật, Trung, Hàn.
-- **Duyệt transcript trước khi tạo giọng:** sửa câu nghe nhầm/dịch chưa ưng, hoặc bấm dịch lại
-  từng câu — giọng đọc và video được tạo đúng theo bản đã duyệt.
-- **Nhiều giọng đọc:**
-  - Mặc định (VieNeu-TTS, mã nguồn mở): giọng **Nora** và 6 giọng Việt có sẵn; hoặc
-    **clone giọng của bạn** từ 3–15 giây ghi âm.
-  - Miễn phí (edge-tts): HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam).
+- **Nhiều cặp ngôn ngữ:** video nói tiếng Anh, Việt, Nhật, Trung, Hàn (hoặc tự nhận biết); dịch
+  sang tiếng Việt, Anh, Nhật, Trung, Hàn — gồm cả chiều **Việt → Anh**.
+- **Dịch tự nhiên cho mọi chủ đề** (phim, truyện, vlog, bài giảng...): trước khi dịch, AI đọc
+  hiểu cả transcript (tóm tắt nội dung + bảng từ lóng/tên riêng) nên xưng hô và tên riêng nhất
+  quán cả video. Hai kiểu dịch: **Tự nhiên** hoặc **Bản địa hoá** (đổi câu đùa, tiếng lóng sang
+  meme quen thuộc của nước đích).
+- **Duyệt lời thoại trước khi tạo giọng:** sửa câu nghe nhầm/dịch chưa ưng, hoặc bấm dịch lại
+  từng câu (vẫn hiểu ngữ cảnh cả video) — giọng đọc và video được tạo đúng theo bản đã duyệt.
+- **Nhiều giọng đọc, nghe thử ngay trong form:**
+  - Tiếng Việt mặc định (VieNeu-TTS, mã nguồn mở): giọng **Nora** và 6 giọng Việt có sẵn.
+  - Tiếng Anh mặc định (Chatterbox-Turbo, mã nguồn mở): giọng **Narrator** kể chuyện và 1 giọng
+    nữ có sẵn.
+  - **Clone giọng của bạn** (VieNeu cho tiếng Việt, Chatterbox cho tiếng Anh) từ 3–15 giây ghi
+    âm — tải file lên hoặc **thu bằng mic** ngay trên trang.
+  - Miễn phí (edge-tts): HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam); đích tiếng
+    Anh dùng Aria/Guy.
   - Có cảm xúc (Gemini TTS): Leda (nữ), Charon (nam) — đọc hồi hộp, nhấn nhá theo nội dung.
-- **Đọc liền mạch:** đọc trọn câu, nghỉ ngắn và đều giữa các câu, không có khoảng lặng dài.
+- **Đọc liền mạch:** đọc trọn câu, nghỉ ngắn và đều giữa các câu, không có khoảng lặng dài; câu
+  cuối luôn được đọc hết (giữ khung hình cuối nếu cần).
 - **Tua nhanh hình ở khoảng lặng** (bật sẵn, tối đa 2×): giọng Việt thường ngắn hơn lời gốc, nên
   thay vì để khoảng nghỉ, hình được tua cho khớp giọng — giọng vẫn đọc ở tốc độ tự nhiên.
-- **Phụ đề** song ngữ, chỉ tiếng Việt, chỉ tiếng Anh hoặc không phụ đề; tải về dạng `.srt`.
-- **Tài khoản & tiện ích:** đăng nhập (kể cả Google), lịch sử job, email báo khi job cần duyệt /
-  xong / lỗi, hạn mức theo người dùng, trang thống kê cho quản trị viên.
+- **Âm lượng chuẩn mạng xã hội:** đầu ra chuẩn hoá về −14 LUFS như YouTube/TikTok.
+- **Phụ đề** song ngữ, chỉ ngôn ngữ đích, chỉ ngôn ngữ gốc hoặc không phụ đề; tải về dạng `.srt`.
+
+### Đọc kịch bản
+
+- Dán văn bản (tối đa 20.000 ký tự, tiếng Việt hoặc Anh), chọn giọng (kể cả giọng clone), nhận
+  file **mp3 đọc liền mạch + phụ đề SRT** — đọc nguyên văn, không dịch.
+- **Manhwa recap:** AI đọc cả kịch bản, dựng storyboard với nhân vật cố định, vẽ tranh màu nước
+  kiểu manhwa (Z-Image-Turbo) khoảng 6 giây một tranh, ghép thành video có zoom chậm trên nền mờ.
+  Chọn kiểu nhân vật **Cô gái hướng dương** (mặc định) hoặc **Mơ màng**, có ảnh mẫu để xem trước.
+
+### Tài khoản & tiện ích
+
+- Đăng nhập (kể cả Google), đổi mật khẩu, lịch sử có ảnh thu nhỏ, email báo khi job cần duyệt /
+  xong / lỗi, hạn mức theo người dùng, trang thống kê và quản lý người dùng cho quản trị viên.
 
 ## Demo
 
@@ -99,12 +124,20 @@ Chỉ tính tiền gọi API (dịch + giọng đọc), cho video 11 phút (~14.
 
 ## Cách dùng
 
+**Lồng tiếng video**
+
 1. Đăng nhập, chọn video (MP4, MOV, AVI, MKV, WEBM).
-2. Chọn ngôn ngữ đích và chất lượng (Nhanh / Cân bằng / Tốt nhất); trong "Tuỳ chỉnh nâng cao"
-   chọn giọng đọc, chất giọng, phụ đề, âm lượng tiếng gốc.
-3. Bấm **Bắt đầu lồng tiếng**. Khi dịch xong, job dừng ở bước **duyệt transcript** — sửa câu
+2. **Ngôn ngữ:** kiểm tra "Video đang nói" (mặc định tự nhận biết), bấm thẻ ngôn ngữ ở "Dịch sang".
+3. **Giọng đọc:** chọn một thẻ giọng (bấm ▶ để nghe thử). Chọn "Giọng của bạn" thì tải hoặc thu
+   giọng mẫu ngay tại đó.
+4. "Tuỳ chọn thêm" (không bắt buộc): phụ đề, âm thanh gốc (mặc định 0%), độ chính xác, kiểu dịch,
+   tua hình; Whisper, công cụ dịch và API key riêng nằm trong "Thiết lập kỹ thuật".
+5. Bấm **Bắt đầu lồng tiếng**. Khi dịch xong, job dừng ở bước **Duyệt lời thoại** — sửa câu
    nếu cần rồi bấm **Xác nhận, tạo giọng đọc**.
-4. Tải video và phụ đề ở trang job.
+6. Tải video và phụ đề ở trang kết quả; khung lời thoại bên cạnh tô câu đang đọc, bấm để tua.
+
+**Đọc kịch bản:** vào mục **Đọc kịch bản** trên sidebar, dán văn bản, chọn ngôn ngữ, giọng và
+kiểu nhân vật, bấm bắt đầu. Kết quả (video recap hoặc mp3 + SRT) nằm trong Lịch sử như job video.
 
 ---
 
@@ -114,14 +147,21 @@ Chỉ tính tiền gọi API (dịch + giọng đọc), cho video 11 phút (~14.
 
 1. Tách âm thanh bằng ffmpeg.
 2. Nhận dạng giọng nói bằng Whisper (faster-whisper, dự phòng openai-whisper), lấy mốc thời gian
-   từng từ và tách thành câu trọn vẹn.
-3. Dịch theo lô bằng DeepSeek (mặc định), lỗi thì lùi sang Gemini rồi OpenAI; mỗi lô kèm các câu
-   đã dịch ngay trước làm ngữ cảnh.
-4. Dừng chờ người dùng duyệt transcript.
-5. Tạo giọng đọc (VieNeu / edge-tts / Gemini TTS / gTTS) và xếp liền mạch lên dòng thời gian.
-6. Tua nhanh hình ở khoảng lặng (nếu bật), trộn giọng vào video bằng ffmpeg, xuất video + SRT.
+   từng từ và tách thành câu trọn vẹn. Video nói tiếng Việt luôn dùng `large-v3-turbo` (model nhỏ
+   nghe "bà chị" thành "3 chị" rồi dịch sai theo).
+3. **Đọc hiểu:** LLM đọc cả transcript, viết tóm tắt + bảng từ lóng/tên riêng, lưu vào job
+   (`translation_notes`) để cả lúc "dịch lại câu này" vẫn có ngữ cảnh. Prompt dịch cũng được báo
+   transcript là bản nhận dạng tự động, có thể nghe nhầm.
+4. Dịch theo lô bằng DeepSeek (mặc định), lỗi thì lùi sang Gemini rồi OpenAI; mỗi lô kèm các câu
+   đã dịch ngay trước làm ngữ cảnh. Kiểu dịch `natural` hoặc `localized` (bản địa hoá).
+5. Dừng chờ người dùng duyệt lời thoại.
+6. Tạo giọng đọc (VieNeu / Chatterbox / edge-tts / Gemini TTS / gTTS) và xếp liền mạch lên dòng
+   thời gian.
+7. Tua nhanh hình ở khoảng lặng (nếu bật), trộn giọng vào video bằng ffmpeg, chuẩn hoá −14 LUFS,
+   xuất video + SRT.
 
-Bước 1–3 chạy trên container GPU (T4), bước 5–6 chạy trên container CPU — xem "Triển khai Modal".
+Bước 1–4 chạy trên container GPU (T4), bước 6–7 chạy trên container CPU (VieNeu/Chatterbox gọi
+sang container GPU riêng) — xem "Triển khai Modal".
 
 ## Giọng đọc
 
@@ -144,51 +184,103 @@ Hai thứ quyết định bản lồng tiếng nghe có "TikTok" hay không: đ�
   (giải mã một lần, giữ fps gốc); âm thanh gốc cắt từng khúc + `atempo` (giữ cao độ) rồi nối lại;
   phụ đề SRT theo đúng lúc giọng đọc. Đoạn Chap 6 (2:30): còn 2:01, chỗ nghỉ ≥ 0,5 giây từ 21/26
   còn 0/26, ghép video lâu thêm chưa tới 1 giây. Video ra có `+faststart` (phát ngay khi đang tải).
+  Biểu thức `setpts` dựng thành cây `if()` lồng nhau — dạng tổng phẳng làm ffmpeg 5.1 trên Modal
+  báo "Cannot allocate memory" từ khoảng 100 khúc.
+- **Không cắt cụt câu cuối** ([`core/video_composer.py`](core/video_composer.py)): giọng đọc xong
+  muộn hơn cuối hình thì `tpad` giữ khung hình cuối, `apad` kéo dài tiếng, thêm 0,6 giây
+  (`END_HOLD_SEC`).
+- **Âm lượng −14 LUFS** (`OUTPUT_LOUDNORM`): video lồng tiếng và mp3 đọc kịch bản đều qua
+  `loudnorm`, rồi chốt `aformat` stereo vì ffmpeg 5.1 không tự chọn được channel layout.
 - **Chặn âm thanh hỏng**: file TTS ngắn bất thường so với số âm tiết bị tạo lại (edge-tts đôi khi
   trả file có dung lượng nhưng không có tiếng).
 
 | Công cụ | Giọng | Chi phí | Ghi chú |
 |---|---|---|---|
 | **VieNeu-TTS** (mặc định, [mã nguồn mở Apache 2.0](https://github.com/pnnbao97/VieNeu-TTS)) | **Nora** (nữ, mặc định), Ngọc Huyền, Quỳnh Anh, Mỹ Duyên, Kim Thanh (nữ), Thiện Minh, Đức Trí (nam), **Giọng của bạn** (clone) | Miễn phí (chỉ tốn GPU ≈ $0,01 / video) | Chạy trên GPU T4 riêng (`VoiceCloner`), đọc cả video trong một lượt: ≈ 25 giây cho 10 phút giọng đọc. Âm thanh có watermark AI |
-| edge-tts | HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam) | Miễn phí | Vivienne/Seraphina/Florian là giọng *Multilingual* đọc được tiếng Việt |
-| Gemini TTS (`gemini-3.8-flash-lite-tts`) | Leda (nữ), Charon (nam) | ≈ $0,09 / 10 phút giọng đọc (giá tới hết 2026) | Có cảm xúc theo chỉ dẫn `GEMINI_TTS_STYLE`; giới hạn 10 request/phút ở Tier 1 |
+| **Chatterbox-Turbo** (mặc định cho tiếng Anh, [mã nguồn mở MIT](https://github.com/resemble-ai/chatterbox)) | **Narrator** (kể chuyện, mặc định), giọng nữ có sẵn, **Giọng của bạn** (clone) | Miễn phí (chỉ tốn GPU) | Chỉ đọc tiếng Anh. Container GPU T4 riêng (`EnglishCloner`, torch 2.6 khác Whisper/VieNeu); mẫu ngắn hơn 5 giây được lặp cho đủ |
+| edge-tts | HoaiMy, NamMinh, Vivienne, Seraphina (nữ), Florian (nam); Aria, Guy khi đích tiếng Anh | Miễn phí | Vivienne/Seraphina/Florian là giọng *Multilingual* đọc được tiếng Việt |
+| Gemini TTS (`gemini-3.8-flash-lite-tts`) | Leda (nữ), Charon (nam) | ≈ $0,09 / 10 phút giọng đọc (giá tới hết 2026) | Có cảm xúc theo chỉ dẫn `GEMINI_TTS_STYLE` (có bản riêng cho từng ngôn ngữ); giới hạn 10 request/phút ở Tier 1 |
 | gTTS | — | Miễn phí | Dự phòng cuối cùng |
 
-Gemini hoặc VieNeu lỗi thì câu đó rơi về edge-tts HoaiMy, rồi gTTS.
+VieNeu chỉ đọc tiếng Việt, Chatterbox chỉ đọc tiếng Anh (`TTS_ENGINE_LANGUAGES`) — form và API
+chặn engine không hợp ngôn ngữ đích. Gemini, VieNeu hoặc Chatterbox lỗi thì câu đó rơi về
+edge-tts (giọng đúng ngôn ngữ đích), rồi gTTS.
 
-**Clone giọng:** vào **Cài đặt → Giọng của bạn**, tải lên 3–15 giây ghi âm (đọc rõ, không nhạc
-nền) và xác nhận đó là giọng của bạn hoặc đã được chủ giọng đồng ý. Sau đó chọn VieNeu → "Giọng
-của bạn" khi tạo bản lồng tiếng. Giọng mặc định **Nora** cũng là giọng clone, từ một đoạn giọng do
-chính VieNeu tạo ra ([`core/voices/nora.wav`](core/voices/nora.wav)), không phải giọng người thật.
+Mỗi giọng có sẵn có file nghe thử trong `static/voices/<engine>/`, tạo một lần bằng
+`python scripts/make_voice_previews.py` (chạy trên Modal, nhận tên engine để chỉ tạo lại giọng của engine đó).
+
+**Clone giọng:** vào **Cài đặt → Giọng của bạn** (hoặc chọn "Giọng của bạn" ngay trong form),
+tải lên hoặc thu bằng mic 3–15 giây ghi âm (đọc rõ, không nhạc nền) và xác nhận đó là giọng của
+bạn hoặc đã được chủ giọng đồng ý. Mỗi người có **một giọng mẫu cho mỗi ngôn ngữ** — clone giữ cả
+ngữ điệu của mẫu, nên mẫu tiếng Việt đọc bản tiếng Anh nghe lơ lớ: VieNeu clone từ mẫu tiếng Việt,
+Chatterbox từ mẫu tiếng Anh (`CLONE_SAMPLE_LANGUAGE`).
+
+Giọng mặc định **Nora** cũng là giọng clone, từ một đoạn giọng do chính VieNeu tạo ra
+([`core/voices/nora.wav`](core/voices/nora.wav)), không phải giọng người thật. Giọng **Narrator**
+tiếng Anh clone từ mẫu 13,7 giây ([`core/voices/narrator_en.wav`](core/voices/narrator_en.wav)),
+chủ dự án có quyền sử dụng.
+
+## Đọc kịch bản
+
+- [`core/script_reader.py`](core/script_reader.py): tách câu theo đoạn/dấu câu (câu dài hơn 250
+  ký tự được chia nhỏ), đọc rồi nối với khoảng nghỉ 0,35 giây (0,9 giây khi xuống đoạn), xuất mp3
+  −14 LUFS + SRT. Giới hạn 20.000 ký tự (`SCRIPT_MAX_CHARS`) để không chạm timeout 1800 giây của
+  `EnglishCloner`.
+- [`core/script_images.py`](core/script_images.py): Gemini đọc cả kịch bản, dựng storyboard với
+  ngoại hình nhân vật viết **một lần** rồi chèn nguyên văn vào mọi prompt để nhân vật đồng nhất;
+  ảnh chỉ đổi ở ranh giới câu. Gemini lỗi thì vẽ thẳng theo lời đọc.
+- [`core/recap.py`](core/recap.py) — chế độ **Manhwa recap** (mặc định trên form): tranh khổ dọc
+  768×960 giữa nền mờ, khoảng 6 giây một tranh (tối đa 150), zoom chậm, 25 fps. Sau khi vẽ có
+  bước hậu kỳ `grade()` — giảm sáng, tăng bão hoà, nhuộm bóng tím / vùng sáng hồng đào, làm nét,
+  bloom và hạt sáng — để khớp tông ảnh mẫu, không tốn thêm GPU.
+- [`core/image_client.py`](core/image_client.py) gọi `ImageGenerator` trên Modal (GPU L40S):
+  Z-Image-Turbo (Apache 2.0), khoảng 3,2 giây/ảnh.
+- Các chế độ ảnh cũ (`none`, `few`, `scenes`, `manga`) vẫn nhận qua API/CLI nếu gửi tường minh.
+  Vẽ ảnh hỏng thì job vẫn xong với mp3 và báo lý do.
 
 ## Công nghệ
 
 - Python 3.12, ffmpeg/ffprobe
 - faster-whisper (dự phòng openai-whisper) + torch
 - DeepSeek / OpenAI (openai SDK), Gemini (google-genai)
-- edge-tts, Gemini TTS, gTTS, pydub
+- VieNeu-TTS, Chatterbox-Turbo, edge-tts, Gemini TTS, gTTS, pydub
+- Z-Image-Turbo (vẽ tranh), Pillow (dựng khung recap/manga)
 - Flask, SQLAlchemy, Alembic; Postgres (Neon) khi chạy trên Modal
-- Modal (GPU T4 + CPU), Tailwind CSS
+- Modal (GPU T4 + L40S + CPU), Tailwind CSS
 
 ## Cấu trúc thư mục
 
 	app/                Flask application package
 	  __init__.py       create_app() factory
 	  models.py         User, Job, TranscriptSegment
-	  auth.py           đăng nhập / đăng ký / đăng xuất
+	  auth.py, oauth.py đăng nhập / đăng ký / Google / đổi mật khẩu
 	  main.py           trang chính, phục vụ file, /healthz
-	  api.py            upload, tiến trình, duyệt transcript
+	  api.py            upload, đọc kịch bản, tiến trình, duyệt lời thoại, giọng mẫu
 	  jobs.py           điều phối job (thread local / Modal), ghi tiến trình vào DB
+	  voices.py         lưu / kiểm tra giọng mẫu clone của người dùng
+	  admin.py          thống kê, quản lý người dùng, trạng thái hệ thống
+	  quota.py          hạn mức theo người dùng
+	  mailer.py         email báo trạng thái job
 	  cli.py            flask create-admin, flask set-role
 	  errors.py         chuẩn hoá lỗi JSON/HTML
-	core/               pipeline lồng tiếng (không phụ thuộc Flask)
+	core/               pipeline (không phụ thuộc Flask)
+	  pipeline.py       điều phối hai giai đoạn lồng tiếng + đọc kịch bản
 	  transcriber.py    Whisper + tách câu theo mốc thời gian từng từ
-	  translator/       DeepSeek, Gemini, OpenAI (dùng chung llm_common.py)
-	  tts_engine.py     VieNeu, edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
-	  vieneu_client.py  gọi VieNeu-TTS (container GPU VoiceCloner trên Modal)
-	  video_retime.py   tua nhanh hình ở khoảng lặng cho khớp giọng đọc
+	  translator/       DeepSeek, Gemini, OpenAI (dùng chung llm_common.py: đọc hiểu, kiểu dịch)
+	  tts_engine.py     VieNeu, Chatterbox, edge-tts, Gemini TTS, gTTS + đổi tốc độ đọc
+	  vieneu_client.py  gọi VieNeu-TTS (container GPU VoiceCloner)
+	  chatterbox_client.py gọi Chatterbox-Turbo (container GPU EnglishCloner)
 	  voice_timeline.py xếp giọng đọc liền mạch lên dòng thời gian
-	  video_composer.py trộn giọng vào video bằng ffmpeg
+	  video_retime.py   tua nhanh hình ở khoảng lặng cho khớp giọng đọc
+	  video_composer.py trộn giọng vào video bằng ffmpeg, chuẩn hoá âm lượng
+	  script_reader.py  đọc kịch bản thành mp3 + SRT
+	  script_images.py  storyboard + ảnh minh hoạ cho kịch bản
+	  recap.py, manga.py dựng video Manhwa recap / trang manga
+	  image_client.py   gọi Z-Image-Turbo (container GPU ImageGenerator)
+	  voices/           file mẫu của giọng Nora và Narrator
+	scripts/            make_voice_previews.py — tạo file nghe thử giọng
+	static/voices/      file nghe thử từng giọng
+	assets/             nguồn Tailwind, file Blender của hình hero trang giới thiệu
 	demo/               video demo (xem mục Demo)
 	migrations/         Alembic
 	modal_app.py        khai báo triển khai Modal
@@ -262,6 +354,17 @@ bằng `@modal.wsgi_app()`; giai đoạn 1 (nhận dạng + dịch) chạy trên
 video) chạy trên `Composer` — container **CPU** (`cpu=1.0`, `region="us"`), vì bước này không
 dùng GPU (chờ mạng + ffmpeg). Tách ra giảm chi phí máy chủ mỗi video 11 phút từ ≈ $0,051 xuống
 ≈ $0,015. Tất cả dùng chung một Volume cho file và chung Postgres cho tiến trình.
+
+Các model nặng còn lại mỗi thứ một container GPU riêng (môi trường Python khác nhau, chỉ bật khi
+cần, `max_containers=1`, tắt sau 60 giây rảnh):
+
+| Container | GPU | Việc |
+|---|---|---|
+| `Dubber` | T4 | Whisper + dịch (giai đoạn 1) |
+| `Composer` | CPU | giọng đọc, ghép video, đọc kịch bản (giai đoạn 2) |
+| `VoiceCloner` | T4 | VieNeu-TTS (tiếng Việt, clone giọng) |
+| `EnglishCloner` | T4 | Chatterbox-Turbo (tiếng Anh, clone giọng) |
+| `ImageGenerator` | L40S | Z-Image-Turbo vẽ tranh cho Đọc kịch bản |
 
 Ba ràng buộc của Modal quyết định toàn bộ thiết kế:
 
@@ -421,7 +524,7 @@ Hạn mức mặc định (chỉnh bằng biến môi trường):
 
 ### Phase 7 — Test & CI ✅ (đã xong)
 
-- [x] **279 test pytest** trong `tests/`
+- [x] **399 test pytest** trong `tests/`
 - [x] API test với Flask test client, mỗi test một DB SQLite sạch
 - [x] Unit test phần lõi không cần Flask: fallback dịch, timeout lệnh ngoài, retry API
 - [x] GitHub Actions: chạy migration trên DB trống rồi chạy test, mỗi lần push
