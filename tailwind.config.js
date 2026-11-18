@@ -21,6 +21,8 @@ module.exports = {
 
   theme: {
     extend: {
+      // Nhóm primary đọc từ biến CSS để người dùng đổi được màu nhấn — bảng
+      // màu và các lựa chọn nằm ở templates/_accent.html.
       colors: {
         "background": "#0b0b0b",
         "surface": "#0b0b0b",
@@ -35,12 +37,12 @@ module.exports = {
         "on-surface": "#ececec",
         "on-surface-variant": "#a3a3a3",
         "on-background": "#ececec",
-        "primary": "#bdfd5d",
-        "primary-container": "#a2e043",
-        "primary-fixed": "#b6f657",
-        "primary-fixed-dim": "#9bd93c",
-        "on-primary": "#213600",
-        "on-primary-container": "#3e6100",
+        "primary": "rgb(var(--c-primary) / <alpha-value>)",
+        "primary-container": "rgb(var(--c-primary-container) / <alpha-value>)",
+        "primary-fixed": "rgb(var(--c-primary-fixed) / <alpha-value>)",
+        "primary-fixed-dim": "rgb(var(--c-primary-fixed-dim) / <alpha-value>)",
+        "on-primary": "rgb(var(--c-on-primary) / <alpha-value>)",
+        "on-primary-container": "rgb(var(--c-on-primary-container) / <alpha-value>)",
         "secondary": "#d1d1d1",
         "tertiary": "#ffe4dd",
         "info": "#8ab4f8",
