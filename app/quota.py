@@ -133,11 +133,15 @@ def check_quota(user: User, incoming_bytes: int = 0) -> tuple[bool, str]:
         )
 
     if incoming_bytes and usage.storage_bytes + incoming_bytes > usage.storage_limit_bytes:
-        used_mb = usage.storage_bytes / 1024 / 1024
-        limit_mb = usage.storage_limit_bytes / 1024 / 1024
+        # Nói rõ cả kích thước file mới: chỉ ghi "1880/2048 MB" thì người dùng
+        # tưởng còn chỗ mà vẫn bị chặn, không hiểu phải xoá bao nhiêu.
+        mb = 1024 * 1024
+        free_mb = max(usage.storage_limit_bytes - usage.storage_bytes, 0) / mb
+        limit_mb = usage.storage_limit_bytes / mb
         return False, (
-            f"Vượt dung lượng lưu trữ ({used_mb:.0f}/{limit_mb:.0f} MB). "
-            "Hãy xoá bớt video cũ rồi thử lại."
+            f"Video này cần {incoming_bytes / mb:.0f} MB nhưng bạn chỉ còn trống "
+            f"{free_mb:.0f}/{limit_mb:.0f} MB. Hãy xoá bớt video cũ, hoặc duyệt "
+            "hay huỷ các video đang chờ duyệt, rồi thử lại."
         )
 
     return True, ""

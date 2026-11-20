@@ -80,6 +80,17 @@ def test_storage_limit_counts_incoming_file(app, user, small_quota):
         assert check_quota(person, incoming_bytes=10 * 1024)[0] is True
 
 
+def test_storage_message_names_incoming_size_and_free_space(app, user, small_quota):
+    # Trần 1 MB, đã dùng 0,5 MB, file mới 3 MB: thông báo phải nói rõ cả hai số.
+    with app.app_context():
+        person = db.session.get(User, user)
+        make_job(user, file_size=512 * 1024)
+        allowed, reason = check_quota(person, incoming_bytes=3 * 1024 * 1024)
+        assert allowed is False
+        assert "cần 3 MB" in reason
+        assert "còn trống 0/1 MB" in reason or "còn trống 1/1 MB" in reason
+
+
 def test_admin_is_exempt_from_quota(app, admin, small_quota):
     with app.app_context():
         boss = db.session.get(User, admin)
