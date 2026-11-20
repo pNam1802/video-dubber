@@ -770,14 +770,14 @@
       syncEngines();
       syncSubmit();
     }
-    // Hết hạn mức (429) thì bấm "Thử lại" cũng bị chặn y như cũ — đưa người
-    // dùng sang trang lịch sử để xoá bớt video thay vì để họ bấm vô ích.
-    function showSubmitError(message, status) {
-      const overQuota = status === 429;
+    // Hết hạn mức (429) thì bấm "Thử lại" cũng bị chặn y như cũ. Chỉ khi hết
+    // DUNG LƯỢNG mới gợi ý sang trang lịch sử xoá bớt video — hết lượt/giây GPU
+    // theo ngày thì xoá video không giúp gì, chỉ còn cách chờ.
+    function showSubmitError(message, quotaKind) {
       uploadStatus.classList.add("hidden");
       document.getElementById("errorMessage").textContent = message;
-      document.getElementById("retryBtn").classList.toggle("hidden", overQuota);
-      document.getElementById("manageVideosLink").classList.toggle("hidden", !overQuota);
+      document.getElementById("retryBtn").classList.toggle("hidden", Boolean(quotaKind));
+      document.getElementById("manageVideosLink").classList.toggle("hidden", quotaKind !== "storage");
       errorCard.classList.remove("hidden");
       submitBtn.disabled = false;
       document.getElementById("submitLabel").textContent = mode === "script" ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
@@ -796,7 +796,7 @@
           window.location = "/job/" + body.job_id;
           return;
         }
-        showSubmitError(body.error || "Không gửi được kịch bản.", res.status);
+        showSubmitError(body.error || "Không gửi được kịch bản.", body.quota);
       } catch (err) {
         showSubmitError("Mất kết nối khi gửi kịch bản.");
       }
@@ -832,7 +832,7 @@
           // Sang trang riêng của job: có link chia sẻ được, tải lại trang không mất tiến trình.
           window.location = "/job/" + data.job_id;
         } else {
-          showSubmitError(data.error || "Không tải lên được video.", xhr.status);
+          showSubmitError(data.error || "Không tải lên được video.", data.quota);
         }
       };
       xhr.onerror = function () {

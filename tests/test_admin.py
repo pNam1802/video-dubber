@@ -58,7 +58,7 @@ def test_daily_job_limit(app, user, small_quota):
         person = db.session.get(User, user)
         for _ in range(3):
             make_job(user, elapsed_sec=10)
-        allowed, reason = check_quota(person)
+        allowed, reason, _ = check_quota(person)
     assert allowed is False
     assert "lượt xử lý" in reason
 
@@ -67,7 +67,7 @@ def test_gpu_seconds_limit(app, user, small_quota):
     with app.app_context():
         person = db.session.get(User, user)
         make_job(user, elapsed_sec=200)
-        allowed, reason = check_quota(person)
+        allowed, reason, _ = check_quota(person)
     assert allowed is False
     assert "giây GPU" in reason
 
@@ -85,7 +85,7 @@ def test_storage_message_names_incoming_size_and_free_space(app, user, small_quo
     with app.app_context():
         person = db.session.get(User, user)
         make_job(user, file_size=512 * 1024)
-        allowed, reason = check_quota(person, incoming_bytes=3 * 1024 * 1024)
+        allowed, reason, _ = check_quota(person, incoming_bytes=3 * 1024 * 1024)
         assert allowed is False
         assert "cần 3 MB" in reason
         assert "còn trống 0/1 MB" in reason or "còn trống 1/1 MB" in reason
@@ -308,3 +308,12 @@ def test_donut_uses_distinct_hues_not_one_ramp(as_admin):
     html = as_admin.get("/quan-tri/thong-ke").get_data(as_text=True)
     assert '["#6fa30f", "#3987e5", "#d55181"]' in html
     assert '"#bdfd5d", "#9bd93c"' not in html
+
+
+def test_quota_kind_tells_ui_which_limit_was_hit(app, user, small_quota):
+    # Giao diện chỉ gợi ý "xoá bớt video" khi kind == "storage".
+    with app.app_context():
+        person = db.session.get(User, user)
+        assert check_quota(person, incoming_bytes=3 * 1024 * 1024).kind == "storage"
+        make_job(user, elapsed_sec=200)
+        assert check_quota(person).kind == "gpu"
