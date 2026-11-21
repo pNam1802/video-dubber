@@ -50,7 +50,11 @@ class JobKind:
 
 class Role:
     USER = "user"
+    # VIP: dùng không giới hạn tài nguyên (lượt, GPU, dung lượng) nhưng KHÔNG có
+    # quyền quản trị. Chỉ cấp cho vài người tin cậy — không có trần chi phí.
+    VIP = "vip"
     ADMIN = "admin"
+    ALL = (USER, VIP, ADMIN)
 
 
 class User(UserMixin, db.Model):
@@ -93,6 +97,15 @@ class User(UserMixin, db.Model):
     @property
     def is_admin(self) -> bool:
         return self.role == Role.ADMIN
+
+    @property
+    def is_unlimited(self) -> bool:
+        """Không bị hạn mức tài nguyên: admin và VIP."""
+        return self.role in (Role.ADMIN, Role.VIP)
+
+    @property
+    def role_label(self) -> str:
+        return {Role.ADMIN: "Quản trị viên", Role.VIP: "Thành viên VIP"}.get(self.role, "Thành viên")
 
     @property
     def voice_sample_path(self) -> Path:

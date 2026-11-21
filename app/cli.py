@@ -44,7 +44,7 @@ def create_admin(username: str, password: str) -> None:
 
 @click.command("set-role")
 @click.argument("username")
-@click.argument("role", type=click.Choice([Role.USER, Role.ADMIN]))
+@click.argument("role", type=click.Choice(list(Role.ALL)))
 @with_appcontext
 def set_role(username: str, role: str) -> None:
     """Đổi quyền của một tài khoản."""

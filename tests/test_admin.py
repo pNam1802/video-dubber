@@ -10,7 +10,7 @@ from app.admin import humanise_error
 from app.extensions import db
 from app.models import JobStatus, Role, User
 from app.quota import check_quota, estimate_cost
-from tests.conftest import PASSWORD, make_job, make_user
+from tests.conftest import PASSWORD, login, make_job, make_user
 
 
 # ── Phân quyền ───────────────────────────────────────────────
@@ -327,3 +327,34 @@ def test_quota_kind_tells_ui_which_limit_was_hit(app, user, small_quota):
         assert check_quota(person, incoming_bytes=3 * 1024 * 1024).kind == "storage"
         make_job(user, elapsed_sec=200)
         assert check_quota(person).kind == "gpu"
+
+
+@pytest.fixture()
+def as_vip(app):
+    with app.app_context():
+        make_user("vera", role=Role.VIP)
+    return login(app, "vera")
+
+
+def test_vip_is_exempt_from_quota(app, small_quota):
+    with app.app_context():
+        vip = make_user("victor", role=Role.VIP)
+        for _ in range(10):
+            make_job(vip.id, elapsed_sec=500, file_size=900 * 1024)
+        assert check_quota(vip, incoming_bytes=10 * 1024 * 1024).allowed is True
+
+
+@pytest.mark.parametrize("path", ["/api/admin/users", "/api/admin/stats", "/api/admin/config"])
+def test_vip_has_no_admin_api(as_vip, path):
+    assert as_vip.get(path).status_code == 403
+
+
+@pytest.mark.parametrize("path", ADMIN_PAGES)
+def test_vip_has_no_admin_pages(as_vip, path):
+    assert as_vip.get(path).status_code == 403
+
+
+def test_admin_can_make_user_vip(app, as_admin, user):
+    assert as_admin.patch(f"/api/admin/users/{user}", json={"role": "vip"}).status_code == 200
+    with app.app_context():
+        assert db.session.get(User, user).role == Role.VIP

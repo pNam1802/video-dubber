@@ -128,8 +128,8 @@ class QuotaCheck(NamedTuple):
 
 
 def check_quota(user: User, incoming_bytes: int = 0) -> QuotaCheck:
-    """Trả về (cho_phép, lý_do, loại_hạn_mức). Admin không bị giới hạn."""
-    if user.is_admin:
+    """Trả về (cho_phép, lý_do, loại_hạn_mức). Admin và VIP không bị giới hạn."""
+    if user.is_unlimited:
         return QuotaCheck(True)
 
     usage = get_usage(user)
