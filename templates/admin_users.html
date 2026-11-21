@@ -123,6 +123,7 @@
             '<select data-role="' + u.id + '" ' + (self ? "disabled title=\'Không thể tự đổi quyền của chính mình\'" : "") +
             ' class="bg-background border border-outline-variant text-on-surface font-body-md text-body-md px-2 py-1 rounded-lg disabled:opacity-40">' +
             '<option value="user"' + (u.role === "user" ? " selected" : "") + ">Người dùng</option>" +
+            '<option value="vip"' + (u.role === "vip" ? " selected" : "") + ">VIP — không giới hạn</option>" +
             '<option value="admin"' + (u.role === "admin" ? " selected" : "") + ">Quản trị</option>" +
             "</select></td>" +
 
