@@ -74,6 +74,8 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     # None = dung han muc mac dinh trong settings; admin co the dat rieng.
     quota_jobs_per_day = db.Column(db.Integer, nullable=True)
+    # None = dùng QUOTA_GPU_SECONDS_PER_DAY chung.
+    quota_gpu_seconds_per_day = db.Column(db.Integer, nullable=True)
     # Luc nguoi dung tai giong mau len VA xac nhan do la giong cua ho (hoac
     # da duoc chu giong dong y). None = chua co giong clone. File nam o
     # voice_sample_path.

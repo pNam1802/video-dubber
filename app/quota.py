@@ -8,6 +8,7 @@ trần trước khi đưa link ra ngoài.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import NamedTuple
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
@@ -70,7 +71,12 @@ def estimate_image_cost(gpu_seconds: float | None) -> float:
 
 def _limits(user: User) -> tuple[int, float, int]:
     jobs = user.quota_jobs_per_day if user.quota_jobs_per_day is not None else QUOTA_JOBS_PER_DAY
-    return jobs, QUOTA_GPU_SECONDS_PER_DAY, QUOTA_STORAGE_MB * 1024 * 1024
+    gpu = (
+        user.quota_gpu_seconds_per_day
+        if user.quota_gpu_seconds_per_day is not None
+        else QUOTA_GPU_SECONDS_PER_DAY
+    )
+    return jobs, gpu, QUOTA_STORAGE_MB * 1024 * 1024
 
 
 def get_usage(user: User) -> Usage:
@@ -113,31 +119,43 @@ def get_usage(user: User) -> Usage:
     )
 
 
-def check_quota(user: User, incoming_bytes: int = 0) -> tuple[bool, str]:
-    """Trả về (cho_phép, lý_do). Admin không bị giới hạn."""
+class QuotaCheck(NamedTuple):
+    allowed: bool
+    reason: str = ""
+    # "jobs" | "gpu" | "storage": giao diện chỉ gợi ý xoá video khi hết dung
+    # lượng — xoá job không giúp gì với hạn mức lượt/GPU theo ngày.
+    kind: str = ""
+
+
+def check_quota(user: User, incoming_bytes: int = 0) -> QuotaCheck:
+    """Trả về (cho_phép, lý_do, loại_hạn_mức). Admin không bị giới hạn."""
     if user.is_admin:
-        return True, ""
+        return QuotaCheck(True)
 
     usage = get_usage(user)
 
     if usage.jobs_today >= usage.jobs_limit:
-        return False, (
+        return QuotaCheck(False, (
             f"Bạn đã dùng hết {usage.jobs_limit} lượt xử lý trong 24 giờ. "
             "Vui lòng thử lại sau."
-        )
+        ), "jobs")
 
     if usage.gpu_seconds_today >= usage.gpu_seconds_limit:
-        return False, (
+        return QuotaCheck(False, (
             f"Bạn đã dùng hết {usage.gpu_seconds_limit:.0f} giây GPU trong 24 giờ. "
             "Vui lòng thử lại sau."
-        )
+        ), "gpu")
 
     if incoming_bytes and usage.storage_bytes + incoming_bytes > usage.storage_limit_bytes:
-        used_mb = usage.storage_bytes / 1024 / 1024
-        limit_mb = usage.storage_limit_bytes / 1024 / 1024
-        return False, (
-            f"Vượt dung lượng lưu trữ ({used_mb:.0f}/{limit_mb:.0f} MB). "
-            "Hãy xoá bớt video cũ rồi thử lại."
-        )
+        # Nói rõ cả kích thước file mới: chỉ ghi "1880/2048 MB" thì người dùng
+        # tưởng còn chỗ mà vẫn bị chặn, không hiểu phải xoá bao nhiêu.
+        mb = 1024 * 1024
+        free_mb = max(usage.storage_limit_bytes - usage.storage_bytes, 0) / mb
+        limit_mb = usage.storage_limit_bytes / mb
+        return QuotaCheck(False, (
+            f"Video này cần {incoming_bytes / mb:.0f} MB nhưng bạn chỉ còn trống "
+            f"{free_mb:.0f}/{limit_mb:.0f} MB. Hãy xoá bớt video cũ, hoặc duyệt "
+            "hay huỷ các video đang chờ duyệt, rồi thử lại."
+        ), "storage")
 
-    return True, ""
+    return QuotaCheck(True)
