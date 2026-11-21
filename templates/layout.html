@@ -92,11 +92,11 @@
         <span class="material-symbols-outlined">menu</span>
       </button>
       <span class="lg:pl-3"><a href="{{ url_for('main.index') }}" class="flex items-center gap-2.5 font-body-lg text-body-lg font-semibold tracking-tight text-on-surface">
-        <span class="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
+        <span class="w-7 h-7 rounded-lg bg-primary text-on-primary flex items-center justify-center flex-shrink-0" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
-            <rect x="4" y="8" width="4" height="8" rx="2" fill="#213600"></rect>
-            <rect x="10" y="4" width="4" height="16" rx="2" fill="#213600"></rect>
-            <rect x="16" y="6" width="4" height="12" rx="2" fill="#213600"></rect>
+            <rect x="4" y="8" width="4" height="8" rx="2" fill="currentColor"></rect>
+            <rect x="10" y="4" width="4" height="16" rx="2" fill="currentColor"></rect>
+            <rect x="16" y="6" width="4" height="12" rx="2" fill="currentColor"></rect>
           </svg>
         </span>Nora
       </a></span>
@@ -129,6 +129,11 @@
             <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant truncate">
               {{ current_user.email or current_user.role_label }}
             </p>
+          </div>
+          {# Đổi màu nhấn ngay tại đây; trang Cài đặt có cùng bộ chọn. #}
+          <div class="px-3 pt-1.5 pb-2.5 border-b border-outline-variant/60 mb-1">
+            <p class="font-label-sm text-label-sm tracking-normal text-on-surface-variant mb-2">Màu nhấn</p>
+            {% from "_accent.html" import accent_picker %}{{ accent_picker('w-6 h-6') }}
           </div>
           <a href="{{ url_for('main.account_settings') }}"
             class="flex items-center gap-3 px-3 py-2 rounded-xl font-body-md text-body-md text-on-surface hover:bg-surface-container-high">

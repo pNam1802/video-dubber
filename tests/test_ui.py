@@ -165,3 +165,25 @@ def test_recent_outputs_show_thumbnail_cards(app, as_user, user):
     assert "y_script.mp3#t=1" not in html
     assert "graphic_eq" in html
     assert "Xem tất cả" in html
+
+
+# ── Màu nhấn người dùng chọn ─────────────────────────────────
+def test_accent_palette_renders_valid_css(client):
+    """Selector phải ra dấu " thật: nếu autoescape biến thành &#34; thì trình
+    duyệt bỏ cả khối và mọi lựa chọn trông như xanh lá mặc định."""
+    html = client.get("/login").get_data(as_text=True)
+    assert "--c-primary: 189 253 93;" in html
+    assert ':root[data-accent="violet"]' in html
+    assert "&#34;" not in html.split("</style>")[0]
+
+
+def test_landing_uses_accent_variables(client):
+    html = client.get("/gioi-thieu").get_data(as_text=True)
+    assert "--accent: rgb(var(--c-primary));" in html
+    assert "#bdfd5d" not in html.split("<body")[0].lower()
+
+
+def test_built_css_reads_primary_from_variable():
+    from pathlib import Path
+    css = (Path(__file__).resolve().parent.parent / "static/css/app.css").read_text(encoding="utf-8")
+    assert "rgb(var(--c-primary)" in css

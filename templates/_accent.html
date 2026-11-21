@@ -1,0 +1,90 @@
+{# Màu nhấn (nút chính, chữ nổi, viền chọn) mà người dùng tự chọn.
+
+   Nền vẫn tối ở mọi lựa chọn, chỉ nhóm màu "primary" đổi. Mỗi màu là kênh
+   R G B cách nhau bằng dấu cách để Tailwind ghép được độ mờ:
+   tailwind.config.js khai báo primary = rgb(var(--c-primary) / <alpha-value>),
+   nên bg-primary/10 vẫn chạy.
+
+   Một nguồn duy nhất cho cả công cụ (qua _head.html) lẫn trang giới thiệu
+   (landing.html không dùng app.css). Thêm màu mới: thêm một dòng vào ACCENTS,
+   không phải sửa chỗ nào khác.
+
+   Lựa chọn lưu trong localStorage (theo trình duyệt, không theo tài khoản),
+   khóa "nora-accent". #}
+
+{# id, tên hiện ra, primary, primary-container, primary-fixed, primary-fixed-dim,
+   on-primary (chữ trên nền màu nhấn), on-primary-container #}
+{% set ACCENTS = [
+  ('lime',   'Xanh lá',  '189 253 93',  '162 224 67',  '182 246 87',  '155 217 60',  '33 54 0',    '62 97 0'),
+  ('sky',    'Xanh trời','124 196 255', '90 169 236',  '116 189 250', '79 155 224',  '0 50 90',    '0 74 128'),
+  ('violet', 'Tím',      '196 167 255', '169 135 245', '187 157 253', '154 120 234', '46 15 107',  '74 42 143'),
+  ('amber',  'Cam',      '255 179 92',  '240 151 58',  '252 171 80',  '224 138 44',  '74 37 0',    '107 58 0'),
+  ('pink',   'Hồng',     '255 143 200', '240 106 174', '252 132 193', '224 90 158',  '90 0 51',    '128 16 79'),
+] %}
+
+{# Đặt trong <head>, TRƯỚC khi trang vẽ: script gắn data-accent lên <html>
+   ngay lập tức nên không có khoảnh khắc nháy màu xanh lá mặc định. #}
+{% macro accent_head() %}
+  <style>
+    {% for id, _, p, pc, pf, pfd, op, opc in ACCENTS %}
+    {# Viết selector thẳng, không ghép chuỗi trong {{ }}: autoescape sẽ biến
+       dấu " thành &#34; và trình duyệt bỏ qua cả khối. #}
+    :root{% if not loop.first %}[data-accent="{{ id }}"]{% endif %} {
+      --c-primary: {{ p }};
+      --c-primary-container: {{ pc }};
+      --c-primary-fixed: {{ pf }};
+      --c-primary-fixed-dim: {{ pfd }};
+      --c-on-primary: {{ op }};
+      --c-on-primary-container: {{ opc }};
+    }
+    {% endfor %}
+  </style>
+  <script>
+    (function () {
+      var KNOWN = {{ ACCENTS | map(attribute=0) | list | tojson }};
+      var root = document.documentElement;
+
+      function apply(id) {
+        if (KNOWN.indexOf(id) < 1) {  // không rõ hoặc là màu mặc định
+          root.removeAttribute("data-accent");
+          id = KNOWN[0];
+        } else {
+          root.setAttribute("data-accent", id);
+        }
+        var buttons = document.querySelectorAll("[data-accent-choice]");
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].setAttribute("aria-pressed", String(buttons[i].dataset.accentChoice === id));
+        }
+        return id;
+      }
+
+      // localStorage có thể ném lỗi (chế độ riêng tư, chặn cookie): khi đó
+      // vẫn đổi được màu cho trang hiện tại, chỉ là không nhớ.
+      var saved = null;
+      try { saved = localStorage.getItem("nora-accent"); } catch (e) {}
+      apply(saved);
+
+      document.addEventListener("DOMContentLoaded", function () { apply(saved); });
+      document.addEventListener("click", function (event) {
+        var button = event.target.closest && event.target.closest("[data-accent-choice]");
+        if (!button) return;
+        saved = apply(button.dataset.accentChoice);
+        try { localStorage.setItem("nora-accent", saved); } catch (e) {}
+      });
+    })();
+  </script>
+{% endmacro %}
+
+{# Hàng ô màu để chọn. Ô nào cũng tô bằng màu CỦA NÓ (không theo màu đang
+   chọn), aria-pressed đánh dấu ô hiện tại để vẽ vòng quanh. #}
+{% macro accent_picker(size='w-7 h-7') %}
+  <div class="flex items-center gap-2.5" role="group" aria-label="Màu nhấn">
+    {% for id, name, p, _pc, _pf, _pfd, _op, _opc in ACCENTS %}
+    <button type="button" data-accent-choice="{{ id }}" aria-pressed="false" title="{{ name }}"
+      aria-label="Màu nhấn {{ name }}"
+      class="{{ size }} rounded-full flex-shrink-0 transition-transform hover:scale-110
+        ring-offset-2 ring-offset-surface-container aria-pressed:ring-2 aria-pressed:ring-on-surface"
+      style="background: rgb({{ p }})"></button>
+    {% endfor %}
+  </div>
+{% endmacro %}

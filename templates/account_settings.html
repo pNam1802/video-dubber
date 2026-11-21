@@ -57,6 +57,27 @@
   </form>
 </section>
 
+<section id="giao-dien" class="card flex flex-col gap-md">
+  <div>
+    <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary">palette</span>Giao diện
+    </h3>
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+      Chọn màu nhấn cho logo, biểu tượng, chữ nổi bật và thanh tiến trình. Nền vẫn
+      tối. Lựa chọn được nhớ trên trình duyệt này.
+    </p>
+  </div>
+  {% from "_accent.html" import accent_picker %}{{ accent_picker('w-9 h-9') }}
+  <div class="flex flex-wrap items-center gap-md">
+    <span class="px-3 py-1 rounded-full bg-primary text-on-primary font-label-sm text-label-sm font-semibold" aria-hidden="true">Mới</span>
+    <span class="px-3 py-1 rounded-full bg-primary/10 border border-primary/50 text-primary font-label-sm text-label-sm" aria-hidden="true">Đang chọn</span>
+    <span class="font-body-md text-body-md text-primary">Chữ nổi bật</span>
+    <span class="h-1.5 w-32 rounded-full bg-surface-container-high overflow-hidden" aria-hidden="true">
+      <span class="block h-full w-2/3 bg-primary"></span>
+    </span>
+  </div>
+</section>
+
 <section id="mat-khau" class="card flex flex-col gap-md">
   <div>
     <h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
