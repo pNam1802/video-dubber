@@ -109,6 +109,16 @@ def test_per_user_override_wins(app, user, small_quota):
         assert check_quota(person)[0] is True
 
 
+def test_per_user_gpu_override_wins(app, user, small_quota):
+    with app.app_context():
+        person = db.session.get(User, user)
+        make_job(user, elapsed_sec=150)
+        assert check_quota(person).kind == "gpu"
+        person.quota_gpu_seconds_per_day = 1000
+        db.session.commit()
+        assert check_quota(person).allowed is True
+
+
 def test_upload_over_quota_returns_429(app, as_user, user, small_quota):
     """Chặn TRƯỚC khi ghi file, để người vượt hạn mức không kịp làm đầy đĩa."""
     with app.app_context():

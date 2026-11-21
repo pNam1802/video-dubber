@@ -71,7 +71,12 @@ def estimate_image_cost(gpu_seconds: float | None) -> float:
 
 def _limits(user: User) -> tuple[int, float, int]:
     jobs = user.quota_jobs_per_day if user.quota_jobs_per_day is not None else QUOTA_JOBS_PER_DAY
-    return jobs, QUOTA_GPU_SECONDS_PER_DAY, QUOTA_STORAGE_MB * 1024 * 1024
+    gpu = (
+        user.quota_gpu_seconds_per_day
+        if user.quota_gpu_seconds_per_day is not None
+        else QUOTA_GPU_SECONDS_PER_DAY
+    )
+    return jobs, gpu, QUOTA_STORAGE_MB * 1024 * 1024
 
 
 def get_usage(user: User) -> Usage:
