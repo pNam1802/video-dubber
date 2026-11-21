@@ -435,6 +435,7 @@
     </h3>
     <p id="errorMessage" class="font-body-md text-body-md text-on-error-container"></p>
     <button type="button" id="retryBtn" class="self-start btn-danger">Thử lại</button>
+    <a id="manageVideosLink" href="/lich-su" class="hidden self-start btn-danger">Xoá bớt video cũ</a>
   </section>
 
   {# ── Thanh hành động dính đáy: ước tính + nút bắt đầu ── #}
@@ -769,9 +770,14 @@
       syncEngines();
       syncSubmit();
     }
-    function showSubmitError(message) {
+    // Hết hạn mức (429) thì bấm "Thử lại" cũng bị chặn y như cũ. Chỉ khi hết
+    // DUNG LƯỢNG mới gợi ý sang trang lịch sử xoá bớt video — hết lượt/giây GPU
+    // theo ngày thì xoá video không giúp gì, chỉ còn cách chờ.
+    function showSubmitError(message, quotaKind) {
       uploadStatus.classList.add("hidden");
       document.getElementById("errorMessage").textContent = message;
+      document.getElementById("retryBtn").classList.toggle("hidden", Boolean(quotaKind));
+      document.getElementById("manageVideosLink").classList.toggle("hidden", quotaKind !== "storage");
       errorCard.classList.remove("hidden");
       submitBtn.disabled = false;
       document.getElementById("submitLabel").textContent = mode === "script" ? "Bắt đầu đọc" : "Bắt đầu lồng tiếng";
@@ -790,7 +796,7 @@
           window.location = "/job/" + body.job_id;
           return;
         }
-        showSubmitError(body.error || "Không gửi được kịch bản.");
+        showSubmitError(body.error || "Không gửi được kịch bản.", body.quota);
       } catch (err) {
         showSubmitError("Mất kết nối khi gửi kịch bản.");
       }
@@ -826,19 +832,11 @@
           // Sang trang riêng của job: có link chia sẻ được, tải lại trang không mất tiến trình.
           window.location = "/job/" + data.job_id;
         } else {
-          uploadStatus.classList.add("hidden");
-          document.getElementById("errorMessage").textContent = data.error || "Không tải lên được video.";
-          errorCard.classList.remove("hidden");
-          submitBtn.disabled = false;
-          document.getElementById("submitLabel").textContent = "Bắt đầu lồng tiếng";
+          showSubmitError(data.error || "Không tải lên được video.", data.quota);
         }
       };
       xhr.onerror = function () {
-        uploadStatus.classList.add("hidden");
-        document.getElementById("errorMessage").textContent = "Mất kết nối khi tải video lên.";
-        errorCard.classList.remove("hidden");
-        submitBtn.disabled = false;
-        document.getElementById("submitLabel").textContent = "Bắt đầu lồng tiếng";
+        showSubmitError("Mất kết nối khi tải video lên.");
       };
       xhr.send(new FormData(form));
     });

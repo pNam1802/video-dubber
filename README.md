@@ -495,7 +495,7 @@ Hạn mức mặc định (chỉnh bằng biến môi trường):
 |---|---|---|
 | `QUOTA_JOBS_PER_DAY` | 10 | Số job trong 24 giờ |
 | `QUOTA_GPU_SECONDS_PER_DAY` | 1800 | Tổng giây GPU trong 24 giờ |
-| `QUOTA_STORAGE_MB` | 2048 | Dung lượng video kết quả đang giữ |
+| `QUOTA_STORAGE_MB` | 5120 | Dung lượng video kết quả đang giữ |
 | `GPU_COST_PER_SECOND` | 0.000164 | Đơn giá T4 để ước tính chi phí |
 
 > **`estimated_cost_usd` là cận dưới, không phải hoá đơn.** Nó chỉ tính thời gian
