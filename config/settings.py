@@ -243,7 +243,7 @@ TRUST_PROXY = _env_bool("TRUST_PROXY", IS_PRODUCTION)
 # Han muc cho moi user thuong (admin khong bi gioi han).
 QUOTA_JOBS_PER_DAY = _env_int("QUOTA_JOBS_PER_DAY", 10)
 QUOTA_GPU_SECONDS_PER_DAY = _env_int("QUOTA_GPU_SECONDS_PER_DAY", 1800)
-QUOTA_STORAGE_MB = _env_int("QUOTA_STORAGE_MB", 2048)
+QUOTA_STORAGE_MB = _env_int("QUOTA_STORAGE_MB", 5120)
 
 # Don gia GPU de uoc tinh chi phi moi job. Mac dinh theo T4 tren Modal.
 GPU_COST_PER_SECOND = float(os.getenv("GPU_COST_PER_SECOND", "0.000164"))

@@ -139,9 +139,9 @@ def upload_video():
 
     # Kiem tra han muc TRUOC khi ghi file: khong de mot nguoi vuot quota
     # van kip do day dia bang cac file rac.
-    allowed, reason = check_quota(current_user, request.content_length or 0)
-    if not allowed:
-        return jsonify({"error": reason, "code": 429}), 429
+    quota = check_quota(current_user, request.content_length or 0)
+    if not quota.allowed:
+        return jsonify({"error": quota.reason, "code": 429, "quota": quota.kind}), 429
 
     safe_name = secure_filename(video.filename)
     upload_path = UPLOAD_DIR / f"{uuid.uuid4().hex}_{safe_name}"
@@ -247,9 +247,9 @@ def create_script_job():
                                      "vào Cài đặt để thêm giọng của bạn."}), 400
         ref_audio = str(current_user.voice_sample_file(sample_lang))
 
-    allowed, reason = check_quota(current_user)
-    if not allowed:
-        return jsonify({"error": reason, "code": 429}), 429
+    quota = check_quota(current_user)
+    if not quota.allowed:
+        return jsonify({"error": quota.reason, "code": 429, "quota": quota.kind}), 429
 
     job = Job(
         user_id=current_user.id,

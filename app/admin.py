@@ -73,7 +73,7 @@ def update_user(user_id: int):
 
     if "role" in payload:
         role = payload["role"]
-        if role not in (Role.USER, Role.ADMIN):
+        if role not in Role.ALL:
             return jsonify({"error": "Role không hợp lệ.", "code": 400}), 400
         if user.id == current_user.id and role != Role.ADMIN:
             return jsonify({"error": "Không thể tự hạ quyền của chính mình.", "code": 400}), 400
