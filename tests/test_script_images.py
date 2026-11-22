@@ -244,11 +244,19 @@ def test_illustrated_script_job_shows_video(app, as_user, monkeypatch, tmp_path)
     assert '<video id="resultVideo"' in page and "Tải video" in page
 
 
-def test_script_page_always_uses_recap_with_character_choice(as_user):
-    """Trang đọc kịch bản không còn cho chọn chế độ ảnh — luôn Manhwa recap,
-    chỉ chọn kiểu nhân vật."""
+def test_script_page_offers_recap_or_stock(as_user, monkeypatch):
+    """Có PIXABAY_API_KEY: cho chọn Manhwa recap (mặc định) hoặc Video stock.
+    Chưa có key: chỉ còn recap, gửi qua ô ẩn. Kiểu nhân vật luôn chọn được."""
+    import app.main as main
+
+    monkeypatch.setattr(main, "PIXABAY_API_KEY", "key")
     html = as_user.get("/doc-kich-ban").get_data(as_text=True)
-    assert '<input type="hidden" name="script_images" value="recap">' in html
-    assert 'type="radio" name="script_images"' not in html
+    assert 'name="script_images" value="recap" checked' in html
+    assert 'name="script_images" value="stock"' in html
     for style in script_images.RECAP_CHARACTER_STYLES:
         assert f'name="recap_style" value="{style}"' in html
+
+    monkeypatch.setattr(main, "PIXABAY_API_KEY", "")
+    html = as_user.get("/doc-kich-ban").get_data(as_text=True)
+    assert '<input type="hidden" name="script_images" value="recap">' in html
+    assert 'name="script_images" value="stock"' not in html

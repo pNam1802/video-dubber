@@ -63,6 +63,9 @@ for directory in (DATA_DIR, UPLOAD_DIR, OUTPUT_DIR, TEMP_DIR):
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
+# Video stock cho chế độ "stock" của "Đọc kịch bản" (core/stock_footage.py).
+# Key miễn phí: https://pixabay.com/api/docs/ (đăng nhập là thấy).
+PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY", "")).strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
