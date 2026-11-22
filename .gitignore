@@ -45,6 +45,7 @@ models/
 data/temp/
 data/outputs/
 uploads/
+stock_cache/
 
 # Optional streamlit cache/config
 .streamlit/secrets.toml

@@ -43,6 +43,7 @@ from config.settings import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     OUTPUT_DIR,
+    PIXABAY_API_KEY,
     VOICE_SAMPLE_MAX_MB,
     VOICE_SAMPLE_MAX_SEC,
     VOICE_SAMPLE_MIN_SEC,
@@ -161,6 +162,7 @@ def _render_tool(mode: str):
         usage=get_usage(current_user).as_dict(),
         max_upload_mb=MAX_UPLOAD_MB,
         script_max_chars=SCRIPT_MAX_CHARS,
+        stock_enabled=bool(PIXABAY_API_KEY),
     )
 
 

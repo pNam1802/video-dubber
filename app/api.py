@@ -30,6 +30,7 @@ from config.settings import (
     MAX_VIDEO_SPEED,
     TTS_VOICES,
     OPENAI_API_KEY,
+    PIXABAY_API_KEY,
     OPENAI_MODEL,
     UPLOAD_DIR,
     VOICE_SAMPLE_LANGUAGES,
@@ -228,9 +229,11 @@ def create_script_job():
         return jsonify({"error": "Kịch bản không có câu nào để đọc."}), 400
 
     language = _pick("target_language", SCRIPT_LANGUAGES, "vi")
-    # Mặc định Manhwa recap — giao diện chỉ còn chế độ này; các chế độ khác
-    # vẫn nhận nếu gửi tường minh (CLI, client cũ).
+    # Giao diện cho chọn Manhwa recap (mặc định) hoặc Video stock; các chế độ
+    # khác vẫn nhận nếu gửi tường minh (CLI, client cũ).
     script_images = _pick("script_images", set(SCRIPT_IMAGE_MODES), "recap")
+    if script_images == "stock" and not PIXABAY_API_KEY:
+        return jsonify({"error": "Kiểu Video stock chưa được bật trên máy chủ (thiếu PIXABAY_API_KEY)."}), 400
     recap_style = _pick("recap_style", set(RECAP_CHARACTER_STYLES), RECAP_CHARACTER_STYLES[0])
     tts_engine = _pick("tts_engine", ALLOWED_TTS_ENGINES, "edge-tts")
     tts_voice = _pick("tts_voice", set(TTS_VOICES[tts_engine]), "female")

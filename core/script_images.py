@@ -10,6 +10,8 @@ Ba chế độ:
              Không dựng được trang manga thì lùi về "scenes".
   "recap"  — kiểu video kể truyện manhwa: ảnh webtoon màu ~6 giây một ảnh,
              khung dọc giữa nền mờ, zoom chậm: core/recap.py.
+  "stock"  — không vẽ: ghép clip quay sẵn từ Pixabay theo nội dung từng đoạn,
+             chỉ tốn CPU: core/stock_footage.py.
 
 Trừ "recap", mọi ảnh cùng một nét vẽ manga đen trắng (MANGA_STYLE) cố định trong code; Gemini
 chỉ chọn cỡ cảnh/góc máy cho từng ảnh để chúng đa dạng như các khung truyện.
@@ -33,7 +35,7 @@ from typing import List, Optional, Tuple
 
 from utils.proc import run_command
 
-MODES = ("none", "few", "scenes", "manga", "recap")
+MODES = ("none", "few", "scenes", "manga", "recap", "stock")
 # Kiểu nhân vật của chế độ "recap" (xem core/recap.style_cast). Ảnh mẫu từng
 # kiểu ở static/recap_styles/<kiểu>.jpg cho nút "Xem mẫu" trên form.
 # Kiểu đầu tiên là mặc định (khách chọn "sunflower" ngày 06/11/2026).
@@ -306,6 +308,10 @@ def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: 
 
     t0 = time.time()
     progress(75, "Đang đọc hiểu kịch bản để dựng cảnh minh hoạ...")
+    if mode == "stock":
+        from core import stock_footage
+
+        return stock_footage.render(sentences, timings, audio, output, work_dir, progress)
     if mode == "recap":
         from core import recap
 
