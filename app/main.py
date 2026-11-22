@@ -19,7 +19,7 @@ from app.legal import PRIVACY, TERMS, UPDATED
 from app.models import Job, JobStatus
 from app.permissions import require_admin_page
 from app.quota import get_usage
-from app.storage import refresh_outputs
+from app.storage import locate_file
 from app.voices import (
     VoiceSampleError,
     accept_voice_upload,
@@ -235,11 +235,9 @@ def upload_voice_sample():
 @login_required
 def voice_sample_audio():
     language = sample_language(request.args.get("lang"))
-    path = current_user.voice_sample_file(language)
     if not current_user.has_voice_sample_in(language):
         abort(404)
-    if not path.exists():
-        refresh_outputs()
+    path = locate_file(current_user.voice_sample_file(language))
     if not path.exists():
         abort(404)
     return send_from_directory(path.parent, path.name, max_age=0)
@@ -292,12 +290,10 @@ def serve_output(filename: str):
     if owned is None:
         return jsonify({"error": "Bạn không có quyền truy cập hoặc file không tồn tại."}), 403
 
-    # Tren Modal, file do container GPU ghi chi hien ra sau khi reload volume.
-    # Chi reload khi chua thay file, de khong ton mot lan goi mang moi request.
-    if not (OUTPUT_DIR / filename).exists():
-        refresh_outputs()
-
-    return send_from_directory(OUTPUT_DIR, filename, as_attachment=False)
+    # Tren Modal, file do container GPU ghi co the chua hien ra tren mount
+    # volume cua container web; locate_file reload hoac tai thang ve dia tam.
+    path = locate_file(OUTPUT_DIR / filename)
+    return send_from_directory(path.parent, path.name, as_attachment=False)
 
 
 @bp.get("/privacy")
