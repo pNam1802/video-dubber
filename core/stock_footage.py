@@ -4,7 +4,7 @@ Chế độ ảnh minh hoạ "stock" của "Đọc kịch bản": thay vì vẽ 
 các clip quay sẵn từ Pixabay (miễn phí, Pixabay Content License) theo nội dung
 từng đoạn lời đọc.
 
-  1. Gemini đọc cả kịch bản, chia thành cảnh ~5 giây và viết 2-3 cụm từ khoá
+  1. Gemini (lỗi thì DeepSeek) đọc cả kịch bản, chia thành cảnh ~5 giây và viết 2-3 cụm từ khoá
      tiếng Anh tả HÌNH ẢNH cụ thể cho từng cảnh ("person writing checklist",
      không phải "discipline") — từ khoá ý niệm hay ra clip lạc đề.
   2. Tìm clip trên Pixabay theo từng cụm từ khoá, lấy clip chưa dùng trong video,
@@ -102,13 +102,48 @@ def fallback_board(timings: List[Tuple[float, float]]) -> List[Tuple[int, List[s
     return [(start, [GENERIC_QUERIES[k % len(GENERIC_QUERIES)]]) for k, start in enumerate(starts)]
 
 
+def ask_deepseek_json(request: str) -> str:
+    """Như ask_gemini_json nhưng hỏi DeepSeek (API tương thích OpenAI, chế độ JSON)."""
+    from config.settings import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("chưa có DEEPSEEK_API_KEY")
+    from openai import OpenAI
+
+    from core.translator.llm_common import call_with_retry
+
+    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+    response = call_with_retry(
+        lambda: client.chat.completions.create(
+            model=DEEPSEEK_MODEL, temperature=0.5, response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": request}],
+            extra_body={"thinking": {"type": "disabled"}},
+        ),
+        what="DeepSeek (chia cảnh)",
+    )
+    return response.choices[0].message.content or ""
+
+
+def plan_shots(request: str, sentence_count: int) -> List[Tuple[int, List[str]]]:
+    """Gemini chia cảnh; Gemini lỗi (hết hạn mức, mất key...) thì DeepSeek.
+    Cả hai lỗi thì ném ra để plan() lùi về cảnh chung chung."""
+    errors = []
+    for name, ask in (("Gemini", ask_gemini_json), ("DeepSeek", ask_deepseek_json)):
+        try:
+            board = parse_shots(ask(request), sentence_count)
+            if board:
+                return board
+            errors.append(f"{name}: không có cảnh nào")
+        except Exception as exc:
+            errors.append(f"{name}: {exc}")
+        print(f"[Video stock] {errors[-1]}")
+    raise RuntimeError("; ".join(errors))
+
+
 def plan(sentences: List[str], timings: List[Tuple[float, float]]) -> Tuple[List[List[str]], List[Slide]]:
     """(từ khoá cho từng cảnh, lịch chiếu)."""
     try:
-        board = parse_shots(ask_gemini_json(stock_request(sentences, timings, shot_count(timings))),
-                            len(sentences))
-        if not board:
-            raise RuntimeError("không có cảnh nào")
+        board = plan_shots(stock_request(sentences, timings, shot_count(timings)), len(sentences))
     except Exception as exc:
         print(f"[Video stock] Không chia được cảnh ({exc}), dùng cảnh chung chung.")
         board = fallback_board(timings)

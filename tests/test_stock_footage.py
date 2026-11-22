@@ -27,11 +27,28 @@ def test_parse_shots_orders_clamps_and_forces_first_start():
                                       (3, ["mountain summit"])]
 
 
-def test_plan_falls_back_to_generic_shots_when_gemini_fails(monkeypatch):
-    def boom(_):
-        raise RuntimeError("no key")
+def _boom(_):
+    raise RuntimeError("429 RESOURCE_EXHAUSTED")
 
-    monkeypatch.setattr(sf, "ask_gemini_json", boom)
+
+def test_plan_uses_deepseek_when_gemini_fails(monkeypatch):
+    monkeypatch.setattr(sf, "ask_gemini_json", _boom)
+    monkeypatch.setattr(sf, "ask_deepseek_json", lambda req: json.dumps(
+        {"shots": [{"start": 1, "queries": ["man running sunrise"]}, {"start": 3, "queries": ["city night"]}]}))
+    queries, slides = sf.plan(["a", "b", "c", "d"], TIMINGS)
+    assert queries == [["man running sunrise"], ["city night"]]
+    assert [(a, b) for _, a, b in slides] == [(0.0, 9.0), (9.0, 20.0)]
+
+
+def test_plan_skips_deepseek_when_gemini_works(monkeypatch):
+    monkeypatch.setattr(sf, "ask_gemini_json", lambda req: json.dumps({"shots": [{"start": 1, "queries": ["sky"]}]}))
+    monkeypatch.setattr(sf, "ask_deepseek_json", lambda req: pytest.fail("không được gọi DeepSeek"))
+    assert sf.plan(["a", "b", "c", "d"], TIMINGS)[0] == [["sky"]]
+
+
+def test_plan_falls_back_to_generic_shots_when_both_fail(monkeypatch):
+    monkeypatch.setattr(sf, "ask_gemini_json", _boom)
+    monkeypatch.setattr(sf, "ask_deepseek_json", lambda req: "{}")  # trả về nhưng không có cảnh
     queries, slides = sf.plan(["a", "b", "c", "d"], TIMINGS)
     assert queries and all(q[0] in sf.GENERIC_QUERIES for q in queries)
     assert slides[0][1] == 0.0 and slides[-1][2] == 20.0
