@@ -72,6 +72,9 @@ class DubbingConfig:
     script_images: str = "none"
     # Kiểu nhân vật của chế độ "recap", xem core/script_images.RECAP_CHARACTER_STYLES.
     recap_style: str = "sunflower"
+    # Chế độ "explainer": bảng phân cảnh đã duyệt ở Xưởng kịch bản ([{"start": câu, "layout", ...}]).
+    # None = để Gemini tự phân cảnh lúc render.
+    explainer_board: Optional[list] = None
     original_volume: float = 0.0            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -485,7 +488,7 @@ class DubbingPipeline:
             result.timings.update(illustrate(
                 [(seg.translated or seg.text) for seg, _ in synthesized], timings, audio, video,
                 work_dir / "images", self.config.script_images, progress,
-                recap_style=self.config.recap_style,
+                recap_style=self.config.recap_style, explainer_board=self.config.explainer_board,
             ))
         except Exception as exc:
             video.unlink(missing_ok=True)

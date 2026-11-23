@@ -148,3 +148,44 @@ def test_series_page_ships_voice_previews(as_admin, fake_agent, monkeypatch):
     series_id = as_admin.post("/api/studio/series", json={"topic": "x", "episodes": 1}).get_json()["id"]
     html = as_admin.get(f"/quan-tri/xuong-kich-ban/{series_id}").get_data(as_text=True)
     assert "/static/voices/vieneu/female.mp3" in html and "VOICE_SAMPLES" in html
+
+
+def _drafted_episode(as_admin):
+    series_id = as_admin.post("/api/studio/series", json={"topic": "x", "episodes": 1}).get_json()["id"]
+    ep_id = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]["id"]
+    as_admin.patch(f"/api/studio/episodes/{ep_id}", json={"script_vi": "Câu một. Câu hai.\nCâu ba."})
+    return series_id, ep_id
+
+
+def test_storyboard_step_preview_and_reset_on_script_change(as_admin, fake_agent, monkeypatch, tmp_path):
+    import json as _json
+
+    import app.studio as st
+    from core import explainer
+
+    series_id, ep_id = _drafted_episode(as_admin)
+    board = {"scenes": [{"start": 1, "layout": "title", "title": "Mở"}, {"start": 3, "layout": "number", "value": 3}]}
+    monkeypatch.setattr(explainer, "ask_gemini_json", lambda request: _json.dumps(board))
+    assert as_admin.post(f"/api/studio/episodes/{ep_id}/board_vi").status_code == 202
+    ep = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]
+    assert [s["start"] for s in ep["storyboard_vi"]] == [0, 2] and len(ep["sentences_vi"]) == 3
+
+    # Vẽ thử: render giả, file nằm trong OUTPUT_DIR và chỉ chủ tập xem được.
+    monkeypatch.setattr("config.settings.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr(explainer, "render_scene", lambda scene, frames, out, work: out.write_bytes(b"mp4"))
+    monkeypatch.setattr("app.storage.commit_volume", lambda: None)
+    assert as_admin.post(f"/api/studio/episodes/{ep_id}/preview", json={"lang": "vi", "index": 1}).status_code == 202
+    ep = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]
+    name = ep["previews"]["vi:1"]
+    assert (tmp_path / name).read_bytes() == b"mp4"
+    monkeypatch.setattr("app.storage.locate_file", lambda path: path)
+    assert as_admin.get(f"/quan-tri/xuong-kich-ban/xem-thu/{name}").status_code == 200
+    assert as_admin.get(f"/quan-tri/xuong-kich-ban/xem-thu/studio_{ep_id}_vi_9_deadbeef.mp4").status_code == 404
+    assert as_admin.post(f"/api/studio/episodes/{ep_id}/preview", json={"lang": "vi", "index": 7}).status_code == 400
+
+    # Sửa phân cảnh tay rồi đổi kịch bản: bảng cũ không còn khớp câu nên bị xoá.
+    res = as_admin.patch(f"/api/studio/episodes/{ep_id}", json={"storyboard_vi": [{"start": 0, "layout": "python"}]})
+    assert res.status_code == 400
+    res = as_admin.patch(f"/api/studio/episodes/{ep_id}", json={"script_vi": "Khác hẳn."})
+    assert res.get_json()["storyboard_vi"] == [] and res.get_json()["previews"] == {}
+    assert st.TASK_LABELS["board"]

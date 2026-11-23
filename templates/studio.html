@@ -85,6 +85,13 @@
            ["gemini:male", "Charon — nam, có cảm xúc (Gemini)"], ["edge-tts:female", "Aria — nữ (miễn phí)"],
            ["edge-tts:male", "Guy — nam (miễn phí)"]]
     };
+    // Bố cục Video giải thích (core/explainer.LAYOUTS) — nhãn hiển thị cho ô chọn của từng cảnh.
+    const LAYOUTS = {
+      tokens: "Tách token", probabilities: "Xác suất từ tiếp theo", attention: "Attention", network: "Mạng nơ-ron",
+      vectors: "Không gian vector", flow: "Sơ đồ luồng", code: "Khối code", timeline: "Trục thời gian",
+      number: "Con số lớn", compare: "So sánh", chat: "Hội thoại", title: "Tiêu đề", bullets: "Gạch đầu dòng",
+      statement: "Câu chốt"
+    };
     const PREVIEW_URLS = {{ (voice_preview_urls or {}) | tojson }};
     const VOICE_SAMPLES = {{ (voice_samples or {}) | tojson }};
     const chosenVoice = JSON.parse(localStorage.getItem("studioVoices") || "{}");
@@ -220,7 +227,7 @@
       const e = series.episodes.find(function (x) { return x.id === current; });
       const panel = document.getElementById("episodePanel");
       if (!e) return;
-      const panelFocus = panel.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA";
+      const panelFocus = panel.contains(document.activeElement) && document.activeElement.matches("textarea, [data-scene-layout]");
       if (panelFocus) return;   // đang gõ thì không vẽ lại, tránh mất chữ
       const locked = Boolean(e.task || series.task);
       const voiceSelect = function (lang) {
@@ -277,13 +284,85 @@
               '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
                 '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
               '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
-            '</div></div>';
+            '</div>' + storyboardBlock(e, lang, locked) + '</div>';
         }).join("");
       paintPlayButtons();
     }
 
+    // ── Phân cảnh: duyệt/sửa từng cảnh, vẽ thử một cảnh trước khi render cả video ──
+    function storyboardBlock(e, lang, locked) {
+      const board = e["storyboard_" + lang];
+      const sentences = e["sentences_" + lang];
+      if (!e["script_" + lang]) return "";
+      let html = '<details class="card !p-md" data-board-box="' + lang + '"' + (board.length ? " open" : "") + '>' +
+        '<summary class="cursor-pointer font-body-md text-body-md text-primary">Phân cảnh video giải thích' +
+        (board.length ? " (" + board.length + " cảnh)" : " — chưa có") + '</summary>' +
+        '<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">Agent chia kịch bản thành cảnh và chọn hình cho từng cảnh. ' +
+        'Sửa bố cục hoặc chữ trên màn hình, bấm Xem thử để vẽ riêng cảnh đó (~1 phút), ưng rồi mới tạo cả video. ' +
+        'Không phân cảnh thì lúc tạo video Gemini tự chia.</p>' +
+        '<div class="flex gap-2 flex-wrap mt-2">' +
+          '<button data-step="board_' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>' +
+          '<span class="material-symbols-outlined text-[18px]">auto_awesome</span>' + (board.length ? "Phân cảnh lại" : "Phân cảnh") + '</button>' +
+          (board.length ? '<button data-save-board="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>Lưu phân cảnh</button>' : "") +
+        '</div>';
+      html += board.map(function (scene, k) {
+        const next = k + 1 < board.length ? board[k + 1].start : sentences.length;
+        const said = sentences.slice(scene.start, next).join(" ");
+        const fields = Object.assign({}, scene);
+        delete fields.start; delete fields.layout;
+        const preview = (e.previews || {})[lang + ":" + k];
+        return '<div class="border-t border-outline-variant/40 mt-md pt-md flex flex-col gap-2" data-scene="' + lang + ':' + k + '" data-start="' + scene.start + '">' +
+          '<div class="flex items-center gap-2 flex-wrap"><span class="font-body-md text-body-md text-on-surface">Cảnh ' + (k + 1) +
+          '</span><span class="font-label-sm text-label-sm text-on-surface-variant">câu ' + (scene.start + 1) + (next - 1 > scene.start ? "–" + next : "") + '</span>' +
+          '<select data-scene-layout class="input !w-auto"' + (locked ? " disabled" : "") + '>' + Object.keys(LAYOUTS).map(function (name) {
+            return '<option value="' + name + '"' + (name === scene.layout ? " selected" : "") + '>' + LAYOUTS[name] + '</option>';
+          }).join("") + '</select>' +
+          '<button data-scene-preview="' + lang + ':' + k + '" class="btn-ghost btn-sm"' + (locked ? " disabled" : "") + '>' +
+          '<span class="material-symbols-outlined text-[18px]">play_circle</span>Xem thử</button></div>' +
+          '<p class="font-label-sm text-label-sm text-on-surface-variant line-clamp-2">“' + esc(said) + '”</p>' +
+          '<textarea data-scene-fields rows="' + (Object.keys(fields).length + 2) + '" class="input font-mono text-label-sm"' + (locked ? " disabled" : "") + '>' +
+          esc(sceneJson(fields)) + '</textarea>' +
+          (preview ? '<video controls preload="metadata" class="w-full max-w-lg rounded-xl border border-outline-variant/40" src="/quan-tri/xuong-kich-ban/xem-thu/' +
+            encodeURIComponent(preview) + '"></video>' : "") +
+          '</div>';
+      }).join("");
+      return html + '</details>';
+    }
+
+    // Mỗi trường một dòng (mảng giữ trên cùng dòng) — dễ sửa hơn JSON thụt lề từng phần tử.
+    function sceneJson(fields) {
+      return "{\n" + Object.keys(fields).map(function (key) {
+        return "  " + JSON.stringify(key) + ": " + JSON.stringify(fields[key]);
+      }).join(",\n") + "\n}";
+    }
+
+    // Đọc bảng phân cảnh đang sửa trên trang; JSON sai thì báo đúng cảnh.
+    function collectBoard(lang) {
+      return Array.from(document.querySelectorAll('[data-scene^="' + lang + ':"]')).map(function (box, k) {
+        let fields;
+        try { fields = JSON.parse(box.querySelector("[data-scene-fields]").value || "{}"); }
+        catch (err) { throw new Error("Cảnh " + (k + 1) + ": phần chữ không phải JSON hợp lệ."); }
+        return Object.assign(fields, {start: Number(box.dataset.start), layout: box.querySelector("[data-scene-layout]").value});
+      });
+    }
+
+    async function saveBoard(e, lang) {
+      const patch = {};
+      patch["storyboard_" + lang] = collectBoard(lang);
+      return api("/api/studio/episodes/" + e.id, "PATCH", patch);
+    }
+
     async function makeVideo(e, lang) {
       const text = document.querySelector('[data-script="' + lang + '"]').value;
+      let board = [];
+      if (text.trim() !== (e["script_" + lang] || "").trim()) {
+        // Kịch bản vừa sửa mà chưa lưu: lưu trước (bảng phân cảnh cũ tự bị xoá vì không còn khớp câu).
+        const patch = {};
+        patch["script_" + lang] = text;
+        await api("/api/studio/episodes/" + e.id, "PATCH", patch);
+      } else if (e["storyboard_" + lang].length) {
+        board = (await saveBoard(e, lang))["storyboard_" + lang];
+      }
       const pick = document.querySelector('[data-voice="' + lang + '"]').value.split(":");
       const form = new FormData();
       form.append("csrf_token", CSRF);
@@ -292,6 +371,7 @@
       form.append("tts_engine", pick[0]);
       form.append("tts_voice", pick[1]);
       form.append("script_images", "explainer");
+      if (board.length) form.append("storyboard", JSON.stringify(board));
       const res = await fetch("/api/script", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
       const data = await res.json().catch(function () { return {}; });
       if (!res.ok) throw new Error(data.error || "Không tạo được video.");
@@ -323,6 +403,21 @@
           return;
         }
         if (!e) return;
+        if (btn.dataset.saveBoard) {
+          btn.disabled = true;
+          await saveBoard(e, btn.dataset.saveBoard);
+          Nora.toast("Đã lưu phân cảnh.", "success");
+          await load();
+          return;
+        }
+        if (btn.dataset.scenePreview) {
+          const parts = btn.dataset.scenePreview.split(":");
+          btn.disabled = true;
+          await saveBoard(e, parts[0]);   // vẽ đúng bản đang sửa trên trang
+          await api("/api/studio/episodes/" + e.id + "/preview", "POST", {lang: parts[0], index: Number(parts[1])});
+          await load();
+          return;
+        }
         if (btn.dataset.step) {
           btn.disabled = true;
           await api("/api/studio/episodes/" + e.id + "/" + btn.dataset.step, "POST");

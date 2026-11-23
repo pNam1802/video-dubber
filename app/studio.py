@@ -21,9 +21,13 @@ from config.settings import JOB_RUNNER, MODAL_APP_NAME
 
 bp = Blueprint("studio", __name__)
 
-EPISODE_STEPS = ("write", "translate", "wrap")
+EPISODE_STEPS = ("write", "translate", "wrap", "board_vi", "board_en")
 TASK_LABELS = {"plan": "Đang lên lộ trình series...", "write": "Đang nghiên cứu và viết kịch bản...",
-               "translate": "Đang dịch sang tiếng Anh...", "wrap": "Đang chốt tập và cập nhật trí nhớ..."}
+               "translate": "Đang dịch sang tiếng Anh...", "wrap": "Đang chốt tập và cập nhật trí nhớ...",
+               "board": "Đang phân cảnh video giải thích...", "preview": "Đang vẽ thử một cảnh..."}
+LANGUAGES = ("vi", "en")
+#: Cảnh xem thử dài tối đa bấy nhiêu giây — đủ thấy hình, không tốn CPU như cả video.
+PREVIEW_MAX_SEC = 15.0
 
 
 # ── Chạy nền ─────────────────────────────────────────────────
@@ -39,13 +43,17 @@ def start_task(flask_app: Flask, kind: str, target_id: int) -> None:
 
 
 def run_task(flask_app: Flask, kind: str, target_id: int) -> None:
-    """Chạy một bước của agent và ghi kết quả. Lỗi thì ghi vào .error, không ném ra."""
+    """Chạy một bước của agent và ghi kết quả. Lỗi thì ghi vào .error, không ném ra.
+
+    kind: "plan" (Series), "write" | "translate" | "wrap" | "board_<lang>" | "preview:<lang>:<cảnh>"
+    (Episode) — tham số của bước nằm sau dấu ":" vì Composer.run_studio chỉ nhận (kind, id)."""
     with flask_app.app_context():
         target = db.session.get(Series if kind == "plan" else Episode, target_id)
         if target is None:
             return
+        name, *args = kind.split(":")
         try:
-            _STEPS[kind](target)
+            _STEPS[name](target, *args)
             target.error = None
         except Exception as exc:
             db.session.rollback()
@@ -89,8 +97,71 @@ def _step_write(episode: Episode) -> None:
     episode.notes, episode.sources, episode.outline = notes, sources, draft["outline"]
     episode.script_vi, episode.quiz, episode.review = reviewed["script"], draft["quiz"], reviewed["issues"]
     episode.script_en = ""  # bản Anh cũ không còn khớp
+    clear_storyboard(episode, "vi")
+    clear_storyboard(episode, "en")
     episode.status = EpisodeStatus.DRAFTED
     episode.series.glossary = merge_glossary(episode.series.glossary or [], draft["new_terms"])
+
+
+def _sentences(episode: Episode, lang: str) -> list[str]:
+    from core.script_reader import split_script
+
+    return [s for _, s in split_script(getattr(episode, f"script_{lang}"))]
+
+
+def clear_storyboard(episode: Episode, lang: str) -> None:
+    """Kịch bản đổi thì số thứ tự câu đổi: bảng phân cảnh và cảnh xem thử cũ không còn khớp."""
+    setattr(episode, f"storyboard_{lang}", [])
+    episode.previews = {k: v for k, v in (episode.previews or {}).items() if not k.startswith(lang + ":")}
+
+
+def _step_board(episode: Episode, lang: str) -> None:
+    from core.explainer import board_to_list, estimate_timings, write_board
+
+    sentences = _sentences(episode, lang)
+    if not sentences:
+        raise RuntimeError("Chưa có kịch bản để phân cảnh.")
+    clear_storyboard(episode, lang)
+    board = write_board(sentences, estimate_timings(sentences, lang))
+    setattr(episode, f"storyboard_{lang}", board_to_list(board))
+
+
+def _step_preview(episode: Episode, lang: str, index: str) -> None:
+    """Vẽ thử một cảnh của bảng phân cảnh, thời lượng theo ước lượng lời đọc (tối đa 15 giây)."""
+    import shutil
+    import tempfile
+    import uuid
+    from pathlib import Path
+
+    from app.storage import commit_volume
+    from config.settings import OUTPUT_DIR
+    from core.explainer import FPS, estimate_timings, render_scene, scene_beats
+
+    board, k = getattr(episode, f"storyboard_{lang}") or [], int(index)
+    if not 0 <= k < len(board):
+        raise RuntimeError("Không có cảnh này trong bảng phân cảnh.")
+    timings = estimate_timings(_sentences(episode, lang), lang)
+    start = timings[board[k]["start"]][0]
+    end = timings[board[k + 1]["start"]][0] if k + 1 < len(board) else timings[-1][1]
+    end = min(end, start + PREVIEW_MAX_SEC)
+    scene = {key: v for key, v in board[k].items() if key != "start"}
+    scene["beats"] = scene_beats(timings, start, end)
+
+    name = f"studio_{episode.id}_{lang}_{k}_{uuid.uuid4().hex[:8]}.mp4"
+    work = Path(tempfile.mkdtemp(prefix="studio-preview-"))
+    try:
+        render_scene(scene, max(25, round((end - start) * FPS)), work / "scene_000.mp4", work)
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(work / "scene_000.mp4"), OUTPUT_DIR / name)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    previews = dict(episode.previews or {})
+    old = previews.get(f"{lang}:{k}")
+    if old:
+        (OUTPUT_DIR / old).unlink(missing_ok=True)
+    previews[f"{lang}:{k}"] = name
+    episode.previews = previews
+    commit_volume()
 
 
 def _step_translate(episode: Episode) -> None:
@@ -99,6 +170,7 @@ def _step_translate(episode: Episode) -> None:
     if not episode.script_vi.strip():
         raise RuntimeError("Chưa có kịch bản tiếng Việt để dịch.")
     episode.script_en = translate(_context(episode), episode.script_vi)
+    clear_storyboard(episode, "en")
     if episode.status != EpisodeStatus.DONE:
         episode.status = EpisodeStatus.TRANSLATED
 
@@ -114,7 +186,9 @@ def _step_wrap(episode: Episode) -> None:
     episode.series.glossary = merge_glossary(episode.series.glossary or [], result["new_terms"])
 
 
-_STEPS = {"plan": _step_plan, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap}
+_STEPS = {"plan": _step_plan, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap,
+          "board_vi": lambda ep: _step_board(ep, "vi"), "board_en": lambda ep: _step_board(ep, "en"),
+          "preview": _step_preview}
 
 
 # ── Trang ────────────────────────────────────────────────────
@@ -200,7 +274,9 @@ def get_series(series_id: int):
     data = _own_series(series_id).as_dict()
     data["task_label"] = TASK_LABELS.get(data["task"] or "")
     for ep in data["episodes"]:
-        ep["task_label"] = TASK_LABELS.get(ep["task"] or "")
+        ep["task_label"] = TASK_LABELS.get((ep["task"] or "").split(":")[0].split("_")[0])
+        for lang in LANGUAGES:
+            ep[f"sentences_{lang}"] = _sentences(db.session.get(Episode, ep["id"]), lang)
     return jsonify(data)
 
 
@@ -239,15 +315,68 @@ def update_episode(episode_id: int):
     for key, limit in (("title", 200), ("goal", 1000)):
         if key in body:
             setattr(episode, key, " ".join(str(body[key]).split())[:limit])
-    for key in ("script_vi", "script_en"):
-        if key in body:
+    for lang in LANGUAGES:
+        key = f"script_{lang}"
+        if key in body and clean_script(body[key]) != getattr(episode, key):
             setattr(episode, key, clean_script(body[key]))
+            clear_storyboard(episode, lang)
+    for lang in LANGUAGES:
+        key = f"storyboard_{lang}"
+        if key in body:
+            from core.explainer import board_from_list, board_to_list
+
+            board = board_from_list(body[key], len(_sentences(episode, lang)))
+            if body[key] and not board:
+                return jsonify({"error": "Bảng phân cảnh không có cảnh hợp lệ nào."}), 400
+            setattr(episode, key, board_to_list(board))
     for key in ("job_vi_id", "job_en_id"):
         if key in body:
             job = Job.query.filter_by(id=body[key], user_id=current_user.id).first() if body[key] else None
             setattr(episode, key, job.id if job else None)
     db.session.commit()
     return jsonify(episode.as_dict())
+
+
+@bp.post("/api/studio/episodes/<int:episode_id>/preview")
+@require_admin
+def preview_scene(episode_id: int):
+    episode = _own_episode(episode_id)
+    body = request.get_json(silent=True) or {}
+    lang = body.get("lang")
+    try:
+        index = int(body.get("index"))
+    except (TypeError, ValueError):
+        index = -1
+    if lang not in LANGUAGES or not 0 <= index < len(getattr(episode, f"storyboard_{lang}") or []):
+        return jsonify({"error": "Không có cảnh này trong bảng phân cảnh."}), 400
+    busy = _busy(episode) or _busy(episode.series)
+    if busy:
+        return busy
+    episode.task, episode.error = f"preview:{lang}:{index}", None
+    db.session.commit()
+    start_task(current_app._get_current_object(), episode.task, episode.id)
+    return jsonify(episode.as_dict()), 202
+
+
+@bp.get("/quan-tri/xuong-kich-ban/xem-thu/<path:filename>")
+@require_admin_page
+def serve_preview(filename: str):
+    """File cảnh xem thử — chỉ chủ của tập đó xem được."""
+    import re
+
+    from flask import abort, send_from_directory
+
+    from app.storage import locate_file
+    from config.settings import OUTPUT_DIR
+
+    match = re.fullmatch(r"studio_(\d+)_(vi|en)_\d+_[0-9a-f]{8}\.mp4", filename)
+    if match is None:
+        abort(404)
+    episode = _own_episode(int(match.group(1)))
+    if filename not in (episode.previews or {}).values():
+        abort(404)
+    path = locate_file(OUTPUT_DIR / filename)
+    return send_from_directory(path.parent, path.name, as_attachment=False)
 
 
 @bp.post("/api/studio/episodes/<int:episode_id>/<step>")

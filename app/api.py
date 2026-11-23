@@ -4,6 +4,7 @@ Endpoint JSON cho upload và theo dõi tiến trình.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 
@@ -236,6 +237,20 @@ def create_script_job():
     # cũng gửi thẳng được giá trị này, giao diện ẩn đi là chưa đủ.
     if script_images == "explainer" and not current_user.is_admin:
         return jsonify({"error": "Kiểu Video giải thích hiện chỉ dành cho quản trị viên.", "code": 403}), 403
+    # Bảng phân cảnh đã duyệt ở Xưởng kịch bản (JSON). Chỉ áp cho Video giải thích; hỏng thì
+    # báo lỗi ngay thay vì âm thầm để Gemini phân cảnh lại.
+    explainer_board = None
+    if script_images == "explainer" and request.form.get("storyboard"):
+        from core.explainer import board_from_list, board_to_list
+
+        try:
+            raw_board = json.loads(request.form["storyboard"])
+        except ValueError:
+            return jsonify({"error": "Bảng phân cảnh không phải JSON hợp lệ."}), 400
+        board = board_from_list(raw_board, len(sentences))
+        if not board:
+            return jsonify({"error": "Bảng phân cảnh không có cảnh hợp lệ nào."}), 400
+        explainer_board = board_to_list(board)
     if script_images == "stock" and not PIXABAY_API_KEY:
         return jsonify({"error": "Kiểu Video stock chưa được bật trên máy chủ (thiếu PIXABAY_API_KEY)."}), 400
     recap_style = _pick("recap_style", set(RECAP_CHARACTER_STYLES), RECAP_CHARACTER_STYLES[0])
@@ -288,7 +303,7 @@ def create_script_job():
 
     config = DubbingConfig(tts_engine=tts_engine, tts_voice=tts_voice, tts_ref_audio=ref_audio,
                            target_language=language, subtitle_mode="target", script_images=script_images,
-                           recap_style=recap_style)
+                           recap_style=recap_style, explainer_board=explainer_board)
     start_script_job(current_app._get_current_object(), job.id, config)
     return jsonify({"job_id": job.id}), 202
 

@@ -469,6 +469,12 @@ class Episode(db.Model):
     quiz = db.Column(db.JSON, nullable=False, default=list)
     #: Những lỗi bước tự soát đã tìm thấy và sửa.
     review = db.Column(db.JSON, nullable=False, default=list)
+    #: Bảng phân cảnh Video giải thích đã duyệt, mỗi bản một bảng:
+    #: [{"start": chỉ số câu từ 0, "layout", ...}] (core/explainer.board_to_list). Rỗng = chưa phân cảnh.
+    storyboard_vi = db.Column(db.JSON, nullable=False, default=list)
+    storyboard_en = db.Column(db.JSON, nullable=False, default=list)
+    #: Cảnh đã render thử: {"vi:3": tên file trong OUTPUT_DIR}.
+    previews = db.Column(db.JSON, nullable=False, default=dict)
     #: Tóm tắt khi chốt tập — agent đọc lại khi viết các tập sau.
     summary = db.Column(db.Text, nullable=False, default="", server_default="")
     job_vi_id = db.Column(db.Integer, db.ForeignKey("job.id", ondelete="SET NULL"), nullable=True)
@@ -487,6 +493,8 @@ class Episode(db.Model):
             "notes": self.notes, "sources": self.sources or [], "outline": self.outline or [],
             "script_vi": self.script_vi, "script_en": self.script_en, "quiz": self.quiz or [],
             "review": self.review or [], "summary": self.summary,
+            "storyboard_vi": self.storyboard_vi or [], "storyboard_en": self.storyboard_en or [],
+            "previews": self.previews or {},
             "job_vi_id": self.job_vi_id, "job_en_id": self.job_en_id,
             "task": self.task, "error": self.error,
         }
