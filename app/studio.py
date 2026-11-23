@@ -127,8 +127,16 @@ def page():
 @bp.get("/quan-tri/xuong-kich-ban/<int:series_id>")
 @require_admin_page
 def series_page(series_id: int):
+    from app.main import _voice_preview_urls
+    from config.settings import VOICE_SAMPLE_LANGUAGES
+
     _own_series(series_id)
-    return render_template("studio.html", series_id=series_id)
+    # Nghe thử giọng giống trang Đọc kịch bản: cùng file mẫu (core/voice_previews.py),
+    # "Giọng của bạn" phát lại chính file giọng mẫu đã tải lên.
+    return render_template(
+        "studio.html", series_id=series_id, voice_preview_urls=_voice_preview_urls(),
+        voice_samples={lang: current_user.has_voice_sample_in(lang) for lang in VOICE_SAMPLE_LANGUAGES},
+    )
 
 
 # ── API ──────────────────────────────────────────────────────
