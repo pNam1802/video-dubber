@@ -285,9 +285,45 @@
               '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
                 '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
               '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
-            '</div>' + recordBlock(e, lang, locked) + storyboardBlock(e, lang, locked) + '</div>';
+            '</div>' + publishBlock(e, lang, locked) + recordBlock(e, lang, locked) + storyboardBlock(e, lang, locked) + '</div>';
         }).join("");
       paintPlayButtons();
+    }
+
+    // ── Đăng YouTube: phụ đề Việt + Anh đúng mốc từng câu, tiêu đề, mô tả có chapters, tags ──
+    function publishBlock(e, lang, locked) {
+      const jobId = e["job_" + lang + "_id"];
+      if (!jobId) return "";
+      const ready = e["job_" + lang + "_status"] === "done";
+      const pack = (e.publish || {})[lang];
+      let html = '<details class="card !p-md" data-publish-box="' + lang + '"' + (pack ? " open" : "") + '>' +
+        '<summary class="cursor-pointer font-body-md text-body-md text-primary">Đăng YouTube' + (pack ? " — đã soạn" : "") + '</summary>' +
+        '<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">' +
+        (ready ? "Dịch phụ đề sang ngôn ngữ còn lại theo đúng mốc từng câu của video, soạn tiêu đề, mô tả có chapters và tags."
+               : "Đợi video #" + jobId + " làm xong rồi soạn phụ đề và gói đăng YouTube.") + '</p>' +
+        '<button data-step="publish_' + lang + '" class="btn-secondary btn-sm mt-2"' + (locked || !ready ? " disabled" : "") + '>' +
+        '<span class="material-symbols-outlined text-[18px]">subtitles</span>' + (pack ? "Soạn lại" : "Soạn phụ đề + gói YouTube") + '</button>';
+      if (pack) {
+        const sub = function (code) {
+          const name = (pack.srt || {})[code];
+          return name ? '<a class="btn-ghost btn-sm" href="/quan-tri/xuong-kich-ban/phu-de/' + e.id + "/" + encodeURIComponent(name) + '">' +
+            '<span class="material-symbols-outlined text-[18px]">download</span>Phụ đề ' + (code === "vi" ? "tiếng Việt" : "tiếng Anh") + '</a>' : "";
+        };
+        const copyField = function (label, value, rows) {
+          return '<label class="flex flex-col gap-1"><span class="field-label !mb-0 flex items-center gap-2">' + label +
+            '<button type="button" data-copy class="btn-icon !w-7 !h-7" title="Sao chép"><span class="material-symbols-outlined text-[16px]">content_copy</span></button></span>' +
+            (rows > 1 ? '<textarea readonly rows="' + rows + '" class="input">' + esc(value) + '</textarea>'
+                      : '<input readonly class="input" value="' + esc(value) + '">') + '</label>';
+        };
+        html += '<div class="flex flex-col gap-3 mt-md">' +
+          '<div class="flex gap-2 flex-wrap">' + sub("vi") + sub("en") +
+          '<a class="btn-ghost btn-sm" href="/job/' + pack.job_id + '"><span class="material-symbols-outlined text-[18px]">movie</span>Video #' + pack.job_id + '</a></div>' +
+          copyField("Tiêu đề", pack.title, 1) +
+          copyField("Mô tả" + (pack.chapters.length ? " (kèm " + pack.chapters.length + " chapters)" : ""), pack.description, 10) +
+          copyField("Tags", pack.tags.join(", "), 2) +
+          '</div>';
+      }
+      return html + '</details>';
     }
 
     // ── Giọng tự thu: máy nhắc chữ, mỗi đoạn một bản thu, đọc vấp thì thu lại đúng đoạn đó ──
@@ -496,6 +532,12 @@
           return;
         }
         if (!e) return;
+        if (btn.hasAttribute("data-copy")) {
+          const field = btn.closest("label").querySelector("input, textarea");
+          await navigator.clipboard.writeText(field.value);
+          Nora.toast("Đã sao chép.", "success");
+          return;
+        }
         if (btn.dataset.record) {
           await toggleRecording(e, btn);
           return;

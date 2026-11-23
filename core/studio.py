@@ -264,3 +264,80 @@ def wrap_up(script: str, ask: Callable[[str], dict] = _ask_json) -> dict:
 
 def word_count(text: str) -> int:
     return len(str(text or "").split())
+
+
+# ── Đăng YouTube: phụ đề thứ hai + tiêu đề, mô tả, tags, chapters ──
+LANG_NAMES = {"vi": "Vietnamese", "en": "English"}
+#: Quy tắc chapters của YouTube: chapter đầu ở 0:00, ít nhất 3 chapter, mỗi chapter >= 10 giây.
+MIN_CHAPTERS, MIN_CHAPTER_SEC = 3, 10.0
+
+
+def translate_lines(context: str, lines: List[str], target: str, ask: Callable[[str], dict] = _ask_json) -> List[str]:
+    """Dịch từng câu phụ đề, GIỮ ĐÚNG số dòng để mỗi câu dịch nằm đúng mốc thời gian câu gốc."""
+    numbered = "\n".join(f"{i + 1}. {line}" for i, line in enumerate(lines))
+    prompt = (f"{context}\n\nTranslate these subtitle lines into natural {LANG_NAMES[target]}. Translate each "
+              "line on its own (it will be shown at the same time as the original line), keep it short, follow "
+              f"the glossary.\n{numbered}\n\nReturn JSON: {{\"lines\": [exactly {len(lines)} translated strings, "
+              "same order]}}")
+    for _ in range(2):  # số dòng lệch thì hỏi lại một lần
+        out = ask(prompt).get("lines")
+        if isinstance(out, list) and len(out) == len(lines):
+            return [" ".join(str(x).split()) for x in out]
+    raise RuntimeError("Bản dịch phụ đề không khớp số dòng.")
+
+
+def srt_text(lines: List[str], timings: List[Tuple[float, float]]) -> str:
+    def stamp(sec: float) -> str:
+        ms = int(round(sec * 1000))
+        return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+
+    return "\n".join(f"{i + 1}\n{stamp(a)} --> {stamp(b)}\n{line}\n"
+                     for i, (line, (a, b)) in enumerate(zip(lines, timings)))
+
+
+def clock(sec: float) -> str:
+    sec = int(sec)
+    return f"{sec // 3600}:{sec // 60 % 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
+
+
+def chapter_marks(chapters: List[dict], timings: List[Tuple[float, float]]) -> List[dict]:
+    """[{"title", "sentence"}] -> [{"time": giây, "title"}] theo mốc thật của câu mở đầu.
+    Bỏ chapter quá sát chapter trước; không đủ 3 chapter thì trả rỗng (YouTube không nhận)."""
+    marks: List[dict] = []
+    total = timings[-1][1] if timings else 0.0
+    for ch in sorted((c for c in chapters if isinstance(c, dict)), key=lambda c: _int(c.get("sentence"))):
+        title = _text(ch.get("title"), 80)
+        idx = _int(ch.get("sentence"))
+        if not title or not 0 <= idx < len(timings):
+            continue
+        t = 0.0 if not marks else timings[idx][0]
+        if marks and (t - marks[-1]["time"] < MIN_CHAPTER_SEC or total - t < MIN_CHAPTER_SEC):
+            continue
+        marks.append({"time": round(t, 2), "title": title})
+    return marks if len(marks) >= MIN_CHAPTERS else []
+
+
+def _int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
+def youtube_package(context: str, episode: dict, lang: str, lines: List[str],
+                    timings: List[Tuple[float, float]], ask: Callable[[str], dict] = _ask_json) -> dict:
+    numbered = "\n".join(f"[{i}] ({clock(t[0])}) {line}" for i, (line, t) in enumerate(zip(lines, timings)))
+    data = ask(
+        f"{context}\n\nWrite the YouTube metadata, in {LANG_NAMES[lang]}, for episode {episode['number']} "
+        f"\"{episode['title']}\" of this educational series. Narration (sentence index, start time):\n{numbered}\n\n"
+        "Return JSON: {\"title\": catchy but honest, max 90 characters, include the series topic keyword, "
+        "\"description\": 3-5 short paragraphs (what you will learn, why it matters, who it is for), no "
+        "timestamps, no links, \"tags\": 8-15 search tags, \"chapters\": [{\"title\": 2-6 words, \"sentence\": "
+        "index of the sentence where the chapter starts}] 4-8 chapters, the first at sentence 0}"
+    )
+    marks = chapter_marks(data.get("chapters") if isinstance(data.get("chapters"), list) else [], timings)
+    description = _text(data.get("description"), 4000)
+    if marks:
+        description += "\n\n" + "\n".join(f"{clock(m['time'])} {m['title']}" for m in marks)
+    return {"title": _text(data.get("title"), 100) or episode["title"], "description": description,
+            "tags": _strings(data.get("tags"), 20, 40), "chapters": marks}

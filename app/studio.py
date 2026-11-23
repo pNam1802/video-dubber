@@ -21,10 +21,11 @@ from config.settings import JOB_RUNNER, MODAL_APP_NAME
 
 bp = Blueprint("studio", __name__)
 
-EPISODE_STEPS = ("write", "translate", "wrap", "board_vi", "board_en")
+EPISODE_STEPS = ("write", "translate", "wrap", "board_vi", "board_en", "publish_vi", "publish_en")
 TASK_LABELS = {"plan": "Đang lên lộ trình series...", "write": "Đang nghiên cứu và viết kịch bản...",
                "translate": "Đang dịch sang tiếng Anh...", "wrap": "Đang chốt tập và cập nhật trí nhớ...",
-               "board": "Đang phân cảnh video giải thích...", "preview": "Đang vẽ thử một cảnh..."}
+               "board": "Đang phân cảnh video giải thích...", "preview": "Đang vẽ thử một cảnh...",
+               "publish": "Đang dịch phụ đề và soạn gói YouTube..."}
 LANGUAGES = ("vi", "en")
 #: Cảnh xem thử dài tối đa bấy nhiêu giây — đủ thấy hình, không tốn CPU như cả video.
 PREVIEW_MAX_SEC = 15.0
@@ -212,6 +213,35 @@ def _step_preview(episode: Episode, lang: str, index: str) -> None:
     commit_volume()
 
 
+def _step_publish(episode: Episode, lang: str) -> None:
+    """Video đã xong -> phụ đề ngôn ngữ còn lại (đúng mốc từng câu) + tiêu đề, mô tả, tags, chapters."""
+    from app.models import JobStatus
+    from app.storage import commit_volume
+    from config.settings import OUTPUT_DIR
+    from core.studio import srt_text, translate_lines, youtube_package
+
+    job = db.session.get(Job, getattr(episode, f"job_{lang}_id") or 0)
+    if job is None or job.status != JobStatus.DONE or not job.video_name:
+        raise RuntimeError("Video của bản này chưa làm xong.")
+    rows = list(job.segments)
+    lines = [row.text_target or row.text_source for row in rows]
+    timings = [(row.play_start_sec if row.play_start_sec is not None else row.start_sec,
+                row.play_end_sec if row.play_end_sec is not None else row.end_sec) for row in rows]
+    if not lines:
+        raise RuntimeError("Video này không có lời thoại để làm phụ đề.")
+    other = "en" if lang == "vi" else "vi"
+    context = _context(episode)
+    translated = translate_lines(context, lines, other)
+    stem = job.video_name.rsplit(".", 1)[0]
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    names = {lang: f"{stem}.{lang}.srt", other: f"{stem}.{other}.srt"}
+    (OUTPUT_DIR / names[lang]).write_text(srt_text(lines, timings), encoding="utf-8")
+    (OUTPUT_DIR / names[other]).write_text(srt_text(translated, timings), encoding="utf-8")
+    package = youtube_package(context, episode.as_dict(), lang, lines, timings)
+    episode.publish = {**(episode.publish or {}), lang: {**package, "job_id": job.id, "srt": names}}
+    commit_volume()
+
+
 def _step_translate(episode: Episode) -> None:
     from core.studio import translate
 
@@ -236,7 +266,8 @@ def _step_wrap(episode: Episode) -> None:
 
 _STEPS = {"plan": _step_plan, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap,
           "board_vi": lambda ep: _step_board(ep, "vi"), "board_en": lambda ep: _step_board(ep, "en"),
-          "preview": _step_preview}
+          "preview": _step_preview,
+          "publish_vi": lambda ep: _step_publish(ep, "vi"), "publish_en": lambda ep: _step_publish(ep, "en")}
 
 
 # ── Trang ────────────────────────────────────────────────────
@@ -325,6 +356,8 @@ def get_series(series_id: int):
         ep["task_label"] = TASK_LABELS.get((ep["task"] or "").split(":")[0].split("_")[0])
         episode = db.session.get(Episode, ep["id"])
         for lang in LANGUAGES:
+            job = db.session.get(Job, ep[f"job_{lang}_id"]) if ep[f"job_{lang}_id"] else None
+            ep[f"job_{lang}_status"] = job.status if job else None
             ep[f"sentences_{lang}"] = _sentences(episode, lang)
             ep[f"paragraphs_{lang}"] = paragraphs(getattr(episode, f"script_{lang}"))
             ep[f"recordings_{lang}"] = recording_status(episode, lang)
@@ -473,6 +506,23 @@ def upload_recording(episode_id: int):
             old.unlink(missing_ok=True)
     commit_volume()
     return jsonify({"name": target.name, "seconds": round(seconds, 1)})
+
+
+@bp.get("/quan-tri/xuong-kich-ban/phu-de/<int:episode_id>/<filename>")
+@require_admin_page
+def serve_subtitle(episode_id: int, filename: str):
+    """Tải phụ đề đã làm ở bước đăng YouTube — chỉ chủ tập, chỉ file của tập đó."""
+    from flask import abort, send_from_directory
+
+    from app.storage import locate_file
+    from config.settings import OUTPUT_DIR
+
+    episode = _own_episode(episode_id)
+    known = {name for pack in (episode.publish or {}).values() for name in (pack.get("srt") or {}).values()}
+    if filename not in known:
+        abort(404)
+    path = locate_file(OUTPUT_DIR / filename)
+    return send_from_directory(path.parent, path.name, as_attachment=True, download_name=filename)
 
 
 @bp.get("/quan-tri/xuong-kich-ban/thu-am/<int:episode_id>/<filename>")
