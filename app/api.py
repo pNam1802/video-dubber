@@ -251,6 +251,17 @@ def create_script_job():
         if not board:
             return jsonify({"error": "Bảng phân cảnh không có cảnh hợp lệ nào."}), 400
         explainer_board = board_to_list(board)
+    # Giọng tự thu ở Xưởng kịch bản (chỉ admin): mỗi đoạn của kịch bản phải có bản thu khớp chữ.
+    recorded = None
+    if request.form.get("recorded_episode"):
+        if not current_user.is_admin:
+            return jsonify({"error": "Giọng tự thu hiện chỉ dành cho quản trị viên.", "code": 403}), 403
+        from app.studio import recorded_paragraphs_for
+
+        try:
+            recorded = recorded_paragraphs_for(current_user, int(request.form["recorded_episode"]), language, text)
+        except (ValueError, LookupError) as exc:
+            return jsonify({"error": str(exc) or "Không tìm thấy tập này."}), 400
     if script_images == "stock" and not PIXABAY_API_KEY:
         return jsonify({"error": "Kiểu Video stock chưa được bật trên máy chủ (thiếu PIXABAY_API_KEY)."}), 400
     recap_style = _pick("recap_style", set(RECAP_CHARACTER_STYLES), RECAP_CHARACTER_STYLES[0])
@@ -281,7 +292,7 @@ def create_script_job():
         message="Đã nhận kịch bản, đang khởi tạo tác vụ...",
         source_filename=_script_title(text) or "Kịch bản",
         tts_engine=tts_engine,
-        tts_voice=tts_voice,
+        tts_voice="recorded" if recorded else tts_voice,
         source_language=language,
         target_language=language,
         subtitle_mode="target",
@@ -303,7 +314,8 @@ def create_script_job():
 
     config = DubbingConfig(tts_engine=tts_engine, tts_voice=tts_voice, tts_ref_audio=ref_audio,
                            target_language=language, subtitle_mode="target", script_images=script_images,
-                           recap_style=recap_style, explainer_board=explainer_board)
+                           recap_style=recap_style, explainer_board=explainer_board,
+                           recorded_paragraphs=recorded)
     start_script_job(current_app._get_current_object(), job.id, config)
     return jsonify({"job_id": job.id}), 202
 

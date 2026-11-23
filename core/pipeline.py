@@ -75,6 +75,8 @@ class DubbingConfig:
     # Chế độ "explainer": bảng phân cảnh đã duyệt ở Xưởng kịch bản ([{"start": câu, "layout", ...}]).
     # None = để Gemini tự phân cảnh lúc render.
     explainer_board: Optional[list] = None
+    # "Đọc kịch bản" bằng giọng tự thu: {"<số thứ tự đoạn>": đường dẫn bản thu} thay cho TTS.
+    recorded_paragraphs: Optional[dict] = None
     original_volume: float = 0.0            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -434,10 +436,17 @@ class DubbingPipeline:
             job_temp_dir = TEMP_DIR / uuid.uuid4().hex
             job_temp_dir.mkdir(parents=True, exist_ok=True)
 
-            _progress(10, f"Đang đọc {len(segments)} câu...")
-            tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
-                            ref_audio=cfg.tts_ref_audio, language=cfg.target_language)
-            synthesized = tts.synthesize_all(segments)
+            if cfg.recorded_paragraphs:
+                # Giọng tự thu (Xưởng kịch bản): cắt bản thu từng đoạn thành từng câu.
+                from core.recorded_voice import synthesize_recorded
+
+                _progress(10, f"Đang ghép giọng tự thu cho {len(segments)} câu...")
+                synthesized = synthesize_recorded(segments, cfg.recorded_paragraphs, job_temp_dir / "recorded")
+            else:
+                _progress(10, f"Đang đọc {len(segments)} câu...")
+                tts = TTSEngine(engine=cfg.tts_engine, voice=cfg.tts_voice, tts_dir=job_temp_dir / "tts",
+                                ref_audio=cfg.tts_ref_audio, language=cfg.target_language)
+                synthesized = tts.synthesize_all(segments)
 
             # Có ảnh minh hoạ thì còn các bước 75-95% (core/script_images.illustrate).
             _progress(70 if cfg.script_images != "none" else 90, "Ghép các câu thành một file âm thanh...")

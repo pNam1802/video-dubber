@@ -115,6 +115,54 @@ def clear_storyboard(episode: Episode, lang: str) -> None:
     episode.previews = {k: v for k, v in (episode.previews or {}).items() if not k.startswith(lang + ":")}
 
 
+# ── Giọng tự thu ─────────────────────────────────────────────
+# Mỗi đoạn (dòng không trống của kịch bản) một bản thu, lưu trên volume: tên file mang mã nội
+# dung đoạn (core/recorded_voice.recording_name) nên sửa chữ trong đoạn thì bản thu cũ tự hết khớp
+# — không cần cột mới trong database.
+def recordings_dir(episode_id: int):
+    from config.settings import DATA_DIR
+
+    return DATA_DIR / "recordings" / str(episode_id)
+
+
+def paragraphs(text: str) -> list[str]:
+    """Các đoạn theo đúng cách core/script_reader.split_script đánh số."""
+    return [" ".join(line.split()) for line in (text or "").splitlines() if line.strip()]
+
+
+def recording_status(episode: Episode, lang: str) -> list[str | None]:
+    """Tên bản thu khớp chữ của từng đoạn, None = chưa thu (hoặc đã sửa chữ sau khi thu)."""
+    from core.recorded_voice import recording_name
+
+    folder = recordings_dir(episode.id)
+    out = []
+    for i, text in enumerate(paragraphs(getattr(episode, f"script_{lang}"))):
+        name = recording_name(episode.id, lang, i, text)
+        out.append(name if (folder / name).is_file() else None)
+    return out
+
+
+def recorded_paragraphs_for(user, episode_id: int, lang: str, text: str) -> dict[str, str]:
+    """{"<đoạn>": đường dẫn bản thu} cho kịch bản `text`; thiếu đoạn nào thì ném ValueError."""
+    from core.recorded_voice import recording_name
+
+    episode = db.session.get(Episode, episode_id)
+    if episode is None or episode.series.user_id != user.id:
+        raise LookupError("Không tìm thấy tập này.")
+    folder = recordings_dir(episode_id)
+    found, missing = {}, []
+    for i, para in enumerate(paragraphs(text)):
+        path = folder / recording_name(episode_id, lang, i, para)
+        if path.is_file():
+            found[str(i)] = str(path)
+        else:
+            missing.append(i + 1)
+    if missing:
+        shown = ", ".join(map(str, missing[:8])) + ("..." if len(missing) > 8 else "")
+        raise ValueError(f"Còn {len(missing)} đoạn chưa thu giọng (đoạn {shown}).")
+    return found
+
+
 def _step_board(episode: Episode, lang: str) -> None:
     from core.explainer import board_to_list, estimate_timings, write_board
 
@@ -275,8 +323,11 @@ def get_series(series_id: int):
     data["task_label"] = TASK_LABELS.get(data["task"] or "")
     for ep in data["episodes"]:
         ep["task_label"] = TASK_LABELS.get((ep["task"] or "").split(":")[0].split("_")[0])
+        episode = db.session.get(Episode, ep["id"])
         for lang in LANGUAGES:
-            ep[f"sentences_{lang}"] = _sentences(db.session.get(Episode, ep["id"]), lang)
+            ep[f"sentences_{lang}"] = _sentences(episode, lang)
+            ep[f"paragraphs_{lang}"] = paragraphs(getattr(episode, f"script_{lang}"))
+            ep[f"recordings_{lang}"] = recording_status(episode, lang)
     return jsonify(data)
 
 
@@ -377,6 +428,67 @@ def serve_preview(filename: str):
         abort(404)
     path = locate_file(OUTPUT_DIR / filename)
     return send_from_directory(path.parent, path.name, as_attachment=False)
+
+
+@bp.post("/api/studio/episodes/<int:episode_id>/recordings")
+@require_admin
+def upload_recording(episode_id: int):
+    """Lưu bản tự thu của một đoạn (thay bản cũ của đoạn đó)."""
+    import tempfile
+    import uuid
+    from pathlib import Path
+
+    from app.storage import commit_volume
+    from core.recorded_voice import normalize_take, recording_name
+
+    episode = _own_episode(episode_id)
+    lang = request.form.get("lang")
+    try:
+        index = int(request.form.get("index", -1))
+    except ValueError:
+        index = -1
+    paras = paragraphs(getattr(episode, f"script_{lang}", "") if lang in LANGUAGES else "")
+    if not 0 <= index < len(paras):
+        return jsonify({"error": "Không có đoạn này trong kịch bản (kịch bản vừa đổi? Hãy lưu rồi tải lại trang)."}), 400
+    upload = request.files.get("file")
+    if upload is None:
+        return jsonify({"error": "Chưa có bản thu."}), 400
+    folder = recordings_dir(episode.id)
+    folder.mkdir(parents=True, exist_ok=True)
+    raw = Path(tempfile.gettempdir()) / f"take_{uuid.uuid4().hex}{Path(upload.filename or '').suffix or '.webm'}"
+    upload.save(raw)
+    target = folder / recording_name(episode.id, lang, index, paras[index])
+    try:
+        seconds = normalize_take(raw, target)
+    except RuntimeError:
+        return jsonify({"error": "Không đọc được bản thu — thử thu lại."}), 400
+    finally:
+        raw.unlink(missing_ok=True)
+    if seconds < 0.5:
+        target.unlink(missing_ok=True)
+        return jsonify({"error": "Bản thu gần như im lặng — kiểm tra lại micro."}), 400
+    # Bỏ các bản thu cũ của đoạn này (chữ cũ hoặc lần thu trước).
+    for old in folder.glob(f"rec_{episode.id}_{lang}_{index}_*.wav"):
+        if old != target:
+            old.unlink(missing_ok=True)
+    commit_volume()
+    return jsonify({"name": target.name, "seconds": round(seconds, 1)})
+
+
+@bp.get("/quan-tri/xuong-kich-ban/thu-am/<int:episode_id>/<filename>")
+@require_admin_page
+def serve_recording(episode_id: int, filename: str):
+    import re
+
+    from flask import abort, send_from_directory
+
+    _own_episode(episode_id)
+    if not re.fullmatch(rf"rec_{episode_id}_(vi|en)_\d+_[0-9a-f]{{8}}\.wav", filename):
+        abort(404)
+    folder = recordings_dir(episode_id)
+    if not (folder / filename).is_file():
+        abort(404)
+    return send_from_directory(folder, filename, as_attachment=False, max_age=0)
 
 
 @bp.post("/api/studio/episodes/<int:episode_id>/<step>")
