@@ -88,6 +88,7 @@ def test_upload_recording_then_video_uses_it(as_admin, as_user, monkeypatch, tmp
 
 @needs_ffmpeg
 def test_pipeline_reads_script_with_recorded_voice(tmp_path):
+    pytest.importorskip("pydub")  # đường ghép âm thanh của pipeline (không có trong requirements-dev)
     from core.pipeline import DubbingConfig, DubbingPipeline
     from core.script_reader import split_script
     from core.transcriber import Segment

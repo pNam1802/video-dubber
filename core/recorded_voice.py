@@ -54,9 +54,13 @@ def normalize_take(src: Path, dst: Path) -> float:
 
 
 def duration(path: Path) -> float:
-    import soundfile
+    # ffprobe chứ không dùng soundfile: bước lưu bản thu chạy trên container web, ảnh web
+    # (requirements-web.txt) chỉ có ffmpeg, không có thư viện âm thanh Python.
+    from config.settings import FFPROBE_BIN
 
-    return float(soundfile.info(str(path)).duration)
+    result = run_command([FFPROBE_BIN, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+                         timeout=30, error_message="Không đọc được độ dài bản thu.")
+    return float(result.stdout.strip() or 0)
 
 
 def silences(path: Path) -> List[Tuple[float, float]]:
