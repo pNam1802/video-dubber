@@ -57,6 +57,11 @@ image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("ffmpeg")
     .pip_install_from_requirements("requirements.txt")
+    # Manim cho "Video giai thich" (core/explainer.py, Composer chay). Lop RIENG
+    # sau requirements.txt de them/doi no khong build lai lop torch phia tren.
+    # manimpango/pycairo khong co wheel Linux nen can trinh bien dich + Cairo/Pango.
+    .apt_install("build-essential", "pkg-config", "libcairo2-dev", "libpango1.0-dev")
+    .pip_install("manim==0.22.1")
     # add_local_* phai la lop CUOI CUNG — Modal cam moi build step sau no.
     # Mount vao /root vi do la thu muc lam viec mac dinh cua container;
     # de o cho khac thi `from wsgi import app` se khong tim thay module.

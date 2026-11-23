@@ -232,6 +232,10 @@ def create_script_job():
     # Giao diện cho chọn Manhwa recap (mặc định) hoặc Video stock; các chế độ
     # khác vẫn nhận nếu gửi tường minh (CLI, client cũ).
     script_images = _pick("script_images", set(SCRIPT_IMAGE_MODES), "recap")
+    # Video giải thích (Manim) đang thử nghiệm: chỉ admin. Chặn ở đây vì ai
+    # cũng gửi thẳng được giá trị này, giao diện ẩn đi là chưa đủ.
+    if script_images == "explainer" and not current_user.is_admin:
+        return jsonify({"error": "Kiểu Video giải thích hiện chỉ dành cho quản trị viên.", "code": 403}), 403
     if script_images == "stock" and not PIXABAY_API_KEY:
         return jsonify({"error": "Kiểu Video stock chưa được bật trên máy chủ (thiếu PIXABAY_API_KEY)."}), 400
     recap_style = _pick("recap_style", set(RECAP_CHARACTER_STYLES), RECAP_CHARACTER_STYLES[0])

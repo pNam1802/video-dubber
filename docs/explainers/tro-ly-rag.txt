@@ -1,0 +1,31 @@
+Trợ lý AI cho Nora: hỏi gì, đáp nấy, dựa trên tài liệu thật.
+
+Người mới vào Nora thường có những câu hỏi rất cụ thể. App có lồng tiếng sang tiếng Pháp không? Muốn clone giọng của mình thì làm thế nào? Vì sao video của tôi bị lỗi? Tôi còn bao nhiêu lượt hôm nay?
+
+Nếu chỉ đưa những câu hỏi này cho một mô hình ngôn ngữ lớn, nó sẽ trả lời rất trôi chảy, nhưng có thể sai. Mô hình không hề biết Nora có những tính năng gì, và khi không biết, nó có xu hướng bịa ra câu trả lời nghe rất hợp lý.
+
+RAG giải quyết đúng vấn đề này. RAG là viết tắt của Retrieval Augmented Generation, tức là sinh câu trả lời có tra cứu. Thay vì để mô hình tự nhớ, ta tìm đúng đoạn tài liệu liên quan, đưa cho mô hình đọc, rồi mới bảo nó trả lời.
+
+Bước đầu tiên là chuẩn bị kho kiến thức. Ta viết bộ tài liệu hướng dẫn dành riêng cho người dùng: các tính năng, cách dùng từng bước, các giọng đọc, giới hạn của hệ thống, và giải thích các lỗi hay gặp. Quan trọng nhất là một mục ghi rõ những gì Nora chưa hỗ trợ, để trợ lý biết nói không.
+
+Tài liệu được cắt thành từng đoạn nhỏ theo tiêu đề. Mỗi đoạn sau đó được biến thành một embedding, tức là một dãy số đại diện cho ý nghĩa của đoạn văn.
+
+Hãy tưởng tượng mỗi đoạn tài liệu là một điểm trong không gian. Những đoạn có nghĩa gần nhau sẽ nằm gần nhau. Khi người dùng hỏi cách clone giọng, câu hỏi cũng được biến thành một điểm, và ta chỉ việc lấy những đoạn tài liệu nằm gần nó nhất, như đoạn về giọng của bạn và đoạn về cách ghi âm mẫu.
+
+Nhưng embedding đôi khi bỏ sót tên riêng như Nora, VieNeu hay edge-tts. Vì vậy ta kết hợp thêm tìm kiếm theo từ khóa BM25. Cách kết hợp hai kiểu tìm kiếm này gọi là hybrid search, giúp kết quả chính xác hơn hẳn.
+
+Tuy nhiên, có những câu hỏi tài liệu không thể trả lời, ví dụ tôi còn bao nhiêu lượt, hay vì sao video số mười hai bị lỗi. Đó là dữ liệu thay đổi theo từng người, từng lúc. Lúc này trợ lý cần trở thành một agent.
+
+Agent là mô hình được trao một bộ công cụ và tự quyết định dùng công cụ nào. Với câu hỏi về tính năng, nó gọi công cụ tìm tài liệu. Với câu hỏi về hạn mức, nó gọi công cụ đọc quota. Với câu hỏi về video lỗi, nó gọi công cụ xem trạng thái job. Mọi công cụ đều chỉ đọc, và chỉ thấy dữ liệu của chính người đang hỏi.
+
+Luồng hoàn chỉnh như sau. Người dùng đặt câu hỏi. Agent chọn công cụ. Hệ thống tìm tài liệu hoặc tra dữ liệu. Cuối cùng Gemini viết câu trả lời kèm nguồn trích dẫn.
+
+Ví dụ, người dùng hỏi: Nora lồng tiếng sang tiếng Pháp được không? Trợ lý tìm thấy mục chưa hỗ trợ và trả lời: hiện Nora chưa hỗ trợ tiếng Pháp, bạn có thể dịch sang tiếng Việt, Anh, Nhật, Trung hoặc Hàn.
+
+Nguyên tắc quan trọng nhất là chống bịa. Nếu không tìm thấy đoạn tài liệu nào đủ liên quan, trợ lý phải nói là không biết, thay vì đoán.
+
+Những câu hỏi mà trợ lý không trả lời được cũng rất có giá trị. Ta lưu chúng lại thành một danh sách cho quản trị viên. Đó chính là những tính năng người dùng thật sự đang cần, giúp quyết định nên làm gì tiếp theo.
+
+Cuối cùng, ta đo chất lượng bằng một bộ khoảng ba mươi câu hỏi mẫu, gồm cả những câu về tính năng không có. Ta đo tỉ lệ tìm đúng tài liệu, và tỉ lệ trợ lý từ chối đúng thay vì bịa.
+
+Tóm lại, trợ lý của Nora gồm ba phần: RAG để trả lời đúng theo tài liệu, agent để tra dữ liệu thật của người dùng, và cơ chế chống bịa để luôn trung thực. Đó là một trợ lý thật sự hữu ích, chứ không chỉ là một chatbot cho có.
