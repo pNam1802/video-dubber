@@ -30,8 +30,14 @@ SCENE_SEC = 8.0
 MIN_SCENE_SEC = 3.0
 MAX_SCENES = 80
 FPS = 25
-RESOLUTION = "1280,720"
-RENDER_WORKERS = 2
+#: Chất lượng -> độ phân giải Manim. Đo 24/11/2026: 1080p render nhanh ngang 720p (thời gian
+#: nằm ở dựng chữ bằng Pango, không phải số điểm ảnh).
+RESOLUTIONS = {"720p": "1280,720", "1080p": "1920,1080"}
+#: Số cảnh render song song. Composer đặt trước 1 lõi nhưng Modal cho dùng vượt và tính theo
+#: mức dùng thật, nên thêm tiến trình làm video xong sớm hơn mà tổng tiền CPU gần như không đổi.
+RENDER_WORKERS = max(1, int(os.getenv("EXPLAINER_WORKERS", "3")))
+#: Nhạc nền: mức to so với giọng đọc, và mức nhạc bị hạ thêm (ducking) mỗi khi có giọng.
+MUSIC_VOLUME = 0.18
 FIELD_CHARS = 80
 
 #: Bố cục -> các trường chữ (str) và danh sách chữ (list[str]) của nó. Trường có cấu trúc
@@ -291,7 +297,7 @@ def frame_counts(slides: List[Slide]) -> List[int]:
     return [max(1, round(end * FPS) - round(start * FPS)) for _, start, end in slides]
 
 
-def render_scene(scene: dict, frames: int, output: Path, work_dir: Path) -> None:
+def render_scene(scene: dict, frames: int, output: Path, work_dir: Path, quality: str = "720p") -> None:
     """Render một cảnh bằng Manim rồi cắt/kéo (giữ khung cuối) cho đúng số khung."""
     name = output.stem
     spec = work_dir / f"{name}.json"
@@ -299,7 +305,7 @@ def render_scene(scene: dict, frames: int, output: Path, work_dir: Path) -> None
     media = work_dir / f"media_{name}"
     run_command(
         [sys.executable, "-m", "manim", "render", str(SCENE_FILE), "ExplainerScene", "--format", "mp4",
-         "-r", RESOLUTION, "--fps", str(FPS), "--media_dir", str(media), "-o", name,
+         "-r", RESOLUTIONS.get(quality, RESOLUTIONS["720p"]), "--fps", str(FPS), "--media_dir", str(media), "-o", name,
          "--disable_caching", "--progress_bar", "none", "-v", "WARNING"],
         timeout=600, error_message="Không vẽ được cảnh video giải thích.",
         env={**os.environ, "EXPLAINER_SPEC": str(spec)},
@@ -316,19 +322,32 @@ def render_scene(scene: dict, frames: int, output: Path, work_dir: Path) -> None
     )
 
 
-def make_video(parts: List[Path], audio: Path, output: Path, work_dir: Path) -> None:
+def music_filter(volume: float = MUSIC_VOLUME) -> str:
+    """Nhạc nền lặp cho đủ dài, nhỏ, tự hạ thêm khi có giọng (sidechain), dài đúng bằng giọng đọc.
+    Đầu vào: [1:a] giọng đọc, [2:a] nhạc. Đầu ra: [aout]."""
+    return (f"[2:a]aformat=channel_layouts=stereo,volume={volume}[bed];"
+            "[1:a]aformat=channel_layouts=stereo,asplit=2[voice][key];"
+            "[bed][key]sidechaincompress=threshold=0.03:ratio=6:attack=50:release=600[ducked];"
+            "[voice][ducked]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]")
+
+
+def make_video(parts: List[Path], audio: Path, output: Path, work_dir: Path, music: Path | None = None) -> None:
     listing = work_dir / "scenes.txt"
     listing.write_text("".join(f"file '{p.resolve().as_posix()}'\n" for p in parts), encoding="utf-8")
-    run_command(
-        ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-i", str(audio),
-         "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest",
-         "-movflags", "+faststart", str(output)],
-        timeout=1800, error_message="Không ghép được video giải thích với giọng đọc.",
-    )
+    cmd = ["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-i", str(audio)]
+    if music is not None and Path(music).is_file():
+        cmd += ["-stream_loop", "-1", "-i", str(music), "-filter_complex", music_filter(), "-map", "0:v",
+                "-map", "[aout]"]
+    else:
+        cmd += ["-map", "0:v", "-map", "1:a"]
+    run_command(cmd + ["-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart",
+                       str(output)],
+                timeout=1800, error_message="Không ghép được video giải thích với giọng đọc.")
 
 
 def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path, output: Path, work_dir: Path,
-           progress=lambda percent, message: None, approved: List[dict] | None = None) -> dict:
+           progress=lambda percent, message: None, approved: List[dict] | None = None,
+           quality: str = "720p", music: str | None = None) -> dict:
     """Toàn bộ chế độ "explainer". Trả về thời gian từng bước (giây)."""
     t0 = time.time()
     scenes, slides = plan(sentences, timings, approved)
@@ -340,11 +359,11 @@ def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path
     counts = frame_counts(slides)
     parts = [work_dir / f"scene_{k:03d}.mp4" for k in range(len(scenes))]
     with ThreadPoolExecutor(RENDER_WORKERS) as pool:
-        list(pool.map(lambda k: render_scene(scenes[k], counts[k], parts[k], work_dir), range(len(scenes))))
+        list(pool.map(lambda k: render_scene(scenes[k], counts[k], parts[k], work_dir, quality), range(len(scenes))))
     t2 = time.time()
 
     progress(95, "Đang ghép các cảnh với giọng đọc...")
-    make_video(parts, audio, output, work_dir)
+    make_video(parts, audio, output, work_dir, Path(music) if music else None)
     # Không trả khoá "images": app/jobs.py tính khoá đó theo giá GPU, còn đây chỉ là CPU.
     return {"image_prompts": round(t1 - t0, 2), "scenes": round(t2 - t1, 2),
             "slideshow": round(time.time() - t2, 2)}

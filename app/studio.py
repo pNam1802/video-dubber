@@ -120,6 +120,28 @@ def clear_storyboard(episode: Episode, lang: str) -> None:
 # Mỗi đoạn (dòng không trống của kịch bản) một bản thu, lưu trên volume: tên file mang mã nội
 # dung đoạn (core/recorded_voice.recording_name) nên sửa chữ trong đoạn thì bản thu cũ tự hết khớp
 # — không cần cột mới trong database.
+# ── Nhạc nền của series ──────────────────────────────────────
+# Mỗi series một bản nhạc (người dùng tự tải lên, ví dụ từ YouTube Audio Library), lưu trên volume
+# DATA_DIR/music/<series>.m4a — không cần cột mới. Trộn vào Video giải thích: nhỏ, tự hạ khi có giọng.
+MUSIC_MAX_SEC = 600
+
+
+def music_file(series_id: int):
+    from config.settings import DATA_DIR
+
+    return DATA_DIR / "music" / f"{series_id}.m4a"
+
+
+def music_path_for(user, series_id: int) -> str:
+    series = db.session.get(Series, series_id)
+    if series is None or series.user_id != user.id:
+        raise LookupError("Không tìm thấy series.")
+    path = music_file(series_id)
+    if not path.is_file():
+        raise ValueError("Series này chưa có nhạc nền.")
+    return str(path)
+
+
 def recordings_dir(episode_id: int):
     from config.settings import DATA_DIR
 
@@ -351,6 +373,7 @@ def create_series():
 @require_admin
 def get_series(series_id: int):
     data = _own_series(series_id).as_dict()
+    data["has_music"] = music_file(series_id).is_file()
     data["task_label"] = TASK_LABELS.get(data["task"] or "")
     for ep in data["episodes"]:
         ep["task_label"] = TASK_LABELS.get((ep["task"] or "").split(":")[0].split("_")[0])
@@ -377,6 +400,60 @@ def update_series(series_id: int):
         series.glossary = clean_glossary(body["glossary"])
     db.session.commit()
     return jsonify(series.as_dict())
+
+
+@bp.post("/api/studio/series/<int:series_id>/music")
+@require_admin
+def upload_music(series_id: int):
+    import tempfile
+    import uuid
+    from pathlib import Path
+
+    from app.storage import commit_volume
+    from config.settings import FFMPEG_BIN
+    from utils.proc import run_command
+
+    _own_series(series_id)
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "Chưa chọn file nhạc."}), 400
+    raw = Path(tempfile.gettempdir()) / f"music_{uuid.uuid4().hex}{Path(upload.filename).suffix}"
+    upload.save(raw)
+    target = music_file(series_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        run_command([FFMPEG_BIN, "-v", "error", "-y", "-i", str(raw), "-vn", "-t", str(MUSIC_MAX_SEC), "-ac", "2",
+                     "-ar", "44100", "-c:a", "aac", "-b:a", "128k", str(target)],
+                    timeout=180, error_message="Không đọc được file nhạc.")
+    except RuntimeError:
+        return jsonify({"error": "Không đọc được file nhạc — hãy dùng mp3, m4a, wav hoặc ogg."}), 400
+    finally:
+        raw.unlink(missing_ok=True)
+    commit_volume()
+    return jsonify({"has_music": True})
+
+
+@bp.delete("/api/studio/series/<int:series_id>/music")
+@require_admin
+def delete_music(series_id: int):
+    from app.storage import commit_volume
+
+    _own_series(series_id)
+    music_file(series_id).unlink(missing_ok=True)
+    commit_volume()
+    return jsonify({"has_music": False})
+
+
+@bp.get("/quan-tri/xuong-kich-ban/nhac/<int:series_id>.m4a")
+@require_admin_page
+def serve_music(series_id: int):
+    from flask import abort, send_from_directory
+
+    _own_series(series_id)
+    path = music_file(series_id)
+    if not path.is_file():
+        abort(404)
+    return send_from_directory(path.parent, path.name, max_age=0)
 
 
 @bp.delete("/api/studio/series/<int:series_id>")

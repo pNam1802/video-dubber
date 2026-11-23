@@ -244,7 +244,9 @@ chủ dự án có quyền sử dụng.
   hiện đúng lúc giọng đọc sang câu nói tới nó, cuối cảnh mờ dần sang cảnh sau. LLM chỉ điền dữ liệu, không sinh code: hình vẽ cố định trong
   [`core/explainer_scene.py`](core/explainer_scene.py). Mỗi cảnh render trong tiến trình `manim`
   riêng rồi cắt đúng số khung theo lời đọc. Chữ dùng font Be Vietnam Pro, code dùng JetBrains Mono
-  (cả hai OFL, `core/fonts/`). Chỉ tốn CPU (~35–90 giây render cho mỗi cảnh 7 giây).
+  (cả hai OFL, `core/fonts/`). Chỉ tốn CPU (~35–90 giây render cho mỗi cảnh 7 giây, 720p hay 1080p
+  như nhau; 3 cảnh song song — `EXPLAINER_WORKERS`). Nhạc nền tuỳ chọn theo series (người dùng tự tải
+  lên): lặp cho đủ dài, nhỏ, tự hạ khi có giọng đọc (sidechain).
 - Các chế độ ảnh cũ (`none`, `few`, `scenes`, `manga`) vẫn nhận qua API/CLI nếu gửi tường minh.
   Vẽ ảnh hỏng thì job vẫn xong với mp3 và báo lý do.
 

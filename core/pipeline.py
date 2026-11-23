@@ -77,6 +77,9 @@ class DubbingConfig:
     explainer_board: Optional[list] = None
     # "Đọc kịch bản" bằng giọng tự thu: {"<số thứ tự đoạn>": đường dẫn bản thu} thay cho TTS.
     recorded_paragraphs: Optional[dict] = None
+    # Video giải thích: "720p" | "1080p", và nhạc nền (đường dẫn file trên volume, None = không nhạc).
+    explainer_quality: str = "720p"
+    background_music: Optional[str] = None
     original_volume: float = 0.0            # 0.0 – 1.0
     subtitle_mode: str = "bilingual"        # "bilingual" | "target" | "source" | "none"
     # API dich hong thi lui ve MarianMT (chay offline) thay vi hong ca job.
@@ -498,6 +501,7 @@ class DubbingPipeline:
                 [(seg.translated or seg.text) for seg, _ in synthesized], timings, audio, video,
                 work_dir / "images", self.config.script_images, progress,
                 recap_style=self.config.recap_style, explainer_board=self.config.explainer_board,
+                explainer_quality=self.config.explainer_quality, background_music=self.config.background_music,
             ))
         except Exception as exc:
             video.unlink(missing_ok=True)

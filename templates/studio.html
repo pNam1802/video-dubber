@@ -51,6 +51,16 @@
       <label><span class="field-label">Văn phong (agent tuân theo khi viết mọi tập)</span>
         <textarea id="styleGuide" rows="8" class="input"></textarea>
         <button id="saveStyle" class="btn-secondary btn-sm mt-2" type="button">Lưu văn phong</button></label>
+      <div class="lg:col-span-2 flex flex-col gap-2">
+        <span class="field-label !mb-0">Nhạc nền cho video giải thích</span>
+        <p class="font-label-sm text-label-sm text-on-surface-variant">Tải lên một bản nhạc không lời (ví dụ từ YouTube Audio Library — miễn phí dùng trên YouTube). Nhạc lặp cho đủ dài, nhỏ và tự hạ thấp mỗi khi có giọng đọc.</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <label class="btn-secondary btn-sm cursor-pointer"><span class="material-symbols-outlined text-[18px]">upload</span><span id="musicLabel">Tải nhạc lên</span>
+            <input id="musicInput" type="file" accept="audio/*" class="hidden"></label>
+          <audio id="musicPlayer" controls preload="none" class="h-9 hidden"></audio>
+          <button id="musicDelete" type="button" class="btn-ghost btn-sm hidden">Bỏ nhạc</button>
+        </div>
+      </div>
       <div><span class="field-label">Thuật ngữ Việt – Anh (<span id="termCount">0</span>)</span>
         <div id="glossary" class="max-h-[260px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div></div>
     </div>
@@ -200,6 +210,11 @@
       const styleBox = document.getElementById("styleGuide");
       if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
       document.getElementById("termCount").textContent = series.glossary.length;
+      const player = document.getElementById("musicPlayer");
+      player.classList.toggle("hidden", !series.has_music);
+      document.getElementById("musicDelete").classList.toggle("hidden", !series.has_music);
+      document.getElementById("musicLabel").textContent = series.has_music ? "Đổi nhạc" : "Tải nhạc lên";
+      if (series.has_music && !player.src) player.src = "/quan-tri/xuong-kich-ban/nhac/" + SERIES_ID + ".m4a?v=" + Date.now();
       document.getElementById("glossary").innerHTML = series.glossary.map(function (g) {
         return '<div><span class="text-on-surface">' + esc(g.vi) + '</span> = <span class="text-primary">' + esc(g.en) +
           '</span><span class="text-on-surface-variant"> — ' + esc(g.definition) + '</span></div>';
@@ -282,6 +297,10 @@
             '<div class="flex gap-2 flex-wrap items-center">' +
               '<button data-save="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>Lưu</button>' +
               voiceSelect(lang) +
+              '<select data-quality="' + lang + '" class="input !w-auto" title="Chất lượng video">' +
+                '<option value="1080p">1080p</option><option value="720p"' + (localStorage.getItem("studioQuality") === "720p" ? " selected" : "") +
+                '>720p</option></select>' +
+              (series.has_music ? '<label class="flex items-center gap-1 font-body-md text-body-md"><input type="checkbox" data-music="' + lang + '" checked class="w-4 h-4">Nhạc nền</label>' : "") +
               '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
                 '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
               '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
@@ -500,6 +519,11 @@
         form.append("tts_voice", pick[1]);
       }
       form.append("script_images", "explainer");
+      const quality = document.querySelector('[data-quality="' + lang + '"]').value;
+      localStorage.setItem("studioQuality", quality);
+      form.append("quality", quality);
+      const music = document.querySelector('[data-music="' + lang + '"]');
+      if (music && music.checked) form.append("music_series", SERIES_ID);
       if (board.length) form.append("storyboard", JSON.stringify(board));
       const res = await fetch("/api/script", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
       const data = await res.json().catch(function () { return {}; });
@@ -587,6 +611,30 @@
     document.addEventListener("input", function (event) {
       const lang = event.target.dataset && event.target.dataset.script;
       if (lang) document.querySelector('[data-count="' + lang + '"]').textContent = words(event.target.value);
+    });
+
+    document.getElementById("musicInput").addEventListener("change", async function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("csrf_token", CSRF);
+      form.append("file", file);
+      try {
+        const res = await fetch("/api/studio/series/" + SERIES_ID + "/music", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) throw new Error(data.error || "Không tải được nhạc.");
+        document.getElementById("musicPlayer").removeAttribute("src");
+        Nora.toast("Đã lưu nhạc nền.", "success");
+        await load();
+      } catch (err) { fail(err); }
+      event.target.value = "";
+    });
+    document.getElementById("musicDelete").addEventListener("click", async function () {
+      try {
+        await api("/api/studio/series/" + SERIES_ID + "/music", "DELETE");
+        document.getElementById("musicPlayer").removeAttribute("src");
+        await load();
+      } catch (err) { fail(err); }
     });
 
     load().catch(fail);
