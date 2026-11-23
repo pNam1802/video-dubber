@@ -262,6 +262,17 @@ def create_script_job():
             recorded = recorded_paragraphs_for(current_user, int(request.form["recorded_episode"]), language, text)
         except (ValueError, LookupError) as exc:
             return jsonify({"error": str(exc) or "Không tìm thấy tập này."}), 400
+    # Video giải thích: chất lượng và nhạc nền của series (Xưởng kịch bản, chỉ admin).
+    explainer_quality, background_music = "720p", None
+    if script_images == "explainer":
+        explainer_quality = _pick("quality", {"720p", "1080p"}, "720p")
+        if request.form.get("music_series"):
+            from app.studio import music_path_for
+
+            try:
+                background_music = music_path_for(current_user, int(request.form["music_series"]))
+            except (ValueError, LookupError):
+                return jsonify({"error": "Series này chưa có nhạc nền."}), 400
     if script_images == "stock" and not PIXABAY_API_KEY:
         return jsonify({"error": "Kiểu Video stock chưa được bật trên máy chủ (thiếu PIXABAY_API_KEY)."}), 400
     recap_style = _pick("recap_style", set(RECAP_CHARACTER_STYLES), RECAP_CHARACTER_STYLES[0])
@@ -315,7 +326,8 @@ def create_script_job():
     config = DubbingConfig(tts_engine=tts_engine, tts_voice=tts_voice, tts_ref_audio=ref_audio,
                            target_language=language, subtitle_mode="target", script_images=script_images,
                            recap_style=recap_style, explainer_board=explainer_board,
-                           recorded_paragraphs=recorded)
+                           recorded_paragraphs=recorded, explainer_quality=explainer_quality,
+                           background_music=background_music)
     start_script_job(current_app._get_current_object(), job.id, config)
     return jsonify({"job_id": job.id}), 202
 

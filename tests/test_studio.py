@@ -261,3 +261,39 @@ def test_youtube_package_appends_computed_chapters():
     pack = cs.youtube_package("ctx", {"number": 1, "title": "Token"}, "vi", ["a"] * 5, TIMINGS, ask=lambda p: answer)
     assert len(pack["title"]) == 100 and pack["tags"] == ["llm", "token"]
     assert pack["description"].endswith("0:00 Mở đầu\n0:12 Token\n0:31 Kết")
+
+
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None, reason="cần ffmpeg")
+def test_music_upload_and_video_options(app, as_admin, as_user, fake_agent, monkeypatch, tmp_path):
+    import io
+    import subprocess
+
+    import app.api as api
+
+    monkeypatch.setattr("config.settings.DATA_DIR", tmp_path)
+    monkeypatch.setattr("app.storage.commit_volume", lambda: None)
+    series_id = as_admin.post("/api/studio/series", json={"topic": "x", "episodes": 1}).get_json()["id"]
+    song = tmp_path / "song.mp3"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=330:duration=2", str(song)],
+                   check=True)
+
+    def upload(client=as_admin, data=song.read_bytes()):
+        return client.post(f"/api/studio/series/{series_id}/music", data={"file": (io.BytesIO(data), "nhac.mp3")},
+                           content_type="multipart/form-data")
+
+    assert upload(data=b"khong phai nhac").status_code == 400
+    assert upload(as_user).status_code == 403
+    assert upload().status_code == 200
+    assert as_admin.get(f"/api/studio/series/{series_id}").get_json()["has_music"] is True
+    assert as_admin.get(f"/quan-tri/xuong-kich-ban/nhac/{series_id}.m4a").status_code == 200
+
+    captured: dict = {}
+    monkeypatch.setattr(api, "start_script_job", lambda flask_app, job_id, config: captured.update(config=config))
+    form = {"script": "Một. Hai.", "target_language": "vi", "tts_engine": "edge-tts", "tts_voice": "female",
+            "script_images": "explainer", "quality": "1080p", "music_series": str(series_id)}
+    assert as_admin.post("/api/script", data=form).status_code == 202
+    assert captured["config"].explainer_quality == "1080p"
+    assert captured["config"].background_music.endswith(f"{series_id}.m4a")
+
+    assert as_admin.delete(f"/api/studio/series/{series_id}/music").get_json() == {"has_music": False}
+    assert as_admin.post("/api/script", data=form).status_code == 400

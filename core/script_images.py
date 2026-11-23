@@ -302,7 +302,8 @@ def make_slideshow(images: List[Path], slides: List[Slide], audio: Path, output:
 
 def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: Path, output: Path,
                work_dir: Path, mode: str, progress=lambda percent, message: None,
-               recap_style: str = RECAP_CHARACTER_STYLES[0], explainer_board: list | None = None) -> dict:
+               recap_style: str = RECAP_CHARACTER_STYLES[0], explainer_board: list | None = None,
+               explainer_quality: str = "720p", background_music: str | None = None) -> dict:
     """Toàn bộ bước ảnh minh hoạ. Trả về thời gian từng bước (giây)."""
     import time
 
@@ -313,7 +314,8 @@ def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: 
     if mode == "explainer":
         from core import explainer
 
-        return explainer.render(sentences, timings, audio, output, work_dir, progress, approved=explainer_board)
+        return explainer.render(sentences, timings, audio, output, work_dir, progress, approved=explainer_board,
+                                quality=explainer_quality, music=background_music)
     if mode == "stock":
         from core import stock_footage
 

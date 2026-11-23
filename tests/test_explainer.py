@@ -158,3 +158,21 @@ def test_api_passes_approved_storyboard_to_job(as_admin, monkeypatch):
     assert [s["start"] for s in captured["config"].explainer_board] == [0, 2]
     data["storyboard"] = "không phải json"
     assert as_admin.post("/api/script", data=data).status_code == 400
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="cần ffmpeg")
+def test_make_video_mixes_looped_music_under_voice(tmp_path):
+    import subprocess
+
+    def run(*args):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
+
+    run("-f", "lavfi", "-i", "color=c=black:s=320x180:d=3:r=25", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        str(tmp_path / "v.mp4"))
+    run("-f", "lavfi", "-i", "sine=frequency=440:duration=3", str(tmp_path / "voice.mp3"))
+    run("-f", "lavfi", "-i", "sine=frequency=220:duration=1", str(tmp_path / "music.mp3"))  # ngắn hơn: phải lặp
+    out = tmp_path / "out.mp4"
+    ex.make_video([tmp_path / "v.mp4"], tmp_path / "voice.mp3", out, tmp_path, tmp_path / "music.mp3")
+    seconds = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                    str(out)], capture_output=True, text=True, check=True).stdout)
+    assert seconds == pytest.approx(3.0, abs=0.15)
