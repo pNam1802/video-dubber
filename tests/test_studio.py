@@ -189,3 +189,75 @@ def test_storyboard_step_preview_and_reset_on_script_change(as_admin, fake_agent
     res = as_admin.patch(f"/api/studio/episodes/{ep_id}", json={"script_vi": "Khác hẳn."})
     assert res.get_json()["storyboard_vi"] == [] and res.get_json()["previews"] == {}
     assert st.TASK_LABELS["board"]
+
+
+# ── Đăng YouTube ─────────────────────────────────────────────
+TIMINGS = [(0.0, 4.0), (4.5, 12.0), (12.4, 20.0), (20.5, 31.0), (31.4, 45.0)]
+
+
+def test_chapter_marks_follow_youtube_rules():
+    chapters = [{"title": "Embedding", "sentence": 4}, {"title": "Mở đầu", "sentence": 1},
+                {"title": "Token", "sentence": 2}, {"title": "Quá sát", "sentence": 3},
+                {"title": "", "sentence": 0}, {"title": "Ngoài", "sentence": 99}]
+    marks = cs.chapter_marks(chapters, TIMINGS)
+    # Chapter đầu luôn ở 0:00; "Quá sát" cách "Token" 8,1 giây (< 10) nên bị bỏ; dòng rỗng/ngoài phạm vi bị bỏ.
+    assert [(m["time"], m["title"]) for m in marks] == [(0.0, "Mở đầu"), (12.4, "Token"), (31.4, "Embedding")]
+    assert cs.chapter_marks([{"title": "Một", "sentence": 0}], TIMINGS) == []  # < 3 chapter thì YouTube không nhận
+
+
+def test_translate_lines_keeps_line_count():
+    answers = iter([{"lines": ["one"]}, {"lines": ["one", "two"]}])
+    assert cs.translate_lines("ctx", ["một", "hai"], "en", ask=lambda p: next(answers)) == ["one", "two"]
+    with pytest.raises(RuntimeError):
+        cs.translate_lines("ctx", ["một", "hai"], "en", ask=lambda p: {"lines": ["x"]})
+
+
+def test_srt_and_clock_format():
+    assert cs.srt_text(["Xin chào"], [(61.5, 63.25)]) == "1\n00:01:01,500 --> 00:01:03,250\nXin chào\n"
+    assert cs.clock(75) == "1:15" and cs.clock(3725) == "1:02:05"
+
+
+def test_publish_step_makes_both_subtitles_and_package(app, as_admin, fake_agent, monkeypatch, tmp_path):
+    from app.extensions import db
+    from app.models import Episode, Job, JobStatus, TranscriptSegment, User
+
+    monkeypatch.setattr("config.settings.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("app.storage.commit_volume", lambda: None)
+    monkeypatch.setattr("app.storage.locate_file", lambda path: path)
+    monkeypatch.setattr(cs, "translate_lines", lambda ctx, lines, target: [f"EN {line}" for line in lines])
+    monkeypatch.setattr(cs, "youtube_package", lambda ctx, ep, lang, lines, timings: {
+        "title": "Token là gì?", "description": "Mô tả\n\n0:00 Mở đầu", "tags": ["llm"],
+        "chapters": [{"time": 0.0, "title": "Mở đầu"}]})
+    series_id, ep_id = _drafted_episode(as_admin)
+    assert as_admin.post(f"/api/studio/episodes/{ep_id}/publish_vi").status_code == 202
+    ep = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]
+    assert "chưa làm xong" in ep["error"]
+
+    with app.app_context():
+        admin = User.query.filter_by(role="admin").first()
+        job = Job(user_id=admin.id, status=JobStatus.DONE, video_name="abc_script.mp4", message="xong")
+        db.session.add(job)
+        db.session.flush()
+        for i, (text, (a, b)) in enumerate(zip(["Câu một.", "Câu hai."], TIMINGS)):
+            db.session.add(TranscriptSegment(job_id=job.id, idx=i, start_sec=i, end_sec=i, play_start_sec=a,
+                                             play_end_sec=b, text_source=text, text_target=text))
+        db.session.get(Episode, ep_id).job_vi_id = job.id
+        db.session.commit()
+    as_admin.post(f"/api/studio/episodes/{ep_id}/publish_vi")
+    ep = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]
+    pack = ep["publish"]["vi"]
+    assert ep["error"] is None and pack["title"] == "Token là gì?" and ep["job_vi_status"] == "done"
+    assert (tmp_path / pack["srt"]["en"]).read_text(encoding="utf-8").splitlines()[2] == "EN Câu một."
+    assert "00:00:04,500 --> 00:00:12,000" in (tmp_path / pack["srt"]["vi"]).read_text(encoding="utf-8")
+    res = as_admin.get(f"/quan-tri/xuong-kich-ban/phu-de/{ep_id}/{pack['srt']['en']}")
+    assert res.status_code == 200 and b"EN C" in res.data
+    assert as_admin.get(f"/quan-tri/xuong-kich-ban/phu-de/{ep_id}/khac.srt").status_code == 404
+
+
+def test_youtube_package_appends_computed_chapters():
+    answer = {"title": "Token là gì? " + "x" * 200, "description": "Bạn sẽ học token.", "tags": ["llm", "token"],
+              "chapters": [{"title": "Mở đầu", "sentence": 0}, {"title": "Token", "sentence": 2},
+                           {"title": "Kết", "sentence": 4}]}
+    pack = cs.youtube_package("ctx", {"number": 1, "title": "Token"}, "vi", ["a"] * 5, TIMINGS, ask=lambda p: answer)
+    assert len(pack["title"]) == 100 and pack["tags"] == ["llm", "token"]
+    assert pack["description"].endswith("0:00 Mở đầu\n0:12 Token\n0:31 Kết")
