@@ -235,6 +235,14 @@ chủ dự án có quyền sử dụng.
   bloom và hạt sáng — để khớp tông ảnh mẫu, không tốn thêm GPU.
 - [`core/image_client.py`](core/image_client.py) gọi `ImageGenerator` trên Modal (GPU L40S):
   Z-Image-Turbo (Apache 2.0), khoảng 3,2 giây/ảnh.
+- [`core/explainer.py`](core/explainer.py) — chế độ **Video giải thích** (đang thử, chỉ admin):
+  video hoạt hình kiểu 3Blue1Brown vẽ bằng [Manim](https://www.manim.community/). Gemini (lỗi thì
+  DeepSeek) chia kịch bản thành cảnh ~8 giây và chọn cho mỗi cảnh một bố cục có sẵn — tiêu đề,
+  gạch đầu dòng, sơ đồ luồng, không gian vector, so sánh, hội thoại, câu chốt — kèm chữ hiện trên
+  màn hình. LLM chỉ điền dữ liệu, không sinh code: hình vẽ cố định trong
+  [`core/explainer_scene.py`](core/explainer_scene.py). Mỗi cảnh render trong tiến trình `manim`
+  riêng rồi cắt đúng số khung theo lời đọc. Chữ dùng font Be Vietnam Pro (OFL, `core/fonts/`).
+  Chỉ tốn CPU (~15–40 giây render cho mỗi cảnh 6 giây).
 - Các chế độ ảnh cũ (`none`, `few`, `scenes`, `manga`) vẫn nhận qua API/CLI nếu gửi tường minh.
   Vẽ ảnh hỏng thì job vẫn xong với mp3 và báo lý do.
 

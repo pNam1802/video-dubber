@@ -72,18 +72,20 @@
       <span id="scriptCount">0</span> / {{ "{:,}".format(script_max_chars).replace(",", ".") }} ký tự
       <span id="scriptLength"></span>
     </p>
-    {# Hai kiểu hình: Manhwa recap (AI vẽ, GPU) hoặc Video stock (clip Pixabay, chỉ CPU). #}
-    {# Máy chủ chưa có PIXABAY_API_KEY thì không hiện lựa chọn, chỉ còn Manhwa recap. #}
-    {% if not stock_enabled %}<input type="hidden" name="script_images" value="recap">{% endif %}
-    <div class="flex flex-col gap-2 {{ '' if stock_enabled else 'hidden' }}">
+    {# Kiểu hình: Manhwa recap (AI vẽ, GPU), Video stock (clip Pixabay, chỉ CPU — cần
+       PIXABAY_API_KEY) và Video giải thích (Manim, chỉ CPU — đang thử, chỉ admin thấy).
+       Chỉ có một lựa chọn thì ẩn cả khối, gửi kèm recap. #}
+    {% set image_modes = [('recap', 'Ảnh Manhwa do AI vẽ (mặc định)', 'Ảnh webtoon màu vẽ theo nội dung — hợp truyện, có nhân vật')] %}
+    {% if stock_enabled %}{% set image_modes = image_modes + [('stock', 'Video stock', 'Ghép clip quay sẵn hợp với từng đoạn — hợp nội dung kiến thức, kỹ năng, động lực')] %}{% endif %}
+    {% if current_user.is_admin %}{% set image_modes = image_modes + [('explainer', 'Video giải thích (admin)', 'Hoạt hình kiểu 3Blue1Brown vẽ bằng Manim: sơ đồ, gạch đầu dòng, không gian vector — hợp giải thích kỹ thuật')] %}{% endif %}
+    {% set image_picker = image_modes|length > 1 %}
+    {% if not image_picker %}<input type="hidden" name="script_images" value="recap">{% endif %}
+    <div class="flex flex-col gap-2 {{ '' if image_picker else 'hidden' }}">
       <span class="field-label !mb-0">Hình minh họa</span>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {% for value, label, hint in [
-          ('recap', 'Ảnh Manhwa do AI vẽ (mặc định)', 'Ảnh webtoon màu vẽ theo nội dung — hợp truyện, có nhân vật'),
-          ('stock', 'Video stock', 'Ghép clip quay sẵn hợp với từng đoạn — hợp nội dung kiến thức, kỹ năng, động lực')
-        ] %}
+        {% for value, label, hint in image_modes %}
         <label class="flex items-start gap-2 cursor-pointer rounded-xl border border-outline-variant/50 bg-surface-container-high px-3 py-2 has-[:checked]:border-primary has-[:checked]:bg-primary/10">
-          <input type="radio" {% if stock_enabled %}name="script_images"{% endif %} value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
+          <input type="radio" {% if image_picker %}name="script_images"{% endif %} value="{{ value }}" {% if loop.first %}checked{% endif %} class="w-4 h-4 mt-1">
           <span class="flex flex-col">
             <span class="font-body-md text-body-md text-on-surface">{{ label }}</span>
             <span class="font-label-sm text-label-sm text-on-surface-variant">{{ hint }}</span>
@@ -777,8 +779,9 @@
 
     // Kiểu nhân vật chỉ có nghĩa với ảnh Manhwa; Video stock thì hiện ghi chú nguồn clip.
     function syncIllustration() {
-      const stock = form.elements.script_images.value === "stock";
-      document.getElementById("recapStyles").classList.toggle("hidden", stock);
+      const value = form.elements.script_images.value;
+      const stock = value === "stock";
+      document.getElementById("recapStyles").classList.toggle("hidden", value !== "recap");
       document.getElementById("stockHint").classList.toggle("hidden", !stock);
     }
     document.querySelectorAll('input[name="script_images"]').forEach(function (radio) {

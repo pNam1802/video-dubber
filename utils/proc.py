@@ -19,6 +19,7 @@ def run_command(
 	*,
 	timeout: float,
 	error_message: str,
+	env: dict | None = None,
 ) -> subprocess.CompletedProcess:
 	"""Chạy lệnh và chuyển mọi lỗi thành RuntimeError có thông tin rõ ràng."""
 	try:
@@ -28,6 +29,7 @@ def run_command(
 			text=True,
 			check=True,
 			timeout=timeout,
+			env=env,
 		)
 	except FileNotFoundError as exc:
 		raise RuntimeError(error_message) from exc

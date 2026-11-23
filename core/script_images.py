@@ -12,6 +12,8 @@ Ba chế độ:
              khung dọc giữa nền mờ, zoom chậm: core/recap.py.
   "stock"  — không vẽ: ghép clip quay sẵn từ Pixabay theo nội dung từng đoạn,
              chỉ tốn CPU: core/stock_footage.py.
+  "explainer" — video giải thích kiểu 3Blue1Brown vẽ bằng Manim (chỉ admin),
+             chỉ tốn CPU: core/explainer.py.
 
 Trừ "recap", mọi ảnh cùng một nét vẽ manga đen trắng (MANGA_STYLE) cố định trong code; Gemini
 chỉ chọn cỡ cảnh/góc máy cho từng ảnh để chúng đa dạng như các khung truyện.
@@ -35,7 +37,7 @@ from typing import List, Optional, Tuple
 
 from utils.proc import run_command
 
-MODES = ("none", "few", "scenes", "manga", "recap", "stock")
+MODES = ("none", "few", "scenes", "manga", "recap", "stock", "explainer")
 # Kiểu nhân vật của chế độ "recap" (xem core/recap.style_cast). Ảnh mẫu từng
 # kiểu ở static/recap_styles/<kiểu>.jpg cho nút "Xem mẫu" trên form.
 # Kiểu đầu tiên là mặc định (khách chọn "sunflower" ngày 06/11/2026).
@@ -308,6 +310,10 @@ def illustrate(sentences: List[str], timings: List[Tuple[float, float]], audio: 
 
     t0 = time.time()
     progress(75, "Đang đọc hiểu kịch bản để dựng cảnh minh hoạ...")
+    if mode == "explainer":
+        from core import explainer
+
+        return explainer.render(sentences, timings, audio, output, work_dir, progress)
     if mode == "stock":
         from core import stock_footage
 
