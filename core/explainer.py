@@ -34,7 +34,8 @@ RESOLUTION = "1280,720"
 RENDER_WORKERS = 2
 FIELD_CHARS = 80
 
-#: Bố cục -> các trường chữ (str) và danh sách (list[str]) của nó.
+#: Bố cục -> các trường chữ (str) và danh sách chữ (list[str]) của nó. Trường có cấu trúc
+#: khác (số, danh sách dict) do clean_scene() xử lý riêng.
 LAYOUTS: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
     "title": (("title", "subtitle"), ()),
     "bullets": (("heading",), ("items",)),
@@ -43,8 +44,17 @@ LAYOUTS: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...]]] = {
     "compare": (("heading", "left_title", "right_title"), ("left", "right")),
     "chat": (("question", "answer"), ()),
     "statement": (("text", "caption"), ()),
+    "tokens": (("heading", "text"), ("tokens",)),
+    "probabilities": (("heading", "context"), ()),
+    "attention": (("heading", "caption"), ("tokens",)),
+    "network": (("heading", "input_label", "output_label"), ()),
+    "code": (("heading", "language"), ()),
+    "timeline": (("heading",), ()),
+    "number": (("heading", "unit", "caption"), ()),
 }
-LIST_LIMITS = {"items": 6, "steps": 5, "left": 4, "right": 4}
+LIST_LIMITS = {"items": 6, "steps": 5, "left": 4, "right": 4, "tokens": 12}
+#: Bố cục chủ yếu là chữ: không để quá nhiều, không đứng liền nhau.
+TEXT_LAYOUTS = frozenset({"title", "bullets", "statement"})
 
 
 def scene_count(timings: List[Tuple[float, float]]) -> int:
@@ -55,8 +65,8 @@ def explainer_request(sentences: List[str], timings: List[Tuple[float, float]], 
     return (
         "You are designing an animated explainer video in the style of 3Blue1Brown for a narrated script.\n"
         f"Split the narration into about {count} scenes (roughly {SCENE_SEC:.0f} seconds each), cutting only "
-        "at the start of a sentence. For every scene pick the ONE layout that best visualises what is said "
-        "during that scene:\n"
+        "at the start of a sentence. For every scene pick the ONE layout that best SHOWS (not tells) what is "
+        "said during that scene:\n"
         '- "title": {"title", "subtitle"} — opening or a new chapter.\n'
         '- "bullets": {"heading", "items": 2-5 short phrases} — a list of points.\n'
         '- "flow": {"heading", "steps": 2-5 short step names in order} — a process, pipeline or sequence.\n'
@@ -66,9 +76,26 @@ def explainer_request(sentences: List[str], timings: List[Tuple[float, float]], 
         "— before/after, problem/solution, A versus B.\n"
         '- "chat": {"question", "answer"} — a user asking and a system answering.\n'
         '- "statement": {"text", "caption"} — one key idea or conclusion.\n'
-        "Rules: write all on-screen text in the SAME language as the script, short and concrete "
-        "(items at most 40 characters, headings at most 60). Vary layouts; prefer flow/vectors/compare "
-        "when the narration describes them. On-screen text summarises, never copies whole sentences.\n"
+        '- "tokens": {"heading", "text": a short sentence, "tokens": how a tokenizer splits it (2-12 pieces, '
+        "keep leading spaces)} — tokenization, how a model reads text.\n"
+        '- "probabilities": {"heading", "context": an unfinished sentence, "options": [{"label": next word, '
+        '"p": probability 0-1}] 3-6 options} — next-token prediction, sampling, choosing among outcomes.\n'
+        '- "attention": {"heading", "tokens": 3-8 words of a sentence, "focus": index of the word that looks '
+        'around, "attends": indexes it pays most attention to, "caption"} — attention, context, which words '
+        "relate.\n"
+        '- "network": {"heading", "layers": node counts per layer e.g. [3,5,5,2], "input_label", '
+        '"output_label"} — neural networks, layers, training, signals flowing through a model.\n'
+        '- "code": {"heading", "language", "lines": 2-8 short lines of real code, commands or API calls} — '
+        "anything a developer would type or run.\n"
+        '- "timeline": {"heading", "events": [{"when", "label"}] 3-6 events in order} — history, versions, '
+        "steps over time.\n"
+        '- "number": {"heading", "value": a number, "unit", "caption"} — one striking figure, size, cost, '
+        "speed.\n"
+        "Rules: this is a VISUAL video. Prefer the drawn layouts (tokens, probabilities, attention, network, "
+        "vectors, flow, code, timeline, number, compare, chat); text-only layouts (title, bullets, statement) "
+        "at most one scene in four and never two in a row. Write all on-screen text in the SAME language as "
+        "the script, at most 6 words per item and 50 characters per heading — on-screen text labels the "
+        "picture, the voice explains it; never copy whole sentences.\n"
         'Return JSON: {"scenes": [{"start": <number of the sentence where the scene begins>, '
         '"layout": "...", ...fields}]}. The first scene starts at 1.\n\n'
         f"Script (numbered sentences with start time):\n{numbered_lines(sentences, timings)}"
@@ -79,25 +106,83 @@ def _clean(value, limit: int = FIELD_CHARS) -> str:
     return " ".join(str(value or "").split())[:limit]
 
 
+def _int_list(value) -> List[int]:
+    return [int(i) for i in value if str(i).isdigit()] if isinstance(value, list) else []
+
+
+def _number(value) -> float | None:
+    try:
+        number = float(str(value).replace(",", ".").replace("%", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number == number and abs(number) < 1e15 else None  # loại NaN
+
+
+def _token(value) -> str:
+    """Token giữ nguyên khoảng trắng đầu (" mèo") — đó chính là điều cảnh tokens muốn cho thấy."""
+    text = str(value or "").replace("\n", " ")
+    return text[:20] if text.strip() else ""
+
+
 def clean_scene(raw: dict) -> dict | None:
-    """Chỉ giữ các trường của bố cục đã chọn, cắt chữ dài. Bố cục lạ thì bỏ."""
+    """Chỉ giữ các trường của bố cục đã chọn, cắt chữ dài. Bố cục lạ hoặc thiếu dữ liệu thì bỏ."""
     layout = str(raw.get("layout", "")).strip().lower()
     if layout not in LAYOUTS:
         return None
     texts, lists = LAYOUTS[layout]
-    scene = {"layout": layout}
+    scene: dict = {"layout": layout}
     for key in texts:
         if raw.get(key):
-            scene[key] = _clean(raw[key], 160 if key in ("answer", "question", "text") else FIELD_CHARS)
+            scene[key] = _clean(raw[key], 160 if key in ("answer", "question", "text", "context") else FIELD_CHARS)
     for key in lists:
         values = raw.get(key) if isinstance(raw.get(key), list) else []
-        scene[key] = [_clean(v) for v in values if _clean(v)][:LIST_LIMITS[key]]
+        clean = _token if key == "tokens" else _clean
+        scene[key] = [clean(v) for v in values if clean(v)][:LIST_LIMITS[key]]
+
     if layout == "vectors":
-        nearest = raw.get("nearest") if isinstance(raw.get("nearest"), list) else []
-        scene["nearest"] = [int(i) for i in nearest if str(i).isdigit()]
+        scene["nearest"] = _int_list(raw.get("nearest"))
+    elif layout == "attention":
+        focus = _number(raw.get("focus"))
+        scene["focus"] = int(focus) if focus is not None and focus >= 0 else len(scene["tokens"]) - 1
+        scene["attends"] = _int_list(raw.get("attends"))
+        if len(scene["tokens"]) < 2:
+            return None
+    elif layout == "probabilities":
+        options = []
+        for opt in raw.get("options", []) if isinstance(raw.get("options"), list) else []:
+            p = _number(opt.get("p")) if isinstance(opt, dict) else None
+            if p is not None and p >= 0 and _clean(opt.get("label"), 30):
+                options.append({"label": _clean(opt["label"], 30), "p": p})
+        total = sum(o["p"] for o in options)
+        if not options or total <= 0:
+            return None
+        # LLM lúc trả 0-1, lúc trả phần trăm: >1.5 thì hiểu là phần trăm.
+        scale = 100.0 if total > 1.5 else 1.0
+        scene["options"] = [{"label": o["label"], "p": min(1.0, o["p"] / scale)} for o in options[:6]]
+    elif layout == "network":
+        scene["layers"] = [max(1, min(6, n)) for n in _int_list(raw.get("layers"))][:5] or [3, 5, 5, 2]
+    elif layout == "code":
+        lines = raw.get("lines") if isinstance(raw.get("lines"), list) else str(raw.get("lines") or "").splitlines()
+        scene["lines"] = [str(line).rstrip()[:70] for line in lines if str(line).strip()][:10]
+        if not scene["lines"]:
+            return None
+    elif layout == "timeline":
+        events = []
+        for ev in raw.get("events", []) if isinstance(raw.get("events"), list) else []:
+            if isinstance(ev, dict) and (_clean(ev.get("label")) or _clean(ev.get("when"))):
+                events.append({"when": _clean(ev.get("when"), 20), "label": _clean(ev.get("label"), 40)})
+        if not events:
+            return None
+        scene["events"] = events[:6]
+    elif layout == "number":
+        value = _number(raw.get("value"))
+        if value is None:
+            return None
+        scene["value"] = value
+
     if lists and not any(scene[key] for key in lists):
         return None
-    if not lists and not any(scene.get(key) for key in texts):
+    if not lists and layout in TEXT_LAYOUTS | {"chat", "compare"} and not any(scene.get(k) for k in texts):
         return None
     return scene
 
@@ -151,6 +236,11 @@ def plan(sentences: List[str], timings: List[Tuple[float, float]]) -> Tuple[List
     return [board[k][1] for k in kept], [(i, bounds[i], bounds[i + 1]) for i in range(len(kept))]
 
 
+def scene_beats(timings: List[Tuple[float, float]], start: float, end: float) -> List[float]:
+    """Mốc bắt đầu các câu nằm trong cảnh, tính từ đầu cảnh — để hình hiện đúng lúc được nói tới."""
+    return [round(t0 - start, 3) for t0, _ in timings if start < t0 < end]
+
+
 # ── Render ───────────────────────────────────────────────────
 def frame_counts(slides: List[Slide]) -> List[int]:
     """Làm tròn theo mốc tích luỹ để tổng số khung không trôi so với giọng đọc."""
@@ -202,6 +292,7 @@ def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path
 
     progress(80, f"Đang vẽ {len(scenes)} cảnh giải thích bằng Manim...")
     work_dir.mkdir(parents=True, exist_ok=True)
+    scenes = [{**scene, "beats": scene_beats(timings, start, end)} for scene, (_, start, end) in zip(scenes, slides)]
     counts = frame_counts(slides)
     parts = [work_dir / f"scene_{k:03d}.mp4" for k in range(len(scenes))]
     with ThreadPoolExecutor(RENDER_WORKERS) as pool:

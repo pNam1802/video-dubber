@@ -95,3 +95,32 @@ def test_render_scene_has_exact_frame_count(tmp_path):
                              "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
                             capture_output=True, text=True, check=True).stdout.strip()
     assert int(frames) == 30
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="cần ffmpeg")
+def test_manim_render_lasts_the_whole_scene(tmp_path):
+    """Manim tự ghi đè Scene.duration trong mỗi play(): từng làm cảnh chỉ dài ~1 giây rồi bị
+    kéo khung cuối cho đủ — hình đứng im suốt phần lời đọc còn lại."""
+    pytest.importorskip("manim")
+    import subprocess
+
+    ex.render_scene({"layout": "bullets", "heading": "Ý chính", "items": ["Một", "Hai", "Ba"],
+                     "beats": [1.0, 2.0]}, 75, tmp_path / "scene_000.mp4", tmp_path)
+    raw = next((tmp_path / "media_scene_000").rglob("scene_000.mp4"))
+    seconds = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                                    str(raw)], capture_output=True, text=True, check=True).stdout)
+    assert seconds >= 2.9
+
+
+def test_new_layouts_are_cleaned():
+    probs = ex.clean_scene({"layout": "probabilities", "context": "Trời", "options": [
+        {"label": "đẹp", "p": "60%"}, {"label": "mưa", "p": 40}, {"label": "", "p": 5}]})
+    assert probs["options"] == [{"label": "đẹp", "p": 0.6}, {"label": "mưa", "p": 0.4}]
+    tokens = ex.clean_scene({"layout": "tokens", "text": "Con mèo", "tokens": ["Con", " mèo", "  "]})
+    assert tokens["tokens"] == ["Con", " mèo"]
+    assert ex.clean_scene({"layout": "number", "value": "abc"}) is None
+    assert ex.clean_scene({"layout": "code", "lines": "x = 1\n\n  y = 2"})["lines"] == ["x = 1", "  y = 2"]
+    assert ex.clean_scene({"layout": "attention", "tokens": ["một"]}) is None
+    net = ex.clean_scene({"layout": "network", "layers": [3, 99, "x", 2]})
+    assert net["layers"] == [3, 6, 2]
+    assert ex.scene_beats([(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)], 1.0, 5.0) == [1.0, 3.0]
