@@ -139,3 +139,12 @@ def test_patch_episode_saves_script_and_only_own_jobs(as_admin, fake_agent, app)
                                                                  "job_vi_id": stranger_job_id})
     data = res.get_json()
     assert data["script_vi"] == "Xin chào\nCác bạn." and data["job_vi_id"] is None
+
+
+def test_series_page_ships_voice_previews(as_admin, fake_agent, monkeypatch):
+    import app.main as main
+
+    monkeypatch.setattr(main, "_voice_preview_urls", lambda: {"vieneu": {"female": "/static/voices/vieneu/female.mp3"}})
+    series_id = as_admin.post("/api/studio/series", json={"topic": "x", "episodes": 1}).get_json()["id"]
+    html = as_admin.get(f"/quan-tri/xuong-kich-ban/{series_id}").get_data(as_text=True)
+    assert "/static/voices/vieneu/female.mp3" in html and "VOICE_SAMPLES" in html

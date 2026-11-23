@@ -72,10 +72,51 @@
     const CSRF = "{{ csrf_token() }}";
     const SERIES_ID = {{ series_id|tojson }};
     const STATUS = {planned: "Mới lên lộ trình", drafted: "Đã có kịch bản", translated: "Đã có bản Anh", done: "Đã chốt"};
+    // Giọng cho từng bản: [engine:khoá, nhãn]. Khoá khớp config.settings.TTS_VOICES.
     const VOICES = {
-      vi: [["vieneu:female", "Nora (VieNeu)"], ["vieneu:mine", "Giọng của bạn (VieNeu)"], ["edge-tts:female", "HoaiMy (miễn phí)"]],
-      en: [["chatterbox:narrator", "Narrator (Chatterbox)"], ["chatterbox:mine", "Giọng của bạn (Chatterbox)"], ["edge-tts:female", "Aria (miễn phí)"]]
+      vi: [["vieneu:female", "Nora — nữ (VieNeu)"], ["vieneu:mine", "Giọng của bạn (clone)"],
+           ["vieneu:male", "Thiện Minh — nam, kể chuyện"], ["vieneu:ngochuyen", "Ngọc Huyền — nữ"],
+           ["vieneu:quynhanh", "Quỳnh Anh — nữ, đọc truyện"], ["vieneu:myduyen", "Mỹ Duyên — nữ miền Nam"],
+           ["vieneu:ductri", "Đức Trí — nam miền Nam"], ["gemini:female", "Leda — nữ, có cảm xúc (Gemini)"],
+           ["gemini:male", "Charon — nam, có cảm xúc (Gemini)"], ["edge-tts:female", "HoaiMy — nữ (miễn phí)"],
+           ["edge-tts:male", "NamMinh — nam (miễn phí)"]],
+      en: [["chatterbox:narrator", "Narrator — kể chuyện (Chatterbox)"], ["chatterbox:mine", "Giọng của bạn (clone)"],
+           ["chatterbox:female", "Giọng nữ có sẵn (Chatterbox)"], ["gemini:female", "Leda — nữ, có cảm xúc (Gemini)"],
+           ["gemini:male", "Charon — nam, có cảm xúc (Gemini)"], ["edge-tts:female", "Aria — nữ (miễn phí)"],
+           ["edge-tts:male", "Guy — nam (miễn phí)"]]
     };
+    const PREVIEW_URLS = {{ (voice_preview_urls or {}) | tojson }};
+    const VOICE_SAMPLES = {{ (voice_samples or {}) | tojson }};
+    const chosenVoice = JSON.parse(localStorage.getItem("studioVoices") || "{}");
+    const previewAudio = new Audio();
+    let playingVoice = null;
+    previewAudio.addEventListener("ended", function () { playingVoice = null; paintPlayButtons(); });
+    previewAudio.addEventListener("pause", function () { playingVoice = null; paintPlayButtons(); });
+
+    function voiceOf(lang) {
+      const value = chosenVoice[lang];
+      return VOICES[lang].some(function (v) { return v[0] === value; }) ? value : VOICES[lang][0][0];
+    }
+    // File nghe thử là câu tiếng Việt, trừ Chatterbox (tiếng Anh): bản Anh dùng
+    // edge-tts là giọng khác hẳn (Aria/Guy) nên không có file mẫu.
+    function previewOf(lang, value) {
+      const parts = value.split(":");
+      if (lang === "en" && parts[0] === "edge-tts") return "";
+      return (PREVIEW_URLS[parts[0]] || {})[parts[1]] || "";
+    }
+    function paintPlayButtons() {
+      document.querySelectorAll("[data-preview]").forEach(function (btn) {
+        const lang = btn.dataset.preview;
+        const url = previewOf(lang, voiceOf(lang));
+        const playing = playingVoice === lang && !previewAudio.paused;
+        btn.classList.toggle("hidden", !url);
+        btn.querySelector("span").textContent = playing ? "stop_circle" : "play_circle";
+        btn.title = playing ? "Dừng" : "Nghe thử giọng này";
+        const hint = document.querySelector('[data-voice-hint="' + lang + '"]');
+        const needsSample = voiceOf(lang).split(":")[1] === "mine" && !VOICE_SAMPLES[lang];
+        hint.classList.toggle("hidden", !needsSample);
+      });
+    }
 
     function esc(value) {
       const div = document.createElement("div");
@@ -183,9 +224,14 @@
       if (panelFocus) return;   // đang gõ thì không vẽ lại, tránh mất chữ
       const locked = Boolean(e.task || series.task);
       const voiceSelect = function (lang) {
+        const current = voiceOf(lang);
         return '<select data-voice="' + lang + '" class="input !w-auto">' + VOICES[lang].map(function (v) {
-          return '<option value="' + v[0] + '">' + v[1] + '</option>';
-        }).join("") + '</select>';
+          return '<option value="' + v[0] + '"' + (v[0] === current ? " selected" : "") + '>' + esc(v[1]) + '</option>';
+        }).join("") + '</select>' +
+          '<button type="button" data-preview="' + lang + '" class="btn-icon hidden" title="Nghe thử giọng này">' +
+          '<span class="material-symbols-outlined text-[26px]">play_circle</span></button>' +
+          '<a href="/cai-dat" data-voice-hint="' + lang + '" class="hidden font-label-sm text-label-sm text-error">' +
+          'Chưa có giọng mẫu ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") + ' — thêm ở Cài đặt</a>';
       };
       const jobLink = function (id) { return id ? ' <a class="text-primary" href="/job/' + id + '">Xem video #' + id + '</a>' : ""; };
       panel.innerHTML =
@@ -233,6 +279,7 @@
               '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
             '</div></div>';
         }).join("");
+      paintPlayButtons();
     }
 
     async function makeVideo(e, lang) {
@@ -260,6 +307,16 @@
       const e = series && series.episodes.find(function (x) { return x.id === current; });
       try {
         if (btn.dataset.ep) { current = Number(btn.dataset.ep); render(); return; }
+        if (btn.dataset.preview) {
+          const lang = btn.dataset.preview;
+          if (playingVoice === lang && !previewAudio.paused) { previewAudio.pause(); return; }
+          previewAudio.src = previewOf(lang, voiceOf(lang));
+          previewAudio.currentTime = 0;
+          playingVoice = lang;
+          previewAudio.play().catch(function () {});
+          paintPlayButtons();
+          return;
+        }
         if (btn.id === "saveStyle") {
           await api("/api/studio/series/" + SERIES_ID, "PATCH", {style_guide: document.getElementById("styleGuide").value});
           Nora.toast("Đã lưu văn phong.", "success");
@@ -284,6 +341,14 @@
           await load();
         }
       } catch (err) { fail(err); btn.disabled = false; }
+    });
+    document.addEventListener("change", function (event) {
+      const lang = event.target.dataset && event.target.dataset.voice;
+      if (!lang) return;
+      chosenVoice[lang] = event.target.value;
+      localStorage.setItem("studioVoices", JSON.stringify(chosenVoice));
+      previewAudio.pause();
+      paintPlayButtons();
     });
     document.addEventListener("input", function (event) {
       const lang = event.target.dataset && event.target.dataset.script;
