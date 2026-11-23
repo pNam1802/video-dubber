@@ -213,22 +213,66 @@ def fallback_board(sentences: List[str], timings: List[Tuple[float, float]]) -> 
     return [(i, {"layout": "statement", "text": _clean(sentences[i], 120)}) for i in starts]
 
 
-def plan(sentences: List[str], timings: List[Tuple[float, float]]) -> Tuple[List[dict], List[Slide]]:
-    """(đặc tả từng cảnh, lịch chiếu)."""
+#: Tốc độ đọc ước lượng (ký tự/giây) để phân cảnh TRƯỚC khi có giọng đọc thật.
+CHARS_PER_SEC = {"vi": 14.0, "en": 15.0}
+
+
+def estimate_timings(sentences: List[str], language: str = "vi") -> List[Tuple[float, float]]:
+    """Mốc thời gian ước lượng theo độ dài câu (kèm khoảng nghỉ), dùng cho bước duyệt phân cảnh."""
+    rate, t, out = CHARS_PER_SEC.get(language, 14.0), 0.0, []
+    for sentence in sentences:
+        length = max(1.0, len(sentence) / rate)
+        out.append((round(t, 2), round(t + length, 2)))
+        t += length + 0.35
+    return out
+
+
+def write_board(sentences: List[str], timings: List[Tuple[float, float]]) -> List[Tuple[int, dict]]:
+    """Gemini (lỗi thì DeepSeek) phân cảnh; cả hai lỗi thì mỗi ~8 giây một câu chốt."""
     from core.stock_footage import ask_deepseek_json
 
     request = explainer_request(sentences, timings, scene_count(timings))
-    board: List[Tuple[int, dict]] = []
     for name, ask in (("Gemini", ask_gemini_json), ("DeepSeek", ask_deepseek_json)):
         try:
             board = parse_scenes(ask(request), len(sentences))
             if board:
-                break
+                return board
             print(f"[Video giải thích] {name}: không có cảnh nào")
         except Exception as exc:
             print(f"[Video giải thích] {name}: {exc}")
+    return fallback_board(sentences, timings)
+
+
+def board_from_list(items, sentence_count: int) -> List[Tuple[int, dict]]:
+    """Bảng phân cảnh đã duyệt (danh sách {"start": chỉ số câu từ 0, "layout", ...}) -> board.
+    Cảnh lỗi bị bỏ; cảnh đầu luôn phủ từ câu đầu tiên."""
+    board: Dict[int, dict] = {}
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            start = int(item.get("start", -1))
+        except (TypeError, ValueError):
+            continue
+        scene = clean_scene(item)
+        if scene is not None and 0 <= start < sentence_count:
+            board[start] = scene
+    result = sorted(board.items())
+    if result:
+        result[0] = (0, result[0][1])
+    return result
+
+
+def board_to_list(board: List[Tuple[int, dict]]) -> List[dict]:
+    return [{"start": start, **scene} for start, scene in board]
+
+
+def plan(sentences: List[str], timings: List[Tuple[float, float]],
+         approved: List[dict] | None = None) -> Tuple[List[dict], List[Slide]]:
+    """(đặc tả từng cảnh, lịch chiếu). Có bảng phân cảnh đã duyệt thì dùng đúng bảng đó."""
+    board = board_from_list(approved, len(sentences)) if approved else []
     if not board:
-        board = fallback_board(sentences, timings)
+        board = write_board(sentences, timings)
     starts = [start for start, _ in board]
     kept = tidy_starts(starts, timings, min_sec=MIN_SCENE_SEC, max_count=MAX_SCENES)
     total = timings[-1][1]
@@ -284,10 +328,10 @@ def make_video(parts: List[Path], audio: Path, output: Path, work_dir: Path) -> 
 
 
 def render(sentences: List[str], timings: List[Tuple[float, float]], audio: Path, output: Path, work_dir: Path,
-           progress=lambda percent, message: None) -> dict:
+           progress=lambda percent, message: None, approved: List[dict] | None = None) -> dict:
     """Toàn bộ chế độ "explainer". Trả về thời gian từng bước (giây)."""
     t0 = time.time()
-    scenes, slides = plan(sentences, timings)
+    scenes, slides = plan(sentences, timings, approved)
     t1 = time.time()
 
     progress(80, f"Đang vẽ {len(scenes)} cảnh giải thích bằng Manim...")

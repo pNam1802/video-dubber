@@ -124,3 +124,37 @@ def test_new_layouts_are_cleaned():
     net = ex.clean_scene({"layout": "network", "layers": [3, 99, "x", 2]})
     assert net["layers"] == [3, 6, 2]
     assert ex.scene_beats([(0.0, 2.0), (2.0, 4.0), (4.0, 6.0)], 1.0, 5.0) == [1.0, 3.0]
+
+
+def test_estimate_timings_grow_with_text():
+    timings = ex.estimate_timings(["Ngắn.", "Một câu dài hơn hẳn câu trước nhiều lần."])
+    assert timings[0][0] == 0.0 and timings[1][0] > timings[0][1]
+    assert timings[1][1] - timings[1][0] > timings[0][1] - timings[0][0]
+
+
+def test_approved_board_is_used_instead_of_llm(monkeypatch):
+    def boom(request):
+        raise AssertionError("không được gọi LLM khi đã có phân cảnh duyệt")
+
+    monkeypatch.setattr(ex, "ask_gemini_json", boom)
+    approved = [{"start": 2, "layout": "number", "value": 175, "unit": "tỷ"},
+                {"start": 0, "layout": "title", "title": "RAG"}, {"start": 9, "layout": "title", "title": "x"},
+                {"start": 1, "layout": "python"}]
+    scenes, slides = ex.plan(SENTENCES, TIMINGS, approved)
+    assert [s["layout"] for s in scenes] == ["title", "number"]
+    assert slides == [(0, 0.0, 9.0), (1, 9.0, 20.0)]
+
+
+def test_api_passes_approved_storyboard_to_job(as_admin, monkeypatch):
+    import app.api as api
+
+    captured: dict = {}
+    monkeypatch.setattr(api, "start_script_job", lambda flask_app, job_id, config: captured.update(config=config))
+    data = {"script": "Một. Hai. Ba.", "target_language": "vi", "tts_engine": "edge-tts", "tts_voice": "female",
+            "script_images": "explainer",
+            "storyboard": json.dumps([{"start": 0, "layout": "title", "title": "A"},
+                                      {"start": 2, "layout": "statement", "text": "B"}])}
+    assert as_admin.post("/api/script", data=data).status_code == 202
+    assert [s["start"] for s in captured["config"].explainer_board] == [0, 2]
+    data["storyboard"] = "không phải json"
+    assert as_admin.post("/api/script", data=data).status_code == 400
