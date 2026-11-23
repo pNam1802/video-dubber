@@ -1,0 +1,296 @@
+{% extends "layout.html" %}
+{% block title %}Xưởng kịch bản · Nora{% endblock %}
+
+{% block content %}
+<div class="mb-lg flex items-start justify-between gap-4 flex-wrap">
+  <div>
+    <h2 class="page-title">
+      <span class="material-symbols-outlined text-[32px] text-primary">movie_edit</span>Xưởng kịch bản
+    </h2>
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+      Agent lên lộ trình series, nghiên cứu có nguồn, viết và tự soát kịch bản Việt–Anh. Trí nhớ series
+      (thuật ngữ, tóm tắt các tập) lưu trong hệ thống nên tập sau luôn nối đúng tập trước.
+    </p>
+  </div>
+  {% if series_id %}<a href="{{ url_for('studio.page') }}" class="btn-secondary btn-sm">
+    <span class="material-symbols-outlined text-[18px]">arrow_back</span>Tất cả series</a>{% endif %}
+</div>
+
+{% if not series_id %}
+{# ── Danh sách + tạo series ─────────────────────────────── #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+  <form id="createForm" class="card flex flex-col gap-3 lg:col-span-1">
+    <h3 class="font-headline-md text-headline-md text-on-surface">Series mới</h3>
+    <label><span class="field-label">Chủ đề</span>
+      <textarea name="topic" rows="3" class="input" required
+        placeholder="LLM & AI Agent: từ token, embedding, attention tới RAG và agent"></textarea></label>
+    <label><span class="field-label">Người xem</span>
+      <input name="audience" class="input" placeholder="Sinh viên, lập trình viên Việt mới tìm hiểu AI"></label>
+    <label><span class="field-label">Số tập</span>
+      <input name="episodes" type="number" min="1" max="30" value="12" class="input"></label>
+    <button class="btn-primary" type="submit">
+      <span class="material-symbols-outlined text-[18px]">auto_awesome</span>Lên lộ trình</button>
+  </form>
+  <div class="lg:col-span-2 flex flex-col gap-3" id="seriesList">
+    <p class="font-body-md text-body-md text-on-surface-variant">Đang tải...</p>
+  </div>
+</div>
+{% else %}
+{# ── Một series ─────────────────────────────────────────── #}
+<div id="taskBanner" class="hidden card mb-lg font-body-md text-body-md text-on-surface flex items-center gap-3">
+  <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span><span></span>
+</div>
+<div id="errorBanner" class="hidden bg-error-container/20 border border-error/50 rounded-2xl p-md mb-lg font-body-md text-body-md text-error"></div>
+
+<div class="card mb-lg">
+  <h3 id="seriesTitle" class="font-headline-md text-headline-md text-on-surface"></h3>
+  <p id="seriesDesc" class="font-body-md text-body-md text-on-surface-variant mt-1"></p>
+  <details class="mt-md">
+    <summary class="cursor-pointer font-body-md text-body-md text-primary">Trí nhớ series: văn phong & thuật ngữ</summary>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg mt-md">
+      <label><span class="field-label">Văn phong (agent tuân theo khi viết mọi tập)</span>
+        <textarea id="styleGuide" rows="8" class="input"></textarea>
+        <button id="saveStyle" class="btn-secondary btn-sm mt-2" type="button">Lưu văn phong</button></label>
+      <div><span class="field-label">Thuật ngữ Việt – Anh (<span id="termCount">0</span>)</span>
+        <div id="glossary" class="max-h-[260px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div></div>
+    </div>
+  </details>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+  <ol id="episodeList" class="flex flex-col gap-2 lg:col-span-1"></ol>
+  <div id="episodePanel" class="lg:col-span-2 card flex flex-col gap-md">
+    <p class="font-body-md text-body-md text-on-surface-variant">Chọn một tập bên trái.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const CSRF = "{{ csrf_token() }}";
+    const SERIES_ID = {{ series_id|tojson }};
+    const STATUS = {planned: "Mới lên lộ trình", drafted: "Đã có kịch bản", translated: "Đã có bản Anh", done: "Đã chốt"};
+    const VOICES = {
+      vi: [["vieneu:female", "Nora (VieNeu)"], ["vieneu:mine", "Giọng của bạn (VieNeu)"], ["edge-tts:female", "HoaiMy (miễn phí)"]],
+      en: [["chatterbox:narrator", "Narrator (Chatterbox)"], ["chatterbox:mine", "Giọng của bạn (Chatterbox)"], ["edge-tts:female", "Aria (miễn phí)"]]
+    };
+
+    function esc(value) {
+      const div = document.createElement("div");
+      div.textContent = value == null ? "" : value;
+      return div.innerHTML;
+    }
+    async function api(url, method, body) {
+      const res = await fetch(url, {
+        method: method || "GET",
+        headers: {"Content-Type": "application/json", "X-CSRFToken": CSRF},
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || "Có lỗi xảy ra.");
+      return data;
+    }
+    function fail(err) { Nora.toast(err.message || String(err), "error"); }
+    function words(text) { return (text || "").split(/\s+/).filter(Boolean).length; }
+
+    // ── Trang danh sách ──
+    if (!SERIES_ID) {
+      async function loadList() {
+        const rows = await api("/api/studio/series");
+        const box = document.getElementById("seriesList");
+        if (!rows.length) {
+          box.innerHTML = '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có series nào.</p>';
+          return;
+        }
+        box.innerHTML = rows.map(function (s) {
+          return '<a href="/quan-tri/xuong-kich-ban/' + s.id + '" class="card flex items-center justify-between gap-3 hover:border-outline">' +
+            '<span class="flex flex-col"><span class="font-body-lg text-body-lg text-on-surface">' + esc(s.title) + '</span>' +
+            '<span class="font-label-sm text-label-sm text-on-surface-variant">' +
+            (s.task ? "Agent đang làm việc..." : s.done + "/" + s.episodes + " tập đã chốt") + '</span></span>' +
+            '<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span></a>';
+        }).join("");
+      }
+      document.getElementById("createForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const form = event.target;
+        form.querySelector("button").disabled = true;
+        try {
+          const s = await api("/api/studio/series", "POST", {
+            topic: form.topic.value, audience: form.audience.value, episodes: Number(form.episodes.value)
+          });
+          location.href = "/quan-tri/xuong-kich-ban/" + s.id;
+        } catch (err) { fail(err); form.querySelector("button").disabled = false; }
+      });
+      loadList().catch(fail);
+      return;
+    }
+
+    // ── Trang một series ──
+    let series = null;
+    let current = null;   // id tập đang mở
+    let timer = null;
+
+    function busy() { return series && (series.task || series.episodes.some(function (e) { return e.task; })); }
+
+    async function load() {
+      series = await api("/api/studio/series/" + SERIES_ID);
+      if (current === null && series.episodes.length) {
+        const next = series.episodes.find(function (e) { return e.status !== "done"; }) || series.episodes[0];
+        current = next.id;
+      }
+      render();
+      clearTimeout(timer);
+      if (busy()) timer = setTimeout(function () { load().catch(fail); }, 4000);
+    }
+
+    function render() {
+      document.getElementById("seriesTitle").textContent = series.title;
+      document.getElementById("seriesDesc").textContent = series.description;
+      const styleBox = document.getElementById("styleGuide");
+      if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
+      document.getElementById("termCount").textContent = series.glossary.length;
+      document.getElementById("glossary").innerHTML = series.glossary.map(function (g) {
+        return '<div><span class="text-on-surface">' + esc(g.vi) + '</span> = <span class="text-primary">' + esc(g.en) +
+          '</span><span class="text-on-surface-variant"> — ' + esc(g.definition) + '</span></div>';
+      }).join("");
+
+      const banner = document.getElementById("taskBanner");
+      const running = series.task_label || (series.episodes.find(function (e) { return e.task; }) || {}).task_label;
+      banner.classList.toggle("hidden", !running);
+      banner.querySelector("span:last-child").textContent = (running || "") + " (thường 1–3 phút)";
+      const errBox = document.getElementById("errorBanner");
+      errBox.classList.toggle("hidden", !series.error);
+      errBox.textContent = series.error ? "Lên lộ trình lỗi: " + series.error : "";
+
+      document.getElementById("episodeList").innerHTML = series.episodes.map(function (e) {
+        const active = e.id === current;
+        return '<li><button data-ep="' + e.id + '" class="w-full text-left card !p-md flex flex-col gap-1 ' +
+          (active ? "!border-primary" : "hover:border-outline") + '">' +
+          '<span class="font-body-md text-body-md text-on-surface">' + e.number + ". " + esc(e.title || "…") + '</span>' +
+          '<span class="font-label-sm text-label-sm ' + (e.status === "done" ? "text-primary" : "text-on-surface-variant") + '">' +
+          (e.task ? "Đang chạy..." : STATUS[e.status]) + (e.error ? " · lỗi" : "") + '</span></button></li>';
+      }).join("");
+      renderEpisode();
+    }
+
+    function renderEpisode() {
+      const e = series.episodes.find(function (x) { return x.id === current; });
+      const panel = document.getElementById("episodePanel");
+      if (!e) return;
+      const panelFocus = panel.contains(document.activeElement) && document.activeElement.tagName === "TEXTAREA";
+      if (panelFocus) return;   // đang gõ thì không vẽ lại, tránh mất chữ
+      const locked = Boolean(e.task || series.task);
+      const voiceSelect = function (lang) {
+        return '<select data-voice="' + lang + '" class="input !w-auto">' + VOICES[lang].map(function (v) {
+          return '<option value="' + v[0] + '">' + v[1] + '</option>';
+        }).join("") + '</select>';
+      };
+      const jobLink = function (id) { return id ? ' <a class="text-primary" href="/job/' + id + '">Xem video #' + id + '</a>' : ""; };
+      panel.innerHTML =
+        '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+          '<div><h3 class="font-headline-md text-headline-md text-on-surface">Tập ' + e.number + ": " + esc(e.title) + '</h3>' +
+          '<p class="font-body-md text-body-md text-on-surface-variant mt-1">' + esc(e.goal) + '</p></div>' +
+          '<span class="chip border-outline-variant text-on-surface-variant">' + STATUS[e.status] + '</span></div>' +
+        (e.error ? '<p class="font-body-md text-body-md text-error">Lỗi: ' + esc(e.error) + '</p>' : "") +
+        (e.key_points.length ? '<ul class="list-disc pl-5 font-body-md text-body-md text-on-surface-variant">' +
+          e.key_points.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : "") +
+        '<div class="flex gap-2 flex-wrap">' +
+          '<button data-step="write" class="btn-primary btn-sm"' + (locked ? " disabled" : "") + '>' +
+            '<span class="material-symbols-outlined text-[18px]">travel_explore</span>' +
+            (e.script_vi ? "Nghiên cứu & viết lại" : "Nghiên cứu & viết kịch bản") + '</button>' +
+          '<button data-step="translate" class="btn-secondary btn-sm"' + (locked || !e.script_vi ? " disabled" : "") + '>' +
+            '<span class="material-symbols-outlined text-[18px]">translate</span>Dịch sang tiếng Anh</button>' +
+          '<button data-step="wrap" class="btn-secondary btn-sm"' + (locked || !e.script_vi ? " disabled" : "") + '>' +
+            '<span class="material-symbols-outlined text-[18px]">task_alt</span>Chốt tập (lưu vào trí nhớ)</button>' +
+        '</div>' +
+        (e.summary ? '<div><span class="field-label">Tóm tắt trong trí nhớ series</span><p class="font-body-md text-body-md text-on-surface">' + esc(e.summary) + '</p></div>' : "") +
+        (e.review.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Agent tự soát đã sửa ' + e.review.length + ' lỗi</summary>' +
+          '<ul class="list-disc pl-5 mt-2 font-body-md text-body-md text-on-surface-variant">' + e.review.map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + '</ul></details>' : "") +
+        (e.sources.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Nguồn tham khảo (' + e.sources.length + ')</summary>' +
+          '<ul class="list-disc pl-5 mt-2 font-body-md text-body-md">' + e.sources.map(function (s) {
+            return '<li><a class="text-primary break-all" target="_blank" rel="noopener" href="' + esc(s.url) + '">' + esc(s.title) + '</a></li>';
+          }).join("") + '</ul></details>' : "") +
+        (e.notes ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Ghi chú nghiên cứu</summary>' +
+          '<p class="mt-2 whitespace-pre-line font-body-md text-body-md text-on-surface-variant">' + esc(e.notes) + '</p></details>' : "") +
+        (e.quiz.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Câu hỏi tự kiểm tra (' + e.quiz.length + ')</summary>' +
+          '<ol class="list-decimal pl-5 mt-2 flex flex-col gap-2 font-body-md text-body-md">' + e.quiz.map(function (q) {
+            return '<li><span class="text-on-surface">' + esc(q.q) + '</span><details><summary class="cursor-pointer text-on-surface-variant">Đáp án</summary>' +
+              '<span class="text-on-surface-variant">' + esc(q.a) + '</span></details></li>';
+          }).join("") + '</ol></details>' : "") +
+        ["vi", "en"].map(function (lang) {
+          const key = "script_" + lang;
+          const job = lang === "vi" ? e.job_vi_id : e.job_en_id;
+          return '<div class="flex flex-col gap-2"><span class="field-label !mb-0">Kịch bản ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") +
+            ' · <span data-count="' + lang + '">' + words(e[key]) + '</span> từ</span>' +
+            '<textarea data-script="' + lang + '" rows="14" class="input font-body-md"' + (locked ? " disabled" : "") + '>' + esc(e[key]) + '</textarea>' +
+            '<div class="flex gap-2 flex-wrap items-center">' +
+              '<button data-save="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>Lưu</button>' +
+              voiceSelect(lang) +
+              '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
+                '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
+              '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
+            '</div></div>';
+        }).join("");
+    }
+
+    async function makeVideo(e, lang) {
+      const text = document.querySelector('[data-script="' + lang + '"]').value;
+      const pick = document.querySelector('[data-voice="' + lang + '"]').value.split(":");
+      const form = new FormData();
+      form.append("csrf_token", CSRF);
+      form.append("script", text);
+      form.append("target_language", lang);
+      form.append("tts_engine", pick[0]);
+      form.append("tts_voice", pick[1]);
+      form.append("script_images", "explainer");
+      const res = await fetch("/api/script", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || "Không tạo được video.");
+      const patch = {};
+      patch["job_" + lang + "_id"] = data.job_id;
+      await api("/api/studio/episodes/" + e.id, "PATCH", patch);
+      Nora.toast("Đã gửi tạo video #" + data.job_id + " — xem tiến độ ở Lịch sử.", "success");
+    }
+
+    document.addEventListener("click", async function (event) {
+      const btn = event.target.closest("button");
+      if (!btn) return;
+      const e = series && series.episodes.find(function (x) { return x.id === current; });
+      try {
+        if (btn.dataset.ep) { current = Number(btn.dataset.ep); render(); return; }
+        if (btn.id === "saveStyle") {
+          await api("/api/studio/series/" + SERIES_ID, "PATCH", {style_guide: document.getElementById("styleGuide").value});
+          Nora.toast("Đã lưu văn phong.", "success");
+          return;
+        }
+        if (!e) return;
+        if (btn.dataset.step) {
+          btn.disabled = true;
+          await api("/api/studio/episodes/" + e.id + "/" + btn.dataset.step, "POST");
+          await load();
+        } else if (btn.dataset.save) {
+          const patch = {};
+          patch["script_" + btn.dataset.save] = document.querySelector('[data-script="' + btn.dataset.save + '"]').value;
+          btn.disabled = true;
+          document.activeElement.blur();
+          await api("/api/studio/episodes/" + e.id, "PATCH", patch);
+          Nora.toast("Đã lưu kịch bản.", "success");
+          await load();
+        } else if (btn.dataset.video) {
+          btn.disabled = true;
+          await makeVideo(e, btn.dataset.video);
+          await load();
+        }
+      } catch (err) { fail(err); btn.disabled = false; }
+    });
+    document.addEventListener("input", function (event) {
+      const lang = event.target.dataset && event.target.dataset.script;
+      if (lang) document.querySelector('[data-count="' + lang + '"]').textContent = words(event.target.value);
+    });
+
+    load().catch(fail);
+  })();
+</script>
+{% endblock %}

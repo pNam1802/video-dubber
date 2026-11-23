@@ -10,7 +10,7 @@ from tests.conftest import PASSWORD, make_user
 
 # ── Cấu trúc ứng dụng ────────────────────────────────────────
 def test_blueprints_registered(app):
-    assert set(app.blueprints) == {"main", "auth", "api", "admin", "oauth"}
+    assert set(app.blueprints) == {"main", "auth", "api", "admin", "oauth", "studio"}
 
 
 def test_session_hardening(app):

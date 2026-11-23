@@ -398,3 +398,95 @@ class TranscriptSegment(db.Model):
 
     def __repr__(self) -> str:
         return f"<TranscriptSegment job={self.job_id} #{self.idx}>"
+
+
+class Series(db.Model):
+    """Series video YouTube do "Xưởng kịch bản" (app/studio.py) lên ý tưởng.
+
+    Đây là TRÍ NHỚ của agent viết kịch bản: văn phong và bảng thuật ngữ Việt–Anh
+    nằm ở đây, mỗi tập chốt xong lại bổ sung thêm. Viết tập mới thì agent đọc lại
+    toàn bộ — không phụ thuộc vào việc ai/ phiên chat nào còn nhớ tập trước nói gì.
+    """
+
+    __tablename__ = "series"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False, default="", server_default="")
+    topic = db.Column(db.Text, nullable=False, default="", server_default="")
+    audience = db.Column(db.Text, nullable=False, default="", server_default="")
+    description = db.Column(db.Text, nullable=False, default="", server_default="")
+    #: Văn phong chung của cả series (giọng kể, độ dài, cách mở/kết tập).
+    style_guide = db.Column(db.Text, nullable=False, default="", server_default="")
+    #: [{"vi": ..., "en": ..., "definition": ...}] — dịch thuật ngữ nhất quán mọi tập.
+    glossary = db.Column(db.JSON, nullable=False, default=list)
+
+    #: Bước agent đang chạy nền ("plan"), None = rảnh. error: lỗi của lần chạy gần nhất.
+    task = db.Column(db.String(20), nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    episodes = db.relationship(
+        "Episode", backref="series", order_by="Episode.number",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id, "title": self.title, "topic": self.topic, "audience": self.audience,
+            "description": self.description, "style_guide": self.style_guide, "glossary": self.glossary or [],
+            "task": self.task, "error": self.error,
+            "episodes": [e.as_dict() for e in self.episodes],
+        }
+
+
+class EpisodeStatus:
+    PLANNED = "planned"        # mới có tên + mục tiêu trong lộ trình
+    DRAFTED = "drafted"        # đã nghiên cứu + viết + tự soát kịch bản tiếng Việt
+    TRANSLATED = "translated"  # đã có bản tiếng Anh
+    DONE = "done"              # đã chốt: tóm tắt + thuật ngữ vào trí nhớ series
+
+
+class Episode(db.Model):
+    __tablename__ = "episode"
+
+    id = db.Column(db.Integer, primary_key=True)
+    series_id = db.Column(db.Integer, db.ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True)
+    number = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(200), nullable=False, default="", server_default="")
+    goal = db.Column(db.Text, nullable=False, default="", server_default="")
+    key_points = db.Column(db.JSON, nullable=False, default=list)
+    status = db.Column(db.String(20), nullable=False, default=EpisodeStatus.PLANNED,
+                       server_default=EpisodeStatus.PLANNED)
+
+    #: Ghi chú nghiên cứu (Gemini + Google Search) và nguồn [{"title", "url"}].
+    notes = db.Column(db.Text, nullable=False, default="", server_default="")
+    sources = db.Column(db.JSON, nullable=False, default=list)
+    outline = db.Column(db.JSON, nullable=False, default=list)
+    script_vi = db.Column(db.Text, nullable=False, default="", server_default="")
+    script_en = db.Column(db.Text, nullable=False, default="", server_default="")
+    #: Câu hỏi tự kiểm tra cuối tập [{"q", "a"}] — mục tiêu đầu tiên là học.
+    quiz = db.Column(db.JSON, nullable=False, default=list)
+    #: Những lỗi bước tự soát đã tìm thấy và sửa.
+    review = db.Column(db.JSON, nullable=False, default=list)
+    #: Tóm tắt khi chốt tập — agent đọc lại khi viết các tập sau.
+    summary = db.Column(db.Text, nullable=False, default="", server_default="")
+    job_vi_id = db.Column(db.Integer, db.ForeignKey("job.id", ondelete="SET NULL"), nullable=True)
+    job_en_id = db.Column(db.Integer, db.ForeignKey("job.id", ondelete="SET NULL"), nullable=True)
+
+    task = db.Column(db.String(20), nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (db.UniqueConstraint("series_id", "number", name="uq_episode_series_number"),)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id, "series_id": self.series_id, "number": self.number, "title": self.title,
+            "goal": self.goal, "key_points": self.key_points or [], "status": self.status,
+            "notes": self.notes, "sources": self.sources or [], "outline": self.outline or [],
+            "script_vi": self.script_vi, "script_en": self.script_en, "quiz": self.quiz or [],
+            "review": self.review or [], "summary": self.summary,
+            "job_vi_id": self.job_vi_id, "job_en_id": self.job_en_id,
+            "task": self.task, "error": self.error,
+        }

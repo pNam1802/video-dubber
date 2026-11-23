@@ -121,7 +121,17 @@ def all_icons_actually_rendered(app, client, as_user, as_admin, user) -> set[str
     for job_id in job_ids:
         found |= rendered_icon_names(as_user.get(f"/job/{job_id}").get_data(as_text=True))
 
-    for path in ["/quan-tri/thong-ke", "/quan-tri/nguoi-dung", "/quan-tri/he-thong"]:
+    with app.app_context():
+        from app.extensions import db
+        from app.models import Series, User
+
+        admin_id = User.query.filter_by(role="admin").first().id
+        series = Series(user_id=admin_id, topic="LLM", title="LLM")
+        db.session.add(series)
+        db.session.commit()
+        series_id = series.id
+    for path in ["/quan-tri/thong-ke", "/quan-tri/nguoi-dung", "/quan-tri/he-thong", "/quan-tri/xuong-kich-ban",
+                 f"/quan-tri/xuong-kich-ban/{series_id}"]:
         found |= rendered_icon_names(as_admin.get(path).get_data(as_text=True))
 
     # error.html có hai nhánh khác nhau (đã đăng nhập / khách vãng lai) —
