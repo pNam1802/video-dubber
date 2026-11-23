@@ -21,11 +21,13 @@ from pathlib import Path
 
 import manimpango
 from manim import (
-    BOLD, DOWN, LEFT, ORIGIN, RIGHT, UP, Arrow, Circle, Create, Dot, FadeIn, GrowArrow,
-    GrowFromCenter, Indicate, Line, NumberPlane, RoundedRectangle, Scene, Text, VGroup, Write, config,
+    BOLD, DOWN, LEFT, ORIGIN, RIGHT, UP, Arrow, ArcBetweenPoints, Circle, Create, Dot, FadeIn, FadeOut,
+    GrowArrow, GrowFromCenter, GrowFromEdge, Indicate, LaggedStart, Line, NumberPlane, Rectangle,
+    RoundedRectangle, Scene, ShowPassingFlash, SurroundingRectangle, Text, VGroup, Write, config,
 )
 
 FONT = "Be Vietnam Pro"
+MONO = "JetBrains Mono"
 FONT_DIR = Path(__file__).parent / "fonts"
 BG = "#0f1117"
 INK = "#e8eaf0"
@@ -34,10 +36,15 @@ ACCENT = "#58c4dd"   # xanh kiểu 3Blue1Brown
 GOLD = "#ffd166"
 GREEN = "#83c167"
 PINK = "#fc6255"
+PURPLE = "#b189f5"
+ORANGE = "#f19c65"
+PALETTE = (ACCENT, GOLD, GREEN, PINK, PURPLE, ORANGE)
 FRAME_W = 12.6       # bề ngang dùng được (đơn vị Manim, khung 14.2 x 8)
 
 for _font in FONT_DIR.glob("*.ttf"):
     manimpango.register_font(str(_font))
+# Nền tối trơn kiểu 3Blue1Brown, không vẽ lưới nền: vài trăm đường kẻ Cairo phải vẽ lại ở MỌI
+# khung làm render chậm thêm ~40% (đo 23/11/2026).
 config.background_color = BG
 
 
@@ -66,8 +73,11 @@ def label(text: str, size: float = 30, color: str = INK, bold: bool = False, wid
 class ExplainerScene(Scene):
     def setup(self):
         self.spec = json.loads(Path(os.environ["EXPLAINER_SPEC"]).read_text(encoding="utf-8"))
-        self.duration = max(1.0, float(self.spec.get("duration", 5)))
+        # Không đặt tên self.duration: Manim tự ghi đè thuộc tính đó trong mỗi Scene.play().
+        self.scene_sec = max(1.0, float(self.spec.get("duration", 5)))
         self.clock = 0.0
+        # Mốc bắt đầu từng câu trong cảnh (giây, tính từ đầu cảnh): phần tử hiện đúng lúc được nói tới.
+        self.beats = sorted(float(b) for b in self.spec.get("beats", []) if 0 < float(b) < self.scene_sec)
 
     # ── Nhịp thời gian: mọi cảnh phải dài đúng bằng đoạn lời đọc của nó ──
     def run(self, *animations, run_time: float = 0.8):
@@ -79,21 +89,28 @@ class ExplainerScene(Scene):
         self.clock += run_time
 
     def remaining(self) -> float:
-        return self.duration - self.clock
+        return self.scene_sec - self.clock
 
     def wait_until(self, t: float):
-        gap = min(t, self.duration) - self.clock
+        gap = min(t, self.scene_sec) - self.clock
         if gap > 0.04:
             self.wait(gap)
             self.clock += gap
 
     def reveal_times(self, n: int, start: float = 0.9) -> list[float]:
-        """Hiện n phần tử rải đều trong ~70% đầu cảnh, phần còn lại để người xem đọc."""
-        end = max(start + 0.1, self.duration * 0.7)
-        if n <= 1:
-            return [start]
-        step = (end - start) / (n - 1)
-        return [start + i * step for i in range(n)]
+        """Lúc hiện từng phần tử trong n phần tử. Có đủ mốc câu thì bám theo lời đọc (phần tử
+        thứ k hiện khi giọng đọc sang câu tương ứng); không thì rải đều trong ~70% đầu cảnh."""
+        if n <= 0:
+            return []
+        end = max(start + 0.1, self.scene_sec * 0.7)
+        even = [start] if n == 1 else [start + i * (end - start) / (n - 1) for i in range(n)]
+        marks = [start] + [b for b in self.beats if start + 0.4 < b < self.scene_sec - 0.8]
+        if n == 1 or len(marks) < n:
+            return even
+        picked = [marks[round(i * (len(marks) - 1) / (n - 1))] for i in range(n)]
+        if any(b - a < 0.45 for a, b in zip(picked, picked[1:])):
+            return even
+        return picked
 
     def heading(self, text: str):
         if not text:
@@ -108,7 +125,12 @@ class ExplainerScene(Scene):
     def construct(self):
         draw = getattr(self, "layout_" + str(self.spec.get("layout")), self.layout_statement)
         draw(self.spec)
-        self.wait_until(self.duration)
+        # Mờ dần cuối cảnh để nối sang cảnh sau mượt hơn cắt cứng.
+        self.wait_until(self.scene_sec - 0.35)
+        content = list(self.mobjects)
+        if content and self.remaining() > 0.25:
+            self.run(*[FadeOut(m) for m in content], run_time=self.remaining() - 0.02)
+        self.wait_until(self.scene_sec)
 
     def layout_title(self, s):
         title = label(s.get("title"), 60, INK, bold=True, width_chars=28)
@@ -193,7 +215,7 @@ class ExplainerScene(Scene):
             tag = label(text, 22, MUTED, width_chars=18, max_width=3.2).next_to(dot, side, buff=0.12)
             points.add(VGroup(dot, tag))
         for point, t in zip(points, self.reveal_times(len(points), start=1.4)):
-            self.wait_until(min(t, self.duration * 0.45))
+            self.wait_until(min(t, self.scene_sec * 0.45))
             self.run(FadeIn(point, scale=0.6), run_time=0.4)
         query_dot = Dot(plane.c2p(*q_pos), color=GOLD, radius=0.14)
         query_tag = label(s.get("query") or "?", 26, GOLD, bold=True, width_chars=22,
@@ -257,5 +279,230 @@ class ExplainerScene(Scene):
         VGroup(text, *([cap] if cap else [])).arrange(DOWN, buff=0.5).move_to(ORIGIN)
         self.run(Write(text), run_time=min(1.5, 0.3 + 0.04 * len(_nfc(s.get("text") or ""))))
         if cap:
-            self.wait_until(self.duration * 0.35)
+            self.wait_until(self.scene_sec * 0.35)
+            self.run(FadeIn(cap, shift=UP * 0.2), run_time=0.6)
+
+    # ── Bố cục "vẽ": hình chiếm phần lớn khung, chữ chỉ là nhãn ──
+    def layout_tokens(self, s):
+        """Câu chữ tách thành các ô token màu, kèm mã số token bên dưới."""
+        self.heading(s.get("heading"))
+        tokens = [str(t) for t in s.get("tokens", []) if str(t).strip()][:12]
+        sentence = label(s.get("text") or "".join(tokens), 40, INK, width_chars=40).move_to(UP * 1.4)
+        self.run(Write(sentence), run_time=1.0)
+        chips = VGroup()
+        for i, tok in enumerate(tokens):
+            txt = Text(_nfc(tok) or "_", font=MONO, font_size=30, color=INK)
+            if txt.width > 3.0:
+                txt.scale_to_fit_width(3.0)
+            color = PALETTE[i % len(PALETTE)]
+            box = RoundedRectangle(corner_radius=0.12, width=txt.width + 0.35, height=0.8, color=color,
+                                   stroke_width=2).set_fill(color, opacity=0.18)
+            txt.move_to(box)
+            chips.add(VGroup(box, txt))
+        if not chips:
+            return
+        chips.arrange(RIGHT, buff=0.15)
+        if chips.width > FRAME_W:
+            chips.arrange_in_grid(rows=2, buff=(0.15, 0.7))
+            if chips.width > FRAME_W:
+                chips.scale_to_fit_width(FRAME_W)
+        chips.move_to(DOWN * 0.5)
+        rng = random.Random("|".join(tokens))
+        ids = VGroup()
+        for chip in chips:
+            tag = Text(str(rng.randint(100, 99999)), font=MONO, font_size=18, color=MUTED)
+            if tag.width > chip.width:
+                tag.scale_to_fit_width(chip.width * 0.95)
+            ids.add(tag.next_to(chip, DOWN, buff=0.12))
+        for chip, t in zip(chips, self.reveal_times(len(chips), start=1.6)):
+            self.wait_until(min(t, self.scene_sec * 0.6))
+            self.run(FadeIn(chip, shift=DOWN * 0.3, scale=0.8), run_time=0.35)
+        self.run(LaggedStart(*[FadeIn(i, shift=UP * 0.1) for i in ids], lag_ratio=0.08), run_time=0.8)
+        count = label(f"{len(chips)} token", 28, GOLD, bold=True).next_to(chips, DOWN, buff=0.8)
+        self.run(FadeIn(count, shift=UP * 0.2), run_time=0.5)
+
+    def layout_probabilities(self, s):
+        """Biểu đồ cột xác suất cho từ/token tiếp theo; cột cao nhất được chọn và nối vào câu."""
+        self.heading(s.get("heading"))
+        options = sorted(s.get("options", []), key=lambda o: -o["p"])[:6]
+        if not options:
+            return
+        context = label(s.get("context") or "", 34, INK, width_chars=40, max_width=10)
+        blank = Text("___", font=MONO, font_size=34, color=GOLD)
+        VGroup(context, blank).arrange(RIGHT, buff=0.2).move_to(UP * 1.9)
+        self.run(Write(context), FadeIn(blank), run_time=0.9)
+        max_w, rows = 6.0, VGroup()
+        for i, opt in enumerate(options):
+            name = label(opt["label"], 28, INK, max_width=3.0)
+            bar = Rectangle(width=max(0.05, max_w * opt["p"]), height=0.5, stroke_width=0,
+                            fill_color=GOLD if i == 0 else ACCENT, fill_opacity=0.85 if i == 0 else 0.5)
+            pct = Text(f"{opt['p'] * 100:.0f}%", font=MONO, font_size=24, color=MUTED)
+            rows.add(VGroup(name, bar, pct))
+        left_edge = -max_w / 2 - 0.5
+        for k, row in enumerate(rows):
+            y = -0.2 - k * 0.72
+            row[1].move_to([0, y, 0]).align_to([left_edge + 0.3, 0, 0], LEFT)
+            row[0].move_to([0, y, 0]).align_to([left_edge, 0, 0], RIGHT)
+            row[2].next_to(row[1], RIGHT, buff=0.2)
+        rows.move_to(DOWN * 0.9).shift(RIGHT * 0.8)
+        self.run(*[FadeIn(r[0]) for r in rows], run_time=0.5)
+        self.run(LaggedStart(*[GrowFromEdge(r[1], LEFT) for r in rows], lag_ratio=0.15),
+                 *[FadeIn(r[2]) for r in rows], run_time=1.4)
+        self.wait_until(self.scene_sec * 0.55)
+        chosen = label(options[0]["label"], 34, GOLD, bold=True).move_to(blank).align_to(blank, LEFT)
+        self.run(Create(SurroundingRectangle(rows[0], color=GOLD, buff=0.12)), run_time=0.5)
+        self.run(FadeOut(blank), FadeIn(chosen, shift=UP * 0.3), run_time=0.6)
+
+    def layout_attention(self, s):
+        """Một token "nhìn" về các token khác: cung nối dày mỏng theo trọng số chú ý."""
+        self.heading(s.get("heading"))
+        tokens = [str(t) for t in s.get("tokens", []) if str(t).strip()][:8]
+        if len(tokens) < 2:
+            return self.layout_statement({"text": " ".join(tokens)})
+        focus = s.get("focus", len(tokens) - 1)
+        focus = focus if isinstance(focus, int) and 0 <= focus < len(tokens) else len(tokens) - 1
+        attends = [i for i in s.get("attends", []) if 0 <= i < len(tokens) and i != focus] or [0 if focus else 1]
+        chips = VGroup()
+        for i, tok in enumerate(tokens):
+            txt = label(tok, 30, INK, bold=i == focus, max_width=2.6)
+            box = RoundedRectangle(corner_radius=0.12, width=txt.width + 0.4, height=0.85,
+                                   color=GOLD if i == focus else MUTED, stroke_width=2)
+            txt.move_to(box)
+            chips.add(VGroup(box, txt))
+        chips.arrange(RIGHT, buff=0.35)
+        if chips.width > FRAME_W:
+            chips.scale_to_fit_width(FRAME_W)
+        chips.move_to(UP * 1.0)
+        self.run(LaggedStart(*[FadeIn(c, shift=UP * 0.2) for c in chips], lag_ratio=0.1), run_time=1.0)
+        self.wait_until(self.reveal_times(2, start=1.2)[0])
+        self.run(Indicate(chips[focus], color=GOLD, scale_factor=1.12), run_time=0.7)
+        rng = random.Random("|".join(tokens))
+        weights = {i: rng.uniform(0.55, 0.95) if i in attends else rng.uniform(0.03, 0.15)
+                   for i in range(len(tokens)) if i != focus}
+        arcs = VGroup()
+        for i, w in sorted(weights.items(), key=lambda kv: kv[1]):
+            start, end = chips[focus].get_bottom(), chips[i].get_bottom()
+            arc = ArcBetweenPoints(start + DOWN * 0.08, end + DOWN * 0.08, angle=-1.4 if i < focus else 1.4,
+                                   color=GOLD if i in attends else MUTED, stroke_width=1 + 12 * w)
+            arc.set_stroke(opacity=0.25 + 0.75 * w)
+            arcs.add(arc)
+        self.run(LaggedStart(*[Create(a) for a in arcs], lag_ratio=0.1), run_time=1.4)
+        tags = VGroup(*[Text(f"{weights[i]:.2f}", font=MONO, font_size=22, color=GOLD)
+                        .next_to(chips[i], UP, buff=0.15) for i in attends])
+        self.run(*[FadeIn(t) for t in tags], *[chips[i][0].animate.set_color(GOLD) for i in attends], run_time=0.6)
+        if s.get("caption"):
+            cap = label(s["caption"], 28, ACCENT, width_chars=50).to_edge(DOWN, buff=0.6)
+            self.run(FadeIn(cap, shift=UP * 0.2), run_time=0.5)
+
+    def layout_network(self, s):
+        """Mạng nơ-ron: các lớp nút, tín hiệu chạy từ đầu vào tới đầu ra."""
+        self.heading(s.get("heading"))
+        sizes = [max(1, min(6, int(n))) for n in s.get("layers", [])][:5]
+        if len(sizes) < 2:
+            sizes = [3, 5, 5, 2]
+        layers = VGroup()
+        for n in sizes:
+            layers.add(VGroup(*[Circle(radius=0.22, color=ACCENT, stroke_width=3).set_fill(BG, opacity=1)
+                                for _ in range(n)]).arrange(DOWN, buff=0.35))
+        layers.arrange(RIGHT, buff=2.0).move_to(DOWN * 0.3)
+        if layers.height > 5.2:
+            layers.scale_to_fit_height(5.2)
+        edges = VGroup(*[VGroup(*[Line(a.get_center(), b.get_center(), stroke_width=1.2, color=MUTED)
+                                  .set_stroke(opacity=0.35) for a in left for b in right])
+                         for left, right in zip(layers, layers[1:])])
+        for layer in layers:
+            layer.set_z_index(2)
+        labels = VGroup()
+        for text, layer, side in ((s.get("input_label"), layers[0], LEFT), (s.get("output_label"), layers[-1], RIGHT)):
+            if text:
+                labels.add(label(text, 26, MUTED, width_chars=12, max_width=2.2).next_to(layer, side, buff=0.4))
+        self.run(LaggedStart(*[LaggedStart(*[GrowFromCenter(n) for n in layer], lag_ratio=0.1) for layer in layers],
+                             lag_ratio=0.3), run_time=1.4)
+        self.run(Create(edges), *[FadeIn(lbl) for lbl in labels], run_time=1.0)
+        # Tín hiệu: các cạnh sáng lên lần lượt từng lớp, lặp tới gần hết cảnh.
+        while self.remaining() > 1.0 + 0.8 * len(edges):
+            for group, layer in zip(edges, layers[1:]):
+                flashes = [ShowPassingFlash(e.copy().set_stroke(GOLD, width=3, opacity=1), time_width=0.6)
+                           for e in group]
+                self.run(*flashes, *[n.animate.set_fill(GOLD, opacity=0.6) for n in layer], run_time=0.6)
+                self.run(*[n.animate.set_fill(BG, opacity=1) for n in layer], run_time=0.2)
+            self.wait_until(self.clock + 0.4)
+
+    def layout_code(self, s):
+        """Cửa sổ terminal/editor, các dòng hiện lần lượt theo lời đọc."""
+        self.heading(s.get("heading"))
+        lines = [str(line) for line in s.get("lines", [])][:10]
+        if not lines:
+            return
+        rows = VGroup()
+        for line in lines:
+            stripped = line.lstrip()
+            color = MUTED if stripped.startswith(("#", "//")) else GREEN if stripped.startswith(("$", ">>>")) else INK
+            rows.add(Text(stripped or " ", font=MONO, font_size=26, color=color))
+        rows.arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+        # Manim bỏ khoảng trắng đầu dòng: dịch từng dòng sang phải theo độ thụt, đo bằng bề rộng một ký tự.
+        char_w = Text("M", font=MONO, font_size=26).width
+        for row, line in zip(rows, lines):
+            row.shift(RIGHT * char_w * (len(line) - len(line.lstrip())))
+        if rows.width > 10.5:
+            rows.scale_to_fit_width(10.5)
+        window = RoundedRectangle(corner_radius=0.2, width=max(rows.width + 1.0, 7), height=rows.height + 1.3,
+                                  color=MUTED, stroke_width=1.5).set_fill("#161b22", opacity=1)
+        window.move_to(DOWN * 0.4)
+        dots = VGroup(*[Dot(radius=0.07, color=c) for c in (PINK, GOLD, GREEN)]).arrange(RIGHT, buff=0.15)
+        dots.move_to(window.get_corner(UP + LEFT) + RIGHT * 0.45 + DOWN * 0.3)
+        chrome = VGroup(window, dots)
+        if s.get("language"):
+            lang = Text(_nfc(s["language"]), font=MONO, font_size=18, color=MUTED)
+            lang.move_to(window.get_corner(UP + RIGHT) + LEFT * (lang.width / 2 + 0.3) + DOWN * 0.3)
+            chrome.add(lang)
+        rows.move_to(window).shift(DOWN * 0.2).align_to(window.get_left() + RIGHT * 0.5, LEFT)
+        self.run(FadeIn(chrome, scale=0.95), run_time=0.6)
+        for row, t in zip(rows, self.reveal_times(len(rows), start=1.0)):
+            self.wait_until(t)
+            self.run(Write(row), run_time=min(1.0, 0.25 + 0.02 * len(row.text)))
+
+    def layout_timeline(self, s):
+        """Trục thời gian: các mốc hiện lần lượt, nhãn so le trên/dưới."""
+        self.heading(s.get("heading"))
+        events = s.get("events", [])[:6]
+        if not events:
+            return
+        axis = Line(LEFT * 6, RIGHT * 6, color=MUTED, stroke_width=3).move_to(DOWN * 0.3)
+        self.run(Create(axis), run_time=0.7)
+        n = len(events)
+        for k, (ev, t) in enumerate(zip(events, self.reveal_times(n, start=1.0))):
+            self.wait_until(t)
+            color = PALETTE[k % len(PALETTE)]
+            dot = Dot(axis.point_from_proportion((k + 0.5) / n), radius=0.12, color=color)
+            when = label(ev.get("when", ""), 28, color, bold=True, max_width=2.2)
+            what = label(ev.get("label", ""), 24, INK, width_chars=14, max_width=2.2)
+            side = UP if k % 2 == 0 else DOWN
+            group = VGroup(when, what).arrange(DOWN, buff=0.12).next_to(dot, side, buff=0.35)
+            self.run(GrowFromCenter(dot), FadeIn(group, shift=-side * 0.2), run_time=0.6)
+
+    def layout_number(self, s):
+        """Một con số lớn bật ra giữa khung, kèm đơn vị và chú thích.
+
+        Không đếm từ 0 lên: dựng lại chữ ở mỗi khung (always_redraw) làm một cảnh 7 giây mất
+        hơn 6 phút render, vì mỗi lần dựng chữ Manim lại gọi Pango tạo một file SVG mới."""
+        self.heading(s.get("heading"))
+        target = float(s.get("value") or 0)
+        if float(target).is_integer() or abs(target) >= 100:
+            text = f"{target:,.0f}".replace(",", ".")
+        else:
+            text = f"{target:.1f}".replace(".", ",")
+        unit = _nfc(s.get("unit") or "")
+        number = Text(text + (" " + unit if unit else ""), font=FONT, weight=BOLD, font_size=96, color=GOLD)
+        if number.width > FRAME_W:
+            number.scale_to_fit_width(FRAME_W)
+        number.move_to(UP * 0.3)
+        ring = Circle(radius=max(number.width, number.height) / 2 + 0.6, color=GOLD, stroke_width=3)
+        ring.move_to(number).stretch(0.45, 1)
+        self.run(GrowFromCenter(number), run_time=0.8)
+        self.run(Create(ring), Indicate(number, color=GOLD, scale_factor=1.08), run_time=0.9)
+        self.run(FadeOut(ring), run_time=0.3)
+        if s.get("caption"):
+            self.wait_until(self.reveal_times(2, start=1.2)[1])
+            cap = label(s["caption"], 32, INK, width_chars=46).next_to(number, DOWN, buff=0.7)
             self.run(FadeIn(cap, shift=UP * 0.2), run_time=0.6)
