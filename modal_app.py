@@ -268,6 +268,15 @@ class Composer:
         finally:
             data_volume.commit()
 
+    @modal.method()
+    def run_studio(self, kind: str, target_id: int) -> None:
+        """"Xưởng kịch bản" (app/studio.py): một bước LLM của agent viết kịch bản.
+        Chỉ đọc/ghi Postgres, không đụng volume."""
+        from app import create_app
+        from app.studio import run_task
+
+        run_task(create_app(), kind, target_id)
+
 
 # Giong VieNeu (mac dinh "Nora" va giong clone). Composer goi .remote() mot
 # lan cho ca video: do that tren T4 (26/10/2026) ~25 giay cho 103 cau / 9,5
