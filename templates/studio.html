@@ -74,13 +74,13 @@
     const STATUS = {planned: "Mới lên lộ trình", drafted: "Đã có kịch bản", translated: "Đã có bản Anh", done: "Đã chốt"};
     // Giọng cho từng bản: [engine:khoá, nhãn]. Khoá khớp config.settings.TTS_VOICES.
     const VOICES = {
-      vi: [["vieneu:female", "Nora — nữ (VieNeu)"], ["vieneu:mine", "Giọng của bạn (clone)"],
+      vi: [["recorded:mine", "Giọng tự thu — bạn tự đọc"], ["vieneu:female", "Nora — nữ (VieNeu)"], ["vieneu:mine", "Giọng của bạn (clone)"],
            ["vieneu:male", "Thiện Minh — nam, kể chuyện"], ["vieneu:ngochuyen", "Ngọc Huyền — nữ"],
            ["vieneu:quynhanh", "Quỳnh Anh — nữ, đọc truyện"], ["vieneu:myduyen", "Mỹ Duyên — nữ miền Nam"],
            ["vieneu:ductri", "Đức Trí — nam miền Nam"], ["gemini:female", "Leda — nữ, có cảm xúc (Gemini)"],
            ["gemini:male", "Charon — nam, có cảm xúc (Gemini)"], ["edge-tts:female", "HoaiMy — nữ (miễn phí)"],
            ["edge-tts:male", "NamMinh — nam (miễn phí)"]],
-      en: [["chatterbox:narrator", "Narrator — kể chuyện (Chatterbox)"], ["chatterbox:mine", "Giọng của bạn (clone)"],
+      en: [["recorded:mine", "Giọng tự thu — bạn tự đọc"], ["chatterbox:narrator", "Narrator — kể chuyện (Chatterbox)"], ["chatterbox:mine", "Giọng của bạn (clone)"],
            ["chatterbox:female", "Giọng nữ có sẵn (Chatterbox)"], ["gemini:female", "Leda — nữ, có cảm xúc (Gemini)"],
            ["gemini:male", "Charon — nam, có cảm xúc (Gemini)"], ["edge-tts:female", "Aria — nữ (miễn phí)"],
            ["edge-tts:male", "Guy — nam (miễn phí)"]]
@@ -108,6 +108,7 @@
     // edge-tts là giọng khác hẳn (Aria/Guy) nên không có file mẫu.
     function previewOf(lang, value) {
       const parts = value.split(":");
+      if (parts[0] === "recorded") return "";
       if (lang === "en" && parts[0] === "edge-tts") return "";
       return (PREVIEW_URLS[parts[0]] || {})[parts[1]] || "";
     }
@@ -120,7 +121,7 @@
         btn.querySelector("span").textContent = playing ? "stop_circle" : "play_circle";
         btn.title = playing ? "Dừng" : "Nghe thử giọng này";
         const hint = document.querySelector('[data-voice-hint="' + lang + '"]');
-        const needsSample = voiceOf(lang).split(":")[1] === "mine" && !VOICE_SAMPLES[lang];
+        const needsSample = voiceOf(lang) !== "recorded:mine" && voiceOf(lang).split(":")[1] === "mine" && !VOICE_SAMPLES[lang];
         hint.classList.toggle("hidden", !needsSample);
       });
     }
@@ -227,7 +228,7 @@
       const e = series.episodes.find(function (x) { return x.id === current; });
       const panel = document.getElementById("episodePanel");
       if (!e) return;
-      const panelFocus = panel.contains(document.activeElement) && document.activeElement.matches("textarea, [data-scene-layout]");
+      const panelFocus = recording || (panel.contains(document.activeElement) && document.activeElement.matches("textarea, [data-scene-layout]"));
       if (panelFocus) return;   // đang gõ thì không vẽ lại, tránh mất chữ
       const locked = Boolean(e.task || series.task);
       const voiceSelect = function (lang) {
@@ -284,9 +285,95 @@
               '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
                 '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
               '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
-            '</div>' + storyboardBlock(e, lang, locked) + '</div>';
+            '</div>' + recordBlock(e, lang, locked) + storyboardBlock(e, lang, locked) + '</div>';
         }).join("");
       paintPlayButtons();
+    }
+
+    // ── Giọng tự thu: máy nhắc chữ, mỗi đoạn một bản thu, đọc vấp thì thu lại đúng đoạn đó ──
+    let recording = null;   // {lang, index, recorder, stream, chunks, started, tick}
+    function recordBlock(e, lang, locked) {
+      const paras = e["paragraphs_" + lang] || [];
+      const takes = e["recordings_" + lang] || [];
+      if (!paras.length) return "";
+      const done = takes.filter(Boolean).length;
+      if (!(navigator.mediaDevices && window.MediaRecorder)) {
+        return '<p class="font-label-sm text-label-sm text-on-surface-variant">Trình duyệt này không thu âm được — hãy dùng Chrome hoặc Firefox để tự thu giọng.</p>';
+      }
+      return '<details class="card !p-md" data-record-box="' + lang + '">' +
+        '<summary class="cursor-pointer font-body-md text-body-md text-primary">Tự thu giọng đọc (' + done + "/" + paras.length + ' đoạn)</summary>' +
+        '<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">Đọc to từng đoạn rồi bấm Dừng. Đọc vấp thì thu lại riêng đoạn đó. ' +
+        'Nghỉ một nhịp ngắn giữa các câu để hệ thống cắt câu chính xác (phụ đề và hình bám theo từng câu). ' +
+        'Thu đủ rồi chọn giọng "Giọng tự thu" và bấm Tạo video. Sửa chữ của đoạn nào thì phải thu lại đoạn đó.</p>' +
+        paras.map(function (text, i) {
+          const take = takes[i];
+          return '<div class="border-t border-outline-variant/40 mt-md pt-md flex flex-col gap-2" data-take="' + lang + ':' + i + '">' +
+            '<div class="flex items-start gap-3"><span class="font-label-sm text-label-sm ' + (take ? "text-primary" : "text-on-surface-variant") + ' mt-1 w-8 flex-shrink-0">' +
+            (take ? "✓ " : "") + (i + 1) + '</span>' +
+            '<p class="font-body-lg text-body-lg text-on-surface leading-relaxed">' + esc(text) + '</p></div>' +
+            '<div class="flex items-center gap-2 flex-wrap pl-11">' +
+              '<button data-record="' + lang + ':' + i + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>' +
+              '<span class="material-symbols-outlined text-[18px]">mic</span>' + (take ? "Thu lại" : "Thu") + '</button>' +
+              (take ? '<audio controls preload="none" class="h-9" src="/quan-tri/xuong-kich-ban/thu-am/' + e.id + "/" + take + '"></audio>' : "") +
+            '</div></div>';
+        }).join("") + '</details>';
+    }
+
+    function recordExtension(mime) {
+      if (mime.indexOf("ogg") !== -1) return ".ogg";
+      if (mime.indexOf("mp4") !== -1 || mime.indexOf("aac") !== -1) return ".m4a";
+      return ".webm";
+    }
+
+    async function toggleRecording(e, btn) {
+      const parts = btn.dataset.record.split(":");
+      if (recording) {
+        const same = recording.lang === parts[0] && recording.index === Number(parts[1]);
+        recording.recorder.stop();
+        if (same) return;
+      }
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({audio: true}); }
+      catch (err) { throw new Error("Không mở được micro — hãy cho phép trình duyệt dùng mic."); }
+      const rec = {lang: parts[0], index: Number(parts[1]), stream: stream, chunks: [], started: Date.now()};
+      rec.recorder = new MediaRecorder(stream);
+      rec.recorder.addEventListener("dataavailable", function (ev) { if (ev.data.size) rec.chunks.push(ev.data); });
+      rec.recorder.addEventListener("stop", function () {
+        clearInterval(rec.tick);
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        if (recording === rec) recording = null;
+        const mime = rec.recorder.mimeType || "audio/webm";
+        uploadTake(e, rec, new File(rec.chunks, "doan" + recordExtension(mime), {type: mime})).catch(fail);
+      });
+      rec.recorder.start();
+      recording = rec;
+      btn.innerHTML = '<span class="material-symbols-outlined text-[18px] text-error">stop_circle</span>Dừng <span data-rec-timer>0:00</span>';
+      rec.tick = setInterval(function () {
+        const s = Math.floor((Date.now() - rec.started) / 1000);
+        const timer = btn.querySelector("[data-rec-timer]");
+        if (timer) timer.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+        if (s >= 180 && rec.recorder.state === "recording") rec.recorder.stop();
+      }, 250);
+    }
+
+    async function uploadTake(e, rec, file) {
+      const form = new FormData();
+      form.append("csrf_token", CSRF);
+      form.append("lang", rec.lang);
+      form.append("index", rec.index);
+      form.append("file", file);
+      const res = await fetch("/api/studio/episodes/" + e.id + "/recordings", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
+      const data = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(data.error || "Không lưu được bản thu.");
+      Nora.toast("Đã lưu đoạn " + (rec.index + 1) + " (" + data.seconds + " giây).", "success");
+      await load();
+      const box = document.querySelector('[data-record-box="' + rec.lang + '"]');
+      if (box) box.open = true;
+      // Cuộn tới đoạn chưa thu kế tiếp: đọc liền một mạch như máy nhắc chữ.
+      const next = (e = series.episodes.find(function (x) { return x.id === current; }))["recordings_" + rec.lang]
+        .findIndex(function (take, i) { return !take && i > rec.index; });
+      const target = document.querySelector('[data-take="' + rec.lang + ':' + (next === -1 ? rec.index : next) + '"]');
+      if (target) target.scrollIntoView({block: "center", behavior: "smooth"});
     }
 
     // ── Phân cảnh: duyệt/sửa từng cảnh, vẽ thử một cảnh trước khi render cả video ──
@@ -368,8 +455,14 @@
       form.append("csrf_token", CSRF);
       form.append("script", text);
       form.append("target_language", lang);
-      form.append("tts_engine", pick[0]);
-      form.append("tts_voice", pick[1]);
+      if (pick[0] === "recorded") {
+        form.append("recorded_episode", e.id);
+        form.append("tts_engine", "edge-tts");
+        form.append("tts_voice", "female");
+      } else {
+        form.append("tts_engine", pick[0]);
+        form.append("tts_voice", pick[1]);
+      }
       form.append("script_images", "explainer");
       if (board.length) form.append("storyboard", JSON.stringify(board));
       const res = await fetch("/api/script", {method: "POST", body: form, headers: {"X-CSRFToken": CSRF}});
@@ -403,6 +496,10 @@
           return;
         }
         if (!e) return;
+        if (btn.dataset.record) {
+          await toggleRecording(e, btn);
+          return;
+        }
         if (btn.dataset.saveBoard) {
           btn.disabled = true;
           await saveBoard(e, btn.dataset.saveBoard);
