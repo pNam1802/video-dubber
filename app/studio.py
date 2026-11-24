@@ -290,7 +290,7 @@ def _step_youtube(episode: Episode, lang: str, publish_at: str = "") -> None:
     video_id = yt.upload_video(token, locate_file(OUTPUT_DIR / job.video_name), yt.video_body(pack, lang, publish_at or None))
     result = {"id": video_id, "url": f"https://youtu.be/{video_id}",
               "studio_url": f"https://studio.youtube.com/video/{video_id}/edit",
-              "publish_at": publish_at or None, "captions": [], "caption_errors": []}
+              "publish_at": publish_at or None, "captions": [], "caption_errors": [], "playlist": None}
     _save_youtube(episode, lang, result)
     db.session.commit()
     for code, name in (pack.get("srt") or {}).items():
@@ -300,6 +300,13 @@ def _step_youtube(episode: Episode, lang: str, publish_at: str = "") -> None:
             result["captions"].append(code)
         except Exception as exc:
             result["caption_errors"].append(f"{code}: {exc}"[:300])
+    playlist = episode.series.youtube_playlist
+    if playlist:
+        try:
+            yt.add_to_playlist(token, playlist, video_id)
+            result["playlist"] = playlist
+        except Exception as exc:
+            result["playlist_error"] = str(exc)[:300]
     _save_youtube(episode, lang, result)
 
 
@@ -439,6 +446,13 @@ def update_series(series_id: int):
     body = request.get_json(silent=True) or {}
     if "style_guide" in body:
         series.style_guide = str(body["style_guide"])[:4000]
+    if "youtube_playlist" in body:
+        import re
+
+        playlist = str(body["youtube_playlist"] or "").strip()
+        if playlist and not re.fullmatch(r"[A-Za-z0-9_-]{10,64}", playlist):
+            return jsonify({"error": "Mã danh sách phát không hợp lệ."}), 400
+        series.youtube_playlist = playlist or None
     if "glossary" in body:
         from core.studio import clean_glossary
 

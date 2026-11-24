@@ -366,3 +366,34 @@ def test_youtube_step_uploads_private_video_and_both_captions(app, as_admin, fak
                               "publishAt": "2099-01-01T19:00:00Z"}
     assert calls["captions"] == [("VID1", "vi", "1\nvi".encode())]
     assert as_admin.post(url, json={"lang": "vi"}).status_code == 409  # không đăng trùng
+
+
+def test_series_playlist_is_saved_and_used_after_upload(app, as_admin, fake_agent, monkeypatch, tmp_path):
+    from app.extensions import db
+    from app.models import Episode, Job, JobStatus, User
+    from core import youtube as yt
+
+    series_id, ep_id = _drafted_episode(as_admin)
+    patch = lambda value: as_admin.patch(f"/api/studio/series/{series_id}", json={"youtube_playlist": value})
+    assert patch("không hợp lệ!").status_code == 400
+    assert patch("PLabcdefghij_-12").status_code == 200
+    assert as_admin.get(f"/api/studio/series/{series_id}").get_json()["youtube_playlist"] == "PLabcdefghij_-12"
+
+    monkeypatch.setattr("config.settings.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("app.storage.locate_file", lambda path: path)
+    (tmp_path / "v.mp4").write_bytes(b"mp4")
+    monkeypatch.setattr(yt, "access_token", lambda *a: "at")
+    monkeypatch.setattr(yt, "upload_video", lambda *a: "VID9")
+    added = []
+    monkeypatch.setattr(yt, "add_to_playlist", lambda token, playlist, vid: added.append((playlist, vid)))
+    with app.app_context():
+        admin = User.query.filter_by(role="admin").first()
+        admin.youtube_token = yt.seal("rt", app.config["SECRET_KEY"])
+        job = Job(user_id=admin.id, status=JobStatus.DONE, video_name="v.mp4", message="xong")
+        db.session.add(job)
+        db.session.flush()
+        db.session.get(Episode, ep_id).publish = {"vi": {"title": "T", "job_id": job.id, "srt": {}}}
+        db.session.commit()
+    as_admin.post(f"/api/studio/episodes/{ep_id}/youtube", json={"lang": "vi"})
+    tube = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]["publish"]["vi"]["youtube"]
+    assert added == [("PLabcdefghij_-12", "VID9")] and tube["playlist"] == "PLabcdefghij_-12"

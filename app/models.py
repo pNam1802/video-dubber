@@ -424,6 +424,8 @@ class Series(db.Model):
     style_guide = db.Column(db.Text, nullable=False, default="", server_default="")
     #: [{"vi": ..., "en": ..., "definition": ...}] — dịch thuật ngữ nhất quán mọi tập.
     glossary = db.Column(db.JSON, nullable=False, default=list)
+    #: Danh sách phát YouTube của series: đăng tập nào lên (app/studio._step_youtube) thì tự thêm vào đây.
+    youtube_playlist = db.Column(db.String(64), nullable=True)
 
     #: Bước agent đang chạy nền ("plan"), None = rảnh. error: lỗi của lần chạy gần nhất.
     task = db.Column(db.String(20), nullable=True)
@@ -439,7 +441,7 @@ class Series(db.Model):
         return {
             "id": self.id, "title": self.title, "topic": self.topic, "audience": self.audience,
             "description": self.description, "style_guide": self.style_guide, "glossary": self.glossary or [],
-            "task": self.task, "error": self.error,
+            "task": self.task, "error": self.error, "youtube_playlist": self.youtube_playlist,
             "episodes": [e.as_dict() for e in self.episodes],
         }
 
@@ -487,7 +489,7 @@ class Episode(db.Model):
     job_vi_id = db.Column(db.Integer, db.ForeignKey("job.id", ondelete="SET NULL"), nullable=True)
     job_en_id = db.Column(db.Integer, db.ForeignKey("job.id", ondelete="SET NULL"), nullable=True)
 
-    task = db.Column(db.String(20), nullable=True)
+    task = db.Column(db.String(40), nullable=True)  # vd "youtube:vi:2026-11-25T12:00:00Z"
     error = db.Column(db.Text, nullable=True)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 

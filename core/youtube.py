@@ -179,3 +179,20 @@ def upload_caption(token: str, video_id: str, language: str, name: str, srt: byt
                                  "Content-Type": f"multipart/related; boundary={boundary}"},
                         data=body, timeout=TIMEOUT * 4)
     return _check(res, f"Không gắn được phụ đề {language}").get("id", "")
+
+
+# ── Danh sách phát ───────────────────────────────────────────
+def list_playlists(token: str) -> list:
+    """Danh sách phát của kênh (tối đa 50, đủ cho một kênh cá nhân): [{"id", "title"}]."""
+    data = _check(requests.get(f"{API}/playlists", params={"part": "snippet", "mine": "true", "maxResults": 50},
+                               headers={"Authorization": f"Bearer {token}"}, timeout=TIMEOUT),
+                  "Không đọc được danh sách phát")
+    return [{"id": item["id"], "title": (item.get("snippet") or {}).get("title", "")} for item in data.get("items") or []]
+
+
+def add_to_playlist(token: str, playlist_id: str, video_id: str) -> None:
+    _check(requests.post(f"{API}/playlistItems", params={"part": "snippet"},
+                         headers={"Authorization": f"Bearer {token}"},
+                         json={"snippet": {"playlistId": playlist_id,
+                                           "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
+                         timeout=TIMEOUT), "Không thêm được video vào danh sách phát")

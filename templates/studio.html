@@ -61,6 +61,11 @@
           <button id="musicDelete" type="button" class="btn-ghost btn-sm hidden">Bỏ nhạc</button>
         </div>
       </div>
+      <div class="lg:col-span-2 flex flex-col gap-2">
+        <span class="field-label !mb-0">Danh sách phát YouTube</span>
+        <p id="playlistHint" class="font-label-sm text-label-sm text-on-surface-variant">Đăng tập nào lên YouTube thì tự thêm vào danh sách phát này.</p>
+        <select id="playlistSelect" class="input !w-auto hidden"></select>
+      </div>
       <div><span class="field-label">Thuật ngữ Việt – Anh (<span id="termCount">0</span>)</span>
         <div id="glossary" class="max-h-[260px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div></div>
     </div>
@@ -190,6 +195,7 @@
     let series = null;
     let current = null;   // id tập đang mở
     let youtube = {connected: false, channel: null};   // kênh YouTube đã kết nối (app/youtube.py)
+    let playlists = null;   // danh sách phát của kênh, tải một lần khi đã kết nối
     let timer = null;
 
     function busy() { return series && (series.task || series.episodes.some(function (e) { return e.task; })); }
@@ -213,6 +219,7 @@
       const styleBox = document.getElementById("styleGuide");
       if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
       document.getElementById("termCount").textContent = series.glossary.length;
+      paintPlaylists();
       const player = document.getElementById("musicPlayer");
       player.classList.toggle("hidden", !series.has_music);
       document.getElementById("musicDelete").classList.toggle("hidden", !series.has_music);
@@ -349,6 +356,28 @@
       return html + '</details>';
     }
 
+    function paintPlaylists() {
+      const select = document.getElementById("playlistSelect");
+      const hint = document.getElementById("playlistHint");
+      if (!youtube.connected) {
+        select.classList.add("hidden");
+        hint.textContent = "Kết nối kênh YouTube (trong khối Đăng YouTube của một tập) để chọn danh sách phát.";
+        return;
+      }
+      if (playlists === null) {
+        playlists = [];
+        api("/api/youtube/playlists").then(function (rows) { playlists = rows; paintPlaylists(); })
+          .catch(function (err) { playlists = null; hint.textContent = err.message; });
+        return;
+      }
+      if (document.activeElement === select) return;
+      hint.textContent = "Đăng tập nào lên YouTube thì tự thêm vào danh sách phát này.";
+      select.innerHTML = '<option value="">Không thêm vào danh sách phát</option>' + playlists.map(function (p) {
+        return '<option value="' + esc(p.id) + '"' + (p.id === series.youtube_playlist ? " selected" : "") + '>' + esc(p.title) + '</option>';
+      }).join("");
+      select.classList.remove("hidden");
+    }
+
     // ── Tự đăng lên kênh YouTube đã kết nối: video riêng tư, hẹn giờ công khai nếu muốn ──
     function youtubeBlock(e, lang, pack, locked) {
       const tube = pack.youtube;
@@ -361,6 +390,8 @@
           '<a class="btn-secondary btn-sm" target="_blank" rel="noopener" href="' + esc(tube.url) + '"><span class="material-symbols-outlined text-[18px]">smart_display</span>Xem video</a>' +
           '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(tube.studio_url) + '"><span class="material-symbols-outlined text-[18px]">edit</span>Mở YouTube Studio</a></div>' +
           (tube.captions && tube.captions.length ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Phụ đề đã gắn: ' + tube.captions.join(", ") + '</p>' : "") +
+          (tube.playlist ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Đã thêm vào danh sách phát của series.</p>' : "") +
+          (tube.playlist_error ? '<p class="font-label-sm text-label-sm text-error">Danh sách phát lỗi: ' + esc(tube.playlist_error) + '</p>' : "") +
           (tube.caption_errors && tube.caption_errors.length ? '<p class="font-label-sm text-label-sm text-error">Phụ đề lỗi: ' + esc(tube.caption_errors.join("; ")) +
             ' — tải file phụ đề ở trên rồi thêm tay trong YouTube Studio.</p>' : "");
         return html + '</div>';
@@ -657,7 +688,15 @@
         }
       } catch (err) { fail(err); btn.disabled = false; }
     });
-    document.addEventListener("change", function (event) {
+    document.addEventListener("change", async function (event) {
+      if (event.target.id === "playlistSelect") {
+        try {
+          await api("/api/studio/series/" + SERIES_ID, "PATCH", {youtube_playlist: event.target.value});
+          series.youtube_playlist = event.target.value || null;
+          Nora.toast("Đã lưu danh sách phát.", "success");
+        } catch (err) { fail(err); }
+        return;
+      }
       const lang = event.target.dataset && event.target.dataset.voice;
       if (!lang) return;
       chosenVoice[lang] = event.target.value;
