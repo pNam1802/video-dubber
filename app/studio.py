@@ -25,7 +25,7 @@ EPISODE_STEPS = ("write", "translate", "wrap", "board_vi", "board_en", "publish_
 TASK_LABELS = {"plan": "Đang lên lộ trình series...", "write": "Đang nghiên cứu và viết kịch bản...",
                "translate": "Đang dịch sang tiếng Anh...", "wrap": "Đang chốt tập và cập nhật trí nhớ...",
                "board": "Đang phân cảnh video giải thích...", "preview": "Đang vẽ thử một cảnh...",
-               "publish": "Đang dịch phụ đề và soạn gói YouTube..."}
+               "publish": "Đang dịch phụ đề và soạn gói YouTube...", "youtube": "Đang tải video lên YouTube..."}
 LANGUAGES = ("vi", "en")
 #: Cảnh xem thử dài tối đa bấy nhiêu giây — đủ thấy hình, không tốn CPU như cả video.
 PREVIEW_MAX_SEC = 15.0
@@ -52,7 +52,8 @@ def run_task(flask_app: Flask, kind: str, target_id: int) -> None:
         target = db.session.get(Series if kind == "plan" else Episode, target_id)
         if target is None:
             return
-        name, *args = kind.split(":")
+        # Tối đa 3 phần: tham số cuối (giờ đăng YouTube) có thể chứa dấu ":".
+        name, *args = kind.split(":", 2)
         try:
             _STEPS[name](target, *args)
             target.error = None
@@ -264,6 +265,50 @@ def _step_publish(episode: Episode, lang: str) -> None:
     commit_volume()
 
 
+def _step_youtube(episode: Episode, lang: str, publish_at: str = "") -> None:
+    """Tải video + phụ đề hai thứ tiếng lên kênh đã kết nối. Video để riêng tư (kèm lịch công khai
+    nếu có publish_at); id video lưu ngay sau khi tải để lỗi phụ đề không làm mất dấu video."""
+    from app.models import JobStatus, User
+    from app.storage import locate_file
+    from config.settings import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OUTPUT_DIR
+    from core import youtube as yt
+
+    pack = (episode.publish or {}).get(lang)
+    if not pack:
+        raise RuntimeError("Chưa soạn gói YouTube cho bản này.")
+    if (pack.get("youtube") or {}).get("id"):
+        raise RuntimeError("Bản này đã đăng lên YouTube rồi.")
+    job = db.session.get(Job, pack.get("job_id") or 0)
+    if job is None or job.status != JobStatus.DONE or not job.video_name:
+        raise RuntimeError("Video của bản này chưa làm xong.")
+    user = db.session.get(User, episode.series.user_id)
+    if user is None or not user.youtube_token:
+        raise RuntimeError("Chưa kết nối kênh YouTube.")
+
+    token = yt.access_token(yt.unseal(user.youtube_token, current_app.config["SECRET_KEY"]),
+                            GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+    video_id = yt.upload_video(token, locate_file(OUTPUT_DIR / job.video_name), yt.video_body(pack, lang, publish_at or None))
+    result = {"id": video_id, "url": f"https://youtu.be/{video_id}",
+              "studio_url": f"https://studio.youtube.com/video/{video_id}/edit",
+              "publish_at": publish_at or None, "captions": [], "caption_errors": []}
+    _save_youtube(episode, lang, result)
+    db.session.commit()
+    for code, name in (pack.get("srt") or {}).items():
+        try:
+            srt = locate_file(OUTPUT_DIR / name).read_bytes()
+            yt.upload_caption(token, video_id, code, "Tiếng Việt" if code == "vi" else "English", srt)
+            result["captions"].append(code)
+        except Exception as exc:
+            result["caption_errors"].append(f"{code}: {exc}"[:300])
+    _save_youtube(episode, lang, result)
+
+
+def _save_youtube(episode: Episode, lang: str, result: dict) -> None:
+    publish = dict(episode.publish or {})
+    publish[lang] = {**publish.get(lang, {}), "youtube": dict(result)}
+    episode.publish = publish  # gán lại cả dict để SQLAlchemy biết cột JSON đã đổi
+
+
 def _step_translate(episode: Episode) -> None:
     from core.studio import translate
 
@@ -288,7 +333,7 @@ def _step_wrap(episode: Episode) -> None:
 
 _STEPS = {"plan": _step_plan, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap,
           "board_vi": lambda ep: _step_board(ep, "vi"), "board_en": lambda ep: _step_board(ep, "en"),
-          "preview": _step_preview,
+          "preview": _step_preview, "youtube": _step_youtube,
           "publish_vi": lambda ep: _step_publish(ep, "vi"), "publish_en": lambda ep: _step_publish(ep, "en")}
 
 
@@ -514,6 +559,46 @@ def preview_scene(episode_id: int):
     if busy:
         return busy
     episode.task, episode.error = f"preview:{lang}:{index}", None
+    db.session.commit()
+    start_task(current_app._get_current_object(), episode.task, episode.id)
+    return jsonify(episode.as_dict()), 202
+
+
+@bp.post("/api/studio/episodes/<int:episode_id>/youtube")
+@require_admin
+def upload_youtube(episode_id: int):
+    """Đăng bản `lang` lên YouTube (riêng tư). publish_at (ISO 8601 có múi giờ) = lịch tự công khai."""
+    from datetime import datetime, timedelta, timezone
+
+    episode = _own_episode(episode_id)
+    body = request.get_json(silent=True) or {}
+    lang = body.get("lang")
+    if lang not in LANGUAGES:
+        return jsonify({"error": "Ngôn ngữ không hợp lệ."}), 400
+    pack = (episode.publish or {}).get(lang)
+    if not pack:
+        return jsonify({"error": "Hãy soạn phụ đề + gói YouTube trước."}), 400
+    if (pack.get("youtube") or {}).get("id"):
+        return jsonify({"error": "Bản này đã đăng lên YouTube rồi."}), 409
+    if not current_user.youtube_token:
+        return jsonify({"error": "Chưa kết nối kênh YouTube."}), 400
+    publish_at = ""
+    raw = str(body.get("publish_at") or "").strip()
+    if raw:
+        try:
+            when = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify({"error": "Giờ đăng không hợp lệ."}), 400
+        if when.tzinfo is None:
+            return jsonify({"error": "Giờ đăng cần có múi giờ."}), 400
+        when = when.astimezone(timezone.utc)
+        if when < datetime.now(timezone.utc) + timedelta(minutes=15):
+            return jsonify({"error": "Giờ đăng phải sau hiện tại ít nhất 15 phút."}), 400
+        publish_at = when.strftime("%Y-%m-%dT%H:%M:%SZ")
+    busy = _busy(episode) or _busy(episode.series)
+    if busy:
+        return busy
+    episode.task, episode.error = f"youtube:{lang}:{publish_at}", None
     db.session.commit()
     start_task(current_app._get_current_object(), episode.task, episode.id)
     return jsonify(episode.as_dict()), 202

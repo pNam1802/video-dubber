@@ -110,3 +110,72 @@ def channel_title(token: str) -> Optional[str]:
     if not items:
         raise YouTubeError("Tài khoản Google này chưa có kênh YouTube.")
     return (items[0].get("snippet") or {}).get("title")
+
+
+# ── Tải video + phụ đề ───────────────────────────────────────
+#: Thể loại "Education" của YouTube.
+CATEGORY_EDUCATION = "27"
+UPLOAD_TIMEOUT = 1800
+
+
+def _plain(text: str, limit: int) -> str:
+    """YouTube từ chối tiêu đề/mô tả có dấu < >; cắt theo giới hạn của trường."""
+    return str(text or "").replace("<", "‹").replace(">", "›").strip()[:limit]
+
+
+def video_body(meta: dict, language: str, publish_at: Optional[str] = None) -> dict:
+    """Metadata gửi kèm video. Có publish_at thì video riêng tư cho tới giờ đó rồi tự công khai."""
+    tags, used = [], 0
+    for tag in meta.get("tags") or []:
+        tag = _plain(tag, 60).replace('"', "")
+        if tag and used + len(tag) + 3 <= 480:  # YouTube giới hạn ~500 ký tự cho cả danh sách tag
+            tags.append(tag)
+            used += len(tag) + 3
+    status = {"privacyStatus": "private", "selfDeclaredMadeForKids": False, "embeddable": True}
+    if publish_at:
+        status["publishAt"] = publish_at
+    return {"snippet": {"title": _plain(meta.get("title"), 100) or "Video", "description": _plain(meta.get("description"), 4900),
+                        "tags": tags, "categoryId": CATEGORY_EDUCATION, "defaultLanguage": language,
+                        "defaultAudioLanguage": language},
+            "status": status}
+
+
+def upload_video(token: str, path, body: dict) -> str:
+    """Tải lên kiểu resumable (một lần PUT cả file). Trả về id video."""
+    from pathlib import Path
+
+    path = Path(path)
+    size = path.stat().st_size
+    auth = {"Authorization": f"Bearer {token}"}
+    start = requests.post(f"{UPLOAD_API}/videos", params={"uploadType": "resumable", "part": "snippet,status"},
+                          headers={**auth, "X-Upload-Content-Type": "video/mp4", "X-Upload-Content-Length": str(size)},
+                          json=body, timeout=TIMEOUT)
+    _check(start, "YouTube không nhận yêu cầu tải video")
+    location = start.headers.get("Location")
+    if not location:
+        raise YouTubeError("YouTube không trả địa chỉ tải video lên.")
+    with path.open("rb") as fh:
+        res = requests.put(location, data=fh, headers={**auth, "Content-Type": "video/mp4", "Content-Length": str(size)},
+                           timeout=UPLOAD_TIMEOUT)
+    video_id = _check(res, "Tải video lên YouTube lỗi").get("id")
+    if not video_id:
+        raise YouTubeError("YouTube không trả id video.")
+    return video_id
+
+
+def upload_caption(token: str, video_id: str, language: str, name: str, srt: bytes) -> str:
+    """Gắn một file phụ đề .srt vào video (multipart). Trả về id phụ đề."""
+    import json
+    import secrets
+
+    boundary = "nora" + secrets.token_hex(12)
+    meta = json.dumps({"snippet": {"videoId": video_id, "language": language, "name": name, "isDraft": False}},
+                      ensure_ascii=False)
+    body = (f"--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{meta}\r\n"
+            f"--{boundary}\r\nContent-Type: application/octet-stream\r\n\r\n").encode("utf-8") + srt + \
+        f"\r\n--{boundary}--\r\n".encode("ascii")
+    res = requests.post(f"{UPLOAD_API}/captions", params={"uploadType": "multipart", "part": "snippet"},
+                        headers={"Authorization": f"Bearer {token}",
+                                 "Content-Type": f"multipart/related; boundary={boundary}"},
+                        data=body, timeout=TIMEOUT * 4)
+    return _check(res, f"Không gắn được phụ đề {language}").get("id", "")
