@@ -516,3 +516,42 @@ def takeaway(sc, s, k):
     sc.wait_until(sc.at(1))
     nxt = k.label("Tập sau: kiến trúc của một agent", 28, k.ACCENT, bold=True).to_edge(DOWN, buff=0.4)
     sc.run(FadeIn(nxt, shift=UP * 0.2), run_time=0.6)
+
+
+# ── Thumbnail 1280x720 (core/explainer.render_thumbnail) ─────
+THUMB_TEXT = {
+    "vi": ("TẬP 1  ·  BẢN CHẤT LLM AGENT", "LLM Agent", "là gì?", "Khác chatbot ở đâu?", ("Làm", "Nhìn", "Sửa")),
+    "en": ("EPISODE 1  ·  LLM AGENTS FROM SCRATCH", "LLM Agents", "explained", "How are they not chatbots?",
+           ("Act", "Check", "Fix")),
+}
+
+
+def thumbnail(sc, k, lang="vi"):
+    tag_text, line1, line2, sub_text, steps = THUMB_TEXT.get(lang, THUMB_TEXT["vi"])
+
+    def node(text, color):
+        txt = k.label(text, 48, k.INK, bold=True)
+        box = RoundedRectangle(corner_radius=0.3, width=txt.width + 0.8, height=txt.height + 0.6, color=color,
+                               stroke_width=6).set_fill(color, opacity=0.18)
+        return VGroup(box, txt.move_to(box))
+
+    tag = k.label(tag_text, 30, k.MUTED, bold=True).to_corner(UP + LEFT, buff=0.6)
+    left = VGroup(k.label(line1, 120, k.INK, bold=True), k.label(line2, 120, k.GOLD, bold=True))
+    left.arrange(DOWN, aligned_edge=LEFT, buff=0.25).scale_to_fit_width(6.9).to_edge(LEFT, buff=0.75).shift(DOWN * 0.2)
+    sub = k.label(sub_text, 40, k.ACCENT, bold=True, max_width=6.9).next_to(left, DOWN, aligned_edge=LEFT, buff=0.45)
+
+    center = RIGHT * 4.1 + DOWN * 0.1
+    a = node(steps[0], k.ACCENT).move_to(center + UP * 2.0)
+    b = node(steps[1], k.GOLD).move_to(center + RIGHT * 1.6 + DOWN * 1.3)
+    c = node(steps[2], k.GREEN).move_to(center + LEFT * 1.6 + DOWN * 1.3)
+    overflow = b.get_right()[0] - 6.75  # chữ dài (bản tiếng Anh) thì lùi nút vào trong khung
+    if overflow > 0:
+        b.shift(LEFT * overflow)
+    arrows = VGroup(
+        CurvedArrow(a.get_right() + RIGHT * 0.05, b.get_top() + UP * 0.05, angle=-0.9, color=k.MUTED, stroke_width=7),
+        CurvedArrow(b.get_bottom() + LEFT * 0.4 + DOWN * 0.05, c.get_bottom() + RIGHT * 0.4 + DOWN * 0.05,
+                    angle=-0.9, color=k.MUTED, stroke_width=7),
+        CurvedArrow(c.get_top() + UP * 0.05, a.get_left() + LEFT * 0.05, angle=-0.9, color=k.MUTED, stroke_width=7),
+    )
+    dot = Dot(arrows[0].point_from_proportion(0.5), color=k.GOLD, radius=0.16)
+    sc.add(tag, left, sub, arrows, a, b, c, dot)

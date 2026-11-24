@@ -161,3 +161,16 @@ def test_playlists_route_needs_connection(as_admin, app, monkeypatch):
     monkeypatch.setattr(yt, "access_token", lambda rt, cid, sec: "at")
     monkeypatch.setattr(yt, "list_playlists", lambda token: [{"id": "PL1234567890", "title": "A"}])
     assert as_admin.get("/api/youtube/playlists").get_json() == [{"id": "PL1234567890", "title": "A"}]
+
+
+def test_set_thumbnail_posts_png(monkeypatch):
+    seen = {}
+
+    def post(url, params, headers, data, timeout):
+        seen.update(url=url, params=params, ctype=headers["Content-Type"], data=data)
+        return _Res(200, {"items": []})
+
+    monkeypatch.setattr(yt.requests, "post", post)
+    yt.set_thumbnail("tok", "VID", b"\x89PNG")
+    assert seen["url"].endswith("/thumbnails/set") and seen["params"] == {"videoId": "VID", "uploadType": "media"}
+    assert seen["ctype"] == "image/png" and seen["data"] == b"\x89PNG"

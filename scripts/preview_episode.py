@@ -4,6 +4,7 @@ Xem trước cảnh viết tay của một tập (core/episodes/<module>.py) nga
     python scripts/preview_episode.py s1e01                 # mọi cảnh, 720p
     python scripts/preview_episode.py s1e01 --only takeaway  # một cảnh
     python scripts/preview_episode.py s1e01 --board          # in bảng phân cảnh JSON để dán vào Xưởng
+    python scripts/preview_episode.py s1e01 --thumb --lang en  # chỉ vẽ thumbnail
 
 Mốc thời gian ước lượng theo độ dài câu (giống bước duyệt phân cảnh), nên hình khớp lời gần đúng.
 Ra: <out>/<cảnh>.mp4 và <out>/<cảnh>.png (4 khung ở 20/45/70/95% ghép ngang).
@@ -46,12 +47,23 @@ def main():
     ap.add_argument("--quality", default="720p")
     ap.add_argument("--out", default="")
     ap.add_argument("--board", action="store_true")
+    ap.add_argument("--thumb", action="store_true", help="chỉ vẽ thumbnail (thumbnail_<lang>.png)")
     args = ap.parse_args()
 
     board = load_board(args.module)
     if args.board:
         print(json.dumps([{"start": start, "layout": "custom", "module": args.module, "scene": name}
                           for start, name in board], ensure_ascii=False))
+        return
+    if args.thumb:
+        from core.explainer import render_thumbnail
+
+        out = Path(args.out or tempfile.mkdtemp(prefix=f"preview-{args.module}-"))
+        out.mkdir(parents=True, exist_ok=True)
+        work = out / "work_thumbnail"
+        work.mkdir(exist_ok=True)
+        render_thumbnail(args.module, args.lang, out / f"thumbnail_{args.lang}.png", work)
+        print(out / f"thumbnail_{args.lang}.png")
         return
     text = (ROOT / "core" / "episodes" / f"{args.module}_{args.lang}.txt").read_text(encoding="utf-8")
     sentences = [s for _, s in split_script(text)]

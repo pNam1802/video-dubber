@@ -216,3 +216,10 @@ def test_episode_board_points_at_real_scenes():
         assert board[-1][0] < len(sentences)
         for _, name in board:
             assert ex.clean_scene({"layout": "custom", "module": module.stem, "scene": name}), name
+
+
+def test_board_module_and_thumbnail_detection():
+    board = [{"start": 0, "layout": "chat"}, {"start": 3, "layout": "custom", "module": "s1e01", "scene": "takeaway"}]
+    assert ex.board_module(board) == "s1e01"
+    assert ex.board_module([{"layout": "custom", "module": "../x"}]) is None and ex.board_module([]) is None
+    assert ex.has_thumbnail("s1e01") and not ex.has_thumbnail("khong_co") and not ex.has_thumbnail("../s1e01")

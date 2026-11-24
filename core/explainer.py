@@ -211,6 +211,38 @@ def clean_custom(raw: dict) -> dict | None:
     return {"layout": "custom", "module": module, "scene": scene}
 
 
+def board_module(board) -> str | None:
+    """Module cảnh vẽ tay mà bảng phân cảnh dùng (cảnh "custom" đầu tiên), None nếu không có."""
+    for scene in board or []:
+        if isinstance(scene, dict) and scene.get("layout") == "custom" and CUSTOM_NAME.match(str(scene.get("module", ""))):
+            return scene["module"]
+    return None
+
+
+def has_thumbnail(module: str) -> bool:
+    path = EPISODES_DIR / f"{module}.py"
+    if not (CUSTOM_NAME.match(module or "") and path.is_file()):
+        return False
+    return re.search(r"^def thumbnail\(", path.read_text(encoding="utf-8"), re.M) is not None
+
+
+def render_thumbnail(module: str, lang: str, output: Path, work_dir: Path) -> None:
+    """Vẽ thumbnail 1280x720 (PNG) bằng hàm thumbnail() của tập."""
+    spec = work_dir / "thumbnail.json"
+    spec.write_text(json.dumps({"module": module, "lang": lang}), encoding="utf-8")
+    media = work_dir / "media_thumbnail"
+    run_command(
+        [sys.executable, "-m", "manim", "render", str(SCENE_FILE), "ThumbnailScene", "-s", "--format", "png",
+         "-r", "1280,720", "--media_dir", str(media), "-o", "thumbnail", "--disable_caching",
+         "--progress_bar", "none", "-v", "WARNING"],
+        timeout=300, error_message="Không vẽ được thumbnail.", env={**os.environ, "EXPLAINER_SPEC": str(spec)},
+    )
+    image = next(media.rglob("thumbnail*.png"), None)
+    if image is None:
+        raise RuntimeError("Manim không tạo ra ảnh thumbnail.")
+    output.write_bytes(image.read_bytes())
+
+
 def parse_scenes(raw: str, sentence_count: int) -> List[Tuple[int, dict]]:
     data = json.loads(raw)
     items = data.get("scenes", []) if isinstance(data, dict) else data

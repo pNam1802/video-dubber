@@ -397,3 +397,34 @@ def test_series_playlist_is_saved_and_used_after_upload(app, as_admin, fake_agen
     as_admin.post(f"/api/studio/episodes/{ep_id}/youtube", json={"lang": "vi"})
     tube = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]["publish"]["vi"]["youtube"]
     assert added == [("PLabcdefghij_-12", "VID9")] and tube["playlist"] == "PLabcdefghij_-12"
+
+
+def test_upload_sets_episode_thumbnail_when_board_uses_custom_scenes(app, as_admin, fake_agent, monkeypatch, tmp_path):
+    from app.extensions import db
+    from app.models import Episode, Job, JobStatus, User
+    from core import explainer as ex
+    from core import youtube as yt
+
+    monkeypatch.setattr("config.settings.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("app.storage.locate_file", lambda path: path)
+    (tmp_path / "v.mp4").write_bytes(b"mp4")
+    monkeypatch.setattr(yt, "access_token", lambda *a: "at")
+    monkeypatch.setattr(yt, "upload_video", lambda *a: "VID7")
+    rendered, uploaded = [], []
+    monkeypatch.setattr(ex, "render_thumbnail", lambda module, lang, out, work: rendered.append((module, lang))
+                        or out.write_bytes(b"png"))
+    monkeypatch.setattr(yt, "set_thumbnail", lambda token, vid, png: uploaded.append((vid, png)))
+    series_id, ep_id = _drafted_episode(as_admin)
+    with app.app_context():
+        admin = User.query.filter_by(role="admin").first()
+        admin.youtube_token = yt.seal("rt", app.config["SECRET_KEY"])
+        job = Job(user_id=admin.id, status=JobStatus.DONE, video_name="v.mp4", message="xong")
+        db.session.add(job)
+        db.session.flush()
+        ep = db.session.get(Episode, ep_id)
+        ep.publish = {"vi": {"title": "T", "job_id": job.id, "srt": {}}}
+        ep.storyboard_vi = [{"start": 0, "layout": "custom", "module": "s1e01", "scene": "takeaway"}]
+        db.session.commit()
+    as_admin.post(f"/api/studio/episodes/{ep_id}/youtube", json={"lang": "vi"})
+    tube = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]["publish"]["vi"]["youtube"]
+    assert rendered == [("s1e01", "vi")] and uploaded == [("VID7", b"png")] and tube["thumbnail"] is True

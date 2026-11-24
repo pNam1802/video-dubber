@@ -390,6 +390,8 @@
           '<a class="btn-secondary btn-sm" target="_blank" rel="noopener" href="' + esc(tube.url) + '"><span class="material-symbols-outlined text-[18px]">smart_display</span>Xem video</a>' +
           '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(tube.studio_url) + '"><span class="material-symbols-outlined text-[18px]">edit</span>Mở YouTube Studio</a></div>' +
           (tube.captions && tube.captions.length ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Phụ đề đã gắn: ' + tube.captions.join(", ") + '</p>' : "") +
+          (tube.thumbnail ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Đã đặt thumbnail riêng của tập.</p>' : "") +
+          (tube.thumbnail_error ? '<p class="font-label-sm text-label-sm text-error">Thumbnail lỗi: ' + esc(tube.thumbnail_error) + '</p>' : "") +
           (tube.playlist ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Đã thêm vào danh sách phát của series.</p>' : "") +
           (tube.playlist_error ? '<p class="font-label-sm text-label-sm text-error">Danh sách phát lỗi: ' + esc(tube.playlist_error) + '</p>' : "") +
           (tube.caption_errors && tube.caption_errors.length ? '<p class="font-label-sm text-label-sm text-error">Phụ đề lỗi: ' + esc(tube.caption_errors.join("; ")) +
