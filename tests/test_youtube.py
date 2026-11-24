@@ -133,3 +133,31 @@ def test_upload_caption_multipart(monkeypatch):
     boundary = seen["ctype"].split("boundary=")[1]
     assert seen["data"].startswith(f"--{boundary}\r\n".encode()) and seen["data"].endswith(f"--{boundary}--\r\n".encode())
     assert '"videoId": "VID"'.encode() in seen["data"] and "Tiếng Việt".encode() in seen["data"]
+
+
+def test_playlist_helpers(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(yt.requests, "get", lambda url, params, headers, timeout: _Res(200, {"items": [
+        {"id": "PL123", "snippet": {"title": "Bản Chất LLM Agent"}}]}))
+
+    def post(url, params, headers, json, timeout):
+        seen.update(url=url, json=json)
+        return _Res(200, {"id": "item"})
+
+    monkeypatch.setattr(yt.requests, "post", post)
+    assert yt.list_playlists("tok") == [{"id": "PL123", "title": "Bản Chất LLM Agent"}]
+    yt.add_to_playlist("tok", "PL123", "VID")
+    assert seen["url"].endswith("/playlistItems")
+    assert seen["json"]["snippet"] == {"playlistId": "PL123", "resourceId": {"kind": "youtube#video", "videoId": "VID"}}
+
+
+def test_playlists_route_needs_connection(as_admin, app, monkeypatch):
+    assert as_admin.get("/api/youtube/playlists").status_code == 400
+    with app.app_context():
+        from app.extensions import db
+
+        User.query.filter_by(username="boss").one().youtube_token = yt.seal("rt", app.config["SECRET_KEY"])
+        db.session.commit()
+    monkeypatch.setattr(yt, "access_token", lambda rt, cid, sec: "at")
+    monkeypatch.setattr(yt, "list_playlists", lambda token: [{"id": "PL1234567890", "title": "A"}])
+    assert as_admin.get("/api/youtube/playlists").get_json() == [{"id": "PL1234567890", "title": "A"}]

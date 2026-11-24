@@ -75,6 +75,21 @@ def status():
     return jsonify({"connected": bool(current_user.youtube_token), "channel": current_user.youtube_channel})
 
 
+@bp.get("/api/youtube/playlists")
+@require_admin
+def playlists():
+    from core.youtube import YouTubeError, access_token, list_playlists, unseal
+
+    if not current_user.youtube_token:
+        return jsonify({"error": "Chưa kết nối kênh YouTube."}), 400
+    try:
+        token = access_token(unseal(current_user.youtube_token, current_app.config["SECRET_KEY"]),
+                             GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+        return jsonify(list_playlists(token))
+    except YouTubeError as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @bp.delete("/api/youtube")
 @require_admin
 def disconnect():
