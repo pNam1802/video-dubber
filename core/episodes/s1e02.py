@@ -207,7 +207,8 @@ def run_rounds(sc, s, k):
     def call(text, tool):
         req = Text(text, font=k.MONO, font_size=22, color=k.GOLD).next_to(brain, DOWN, buff=0.35)
         sc.run(Indicate(brain, color=k.PURPLE), FadeIn(req, shift=DOWN * 0.15), run_time=0.6)
-        sc.run(req.animate.next_to(tool, LEFT, buff=0.25), run_time=0.7)
+        # Bay vòng phía dưới bộ não sang ngay dưới công cụ, không cắt ngang hộp nào.
+        sc.run(req.animate.next_to(tool, DOWN, buff=0.12), run_time=0.7)
         sc.run(Indicate(tool, color=k.GOLD), FadeOut(req), run_time=0.5)
 
     def answer(text, tool):
