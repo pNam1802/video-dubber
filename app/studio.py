@@ -270,8 +270,13 @@ def _step_youtube(episode: Episode, lang: str, publish_at: str = "") -> None:
     nếu có publish_at); id video lưu ngay sau khi tải để lỗi phụ đề không làm mất dấu video."""
     from app.models import JobStatus, User
     from app.storage import locate_file
+    import shutil
+    import tempfile
+    from pathlib import Path
+
     from config.settings import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, OUTPUT_DIR
     from core import youtube as yt
+    from core.explainer import board_module, has_thumbnail, render_thumbnail
 
     pack = (episode.publish or {}).get(lang)
     if not pack:
@@ -300,6 +305,17 @@ def _step_youtube(episode: Episode, lang: str, publish_at: str = "") -> None:
             result["captions"].append(code)
         except Exception as exc:
             result["caption_errors"].append(f"{code}: {exc}"[:300])
+    module = board_module(getattr(episode, f"storyboard_{lang}"))
+    if module and has_thumbnail(module):
+        work = Path(tempfile.mkdtemp(prefix="studio-thumb-"))
+        try:
+            render_thumbnail(module, lang, work / "thumb.png", work)
+            yt.set_thumbnail(token, video_id, (work / "thumb.png").read_bytes())
+            result["thumbnail"] = True
+        except Exception as exc:
+            result["thumbnail_error"] = str(exc)[:300]
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
     playlist = episode.series.youtube_playlist
     if playlist:
         try:

@@ -196,3 +196,10 @@ def add_to_playlist(token: str, playlist_id: str, video_id: str) -> None:
                          json={"snippet": {"playlistId": playlist_id,
                                            "resourceId": {"kind": "youtube#video", "videoId": video_id}}},
                          timeout=TIMEOUT), "Không thêm được video vào danh sách phát")
+
+
+def set_thumbnail(token: str, video_id: str, png: bytes) -> None:
+    """Đặt ảnh thumbnail (PNG, < 2 MB). Kênh phải đã xác minh số điện thoại mới dùng được thumbnail riêng."""
+    _check(requests.post(f"{UPLOAD_API}/thumbnails/set", params={"videoId": video_id, "uploadType": "media"},
+                         headers={"Authorization": f"Bearer {token}", "Content-Type": "image/png"},
+                         data=png, timeout=TIMEOUT * 2), "Không đặt được thumbnail")

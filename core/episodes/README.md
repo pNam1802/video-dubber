@@ -14,5 +14,8 @@ Xem trước trên máy (không tốn Modal), mỗi cảnh ra một mp4 và mộ
 
     PYTHONUTF8=1 python scripts/preview_episode.py s1e01 [--only tên_hàm]
 
+Thumbnail: thêm hàm `thumbnail(sc, k, lang)` (vẽ tĩnh, khung 1280x720). Lúc đăng YouTube app tự vẽ và đặt thumbnail.
+Xem trước: `python scripts/preview_episode.py s1e01 --thumb --lang en`.
+
 Dùng trong video: `python scripts/preview_episode.py s1e01 --board` in ra bảng phân cảnh dạng
 `{"layout": "custom", "module": ..., "scene": ...}`. Dán bảng đó vào Xưởng (hoặc PATCH `storyboard_vi`), deploy, rồi tạo video.

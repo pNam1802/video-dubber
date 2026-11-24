@@ -75,6 +75,28 @@ def label(text: str, size: float = 30, color: str = INK, bold: bool = False, wid
     return mob
 
 
+def episode_module(name):
+    """Nạp core/episodes/<name>.py (cảnh vẽ tay của một tập)."""
+    spec = importlib.util.spec_from_file_location(f"episode_{name}", EPISODES_DIR / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def kit() -> SimpleNamespace:
+    """Màu, font và hàm dùng chung, đưa cho code của từng tập."""
+    return SimpleNamespace(**{k: v for k, v in globals().items() if not k.startswith("_") or k == "_nfc"})
+
+
+class ThumbnailScene(Scene):
+    """Ảnh thumbnail 1280x720 của một tập: hàm thumbnail(sc, k, lang) trong module của tập.
+    Render bằng `manim -s` (chỉ khung cuối), xem core/explainer.render_thumbnail."""
+
+    def construct(self):
+        spec = json.loads(Path(os.environ["EXPLAINER_SPEC"]).read_text(encoding="utf-8"))
+        episode_module(spec["module"]).thumbnail(self, kit(), spec.get("lang", "vi"))
+
+
 class ExplainerScene(Scene):
     def setup(self):
         self.spec = json.loads(Path(os.environ["EXPLAINER_SPEC"]).read_text(encoding="utf-8"))
@@ -126,12 +148,7 @@ class ExplainerScene(Scene):
         return self.beats[k - 1] if k - 1 < len(self.beats) else self.scene_sec * 0.7
 
     def layout_custom(self, s):
-        path = EPISODES_DIR / f"{s.get('module')}.py"
-        spec = importlib.util.spec_from_file_location(f"episode_{s.get('module')}", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        kit = SimpleNamespace(**{k: v for k, v in globals().items() if not k.startswith("_") or k == "_nfc"})
-        getattr(module, str(s.get("scene")))(self, s, kit)
+        getattr(episode_module(s.get("module")), str(s.get("scene")))(self, s, kit())
 
     def heading(self, text: str):
         if not text:
