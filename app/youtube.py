@@ -90,6 +90,27 @@ def playlists():
         return jsonify({"error": str(exc)}), 502
 
 
+@bp.post("/api/youtube/playlists")
+@require_admin
+def new_playlist():
+    """Tạo danh sách phát công khai cho một series mới, khỏi phải vào YouTube Studio tạo tay."""
+    from core.youtube import YouTubeError, access_token, create_playlist, unseal
+
+    if not current_user.youtube_token:
+        return jsonify({"error": "Chưa kết nối kênh YouTube."}), 400
+    body = request.get_json(silent=True) or {}
+    title = " ".join(str(body.get("title") or "").split())
+    if not title:
+        return jsonify({"error": "Hãy nhập tên danh sách phát."}), 400
+    try:
+        token = access_token(unseal(current_user.youtube_token, current_app.config["SECRET_KEY"]),
+                             GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+        playlist_id = create_playlist(token, title, str(body.get("description") or ""))
+    except YouTubeError as exc:
+        return jsonify({"error": str(exc)}), 502
+    return jsonify({"id": playlist_id, "title": title[:150]}), 201
+
+
 @bp.delete("/api/youtube")
 @require_admin
 def disconnect():
