@@ -22,7 +22,9 @@ from config.settings import JOB_RUNNER, MODAL_APP_NAME
 bp = Blueprint("studio", __name__)
 
 EPISODE_STEPS = ("write", "translate", "wrap", "board_vi", "board_en", "publish_vi", "publish_en")
-TASK_LABELS = {"plan": "Đang lên lộ trình series...", "write": "Đang nghiên cứu và viết kịch bản...",
+#: Bước chạy trên Series (còn lại chạy trên Episode).
+SERIES_STEPS = ("plan", "ideas")
+TASK_LABELS = {"plan": "Đang lên lộ trình series...", "ideas": "Đang đọc tin và tìm ý tưởng mới...", "write": "Đang nghiên cứu và viết kịch bản...",
                "translate": "Đang dịch sang tiếng Anh...", "wrap": "Đang chốt tập và cập nhật trí nhớ...",
                "board": "Đang phân cảnh video giải thích...", "preview": "Đang vẽ thử một cảnh...",
                "publish": "Đang dịch phụ đề và soạn gói YouTube...", "youtube": "Đang tải video lên YouTube..."}
@@ -49,7 +51,7 @@ def run_task(flask_app: Flask, kind: str, target_id: int) -> None:
     kind: "plan" (Series), "write" | "translate" | "wrap" | "board_<lang>" | "preview:<lang>:<cảnh>"
     (Episode) — tham số của bước nằm sau dấu ":" vì Composer.run_studio chỉ nhận (kind, id)."""
     with flask_app.app_context():
-        target = db.session.get(Series if kind == "plan" else Episode, target_id)
+        target = db.session.get(Series if kind.split(":")[0] in SERIES_STEPS else Episode, target_id)
         if target is None:
             return
         # Tối đa 3 phần: tham số cuối (giờ đăng YouTube) có thể chứa dấu ":".
@@ -59,7 +61,7 @@ def run_task(flask_app: Flask, kind: str, target_id: int) -> None:
             target.error = None
         except Exception as exc:
             db.session.rollback()
-            target = db.session.get(Series if kind == "plan" else Episode, target_id)
+            target = db.session.get(Series if kind.split(":")[0] in SERIES_STEPS else Episode, target_id)
             target.error = str(exc)[:2000]
             flask_app.logger.exception("Xưởng kịch bản: bước %s của #%s lỗi", kind, target_id)
         finally:
@@ -86,6 +88,18 @@ def _step_plan(series: Series) -> None:
     for number, ep in enumerate(plan["episodes"], start=1):
         series.episodes.append(Episode(number=number, title=ep["title"], goal=ep["goal"],
                                        key_points=ep["key_points"]))
+
+
+def _step_ideas(series: Series) -> None:
+    """Đọc tin trên web (ưu tiên nguồn tiếng Trung) và lưu vài ý tưởng tập mới cho series."""
+    from app.models import Idea
+    from core.ideas import find_ideas
+    from core.studio import memory_context
+
+    context = memory_context(series.as_dict(), [e.as_dict() for e in series.episodes])
+    recent = Idea.query.filter_by(series_id=series.id).order_by(Idea.created_at.desc()).limit(60).all()
+    for idea in find_ideas(context, series.topic, [i.title for i in recent]):
+        db.session.add(Idea(series_id=series.id, **idea))
 
 
 def _step_write(episode: Episode) -> None:
@@ -354,7 +368,7 @@ def _step_wrap(episode: Episode) -> None:
     episode.series.glossary = merge_glossary(episode.series.glossary or [], result["new_terms"])
 
 
-_STEPS = {"plan": _step_plan, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap,
+_STEPS = {"plan": _step_plan, "ideas": _step_ideas, "write": _step_write, "translate": _step_translate, "wrap": _step_wrap,
           "board_vi": lambda ep: _step_board(ep, "vi"), "board_en": lambda ep: _step_board(ep, "en"),
           "preview": _step_preview, "youtube": _step_youtube,
           "publish_vi": lambda ep: _step_publish(ep, "vi"), "publish_en": lambda ep: _step_publish(ep, "en")}
@@ -632,6 +646,79 @@ def upload_youtube(episode_id: int):
     db.session.commit()
     start_task(current_app._get_current_object(), episode.task, episode.id)
     return jsonify(episode.as_dict()), 202
+
+
+# ── Ý tưởng mỗi ngày ─────────────────────────────────────────
+@bp.get("/api/studio/series/<int:series_id>/ideas")
+@require_admin
+def list_ideas(series_id: int):
+    from app.models import Idea
+
+    _own_series(series_id)
+    rows = Idea.query.filter_by(series_id=series_id).order_by(Idea.created_at.desc(), Idea.id).limit(40).all()
+    return jsonify([i.as_dict() for i in rows])
+
+
+@bp.post("/api/studio/series/<int:series_id>/ideas")
+@require_admin
+def find_ideas_now(series_id: int):
+    series = _own_series(series_id)
+    busy = _busy(series)
+    if busy:
+        return busy
+    series.task, series.error = "ideas", None
+    db.session.commit()
+    start_task(current_app._get_current_object(), "ideas", series.id)
+    return jsonify({"task": series.task}), 202
+
+
+def _own_idea(idea_id: int):
+    from app.models import Idea
+
+    idea = db.session.get(Idea, idea_id)
+    if idea is None:
+        from flask import abort
+
+        abort(404)
+    _own_series(idea.series_id)
+    return idea
+
+
+@bp.patch("/api/studio/ideas/<int:idea_id>")
+@require_admin
+def update_idea(idea_id: int):
+    from app.models import IdeaStatus
+
+    idea = _own_idea(idea_id)
+    status = (request.get_json(silent=True) or {}).get("status")
+    if status not in (IdeaStatus.NEW, IdeaStatus.DISMISSED):
+        return jsonify({"error": "Trạng thái không hợp lệ."}), 400
+    if idea.status == IdeaStatus.USED:
+        return jsonify({"error": "Ý tưởng này đã thành một tập."}), 409
+    idea.status = status
+    db.session.commit()
+    return jsonify(idea.as_dict())
+
+
+@bp.post("/api/studio/ideas/<int:idea_id>/episode")
+@require_admin
+def idea_to_episode(idea_id: int):
+    """Thêm ý tưởng vào cuối lộ trình series thành một tập mới (chưa viết kịch bản)."""
+    from app.models import IdeaStatus
+
+    idea = _own_idea(idea_id)
+    if idea.status == IdeaStatus.USED:
+        return jsonify({"error": "Ý tưởng này đã thành một tập."}), 409
+    series = _own_series(idea.series_id)
+    number = max([e.number for e in series.episodes] or [0]) + 1
+    refs = [f"Tham khảo: {s.get('url')}" for s in (idea.sources or [])[:2] if s.get("url")]
+    episode = Episode(number=number, title=idea.title, goal=(idea.summary or "")[:1000],
+                      key_points=(idea.key_points or [])[:5] + refs)
+    series.episodes.append(episode)
+    db.session.flush()
+    idea.status, idea.episode_id = IdeaStatus.USED, episode.id
+    db.session.commit()
+    return jsonify({"idea": idea.as_dict(), "episode": episode.as_dict()}), 201
 
 
 @bp.get("/quan-tri/xuong-kich-ban/xem-thu/<path:filename>")
