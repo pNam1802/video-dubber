@@ -207,7 +207,7 @@ def test_episode_board_points_at_real_scenes():
     from core.script_reader import split_script
 
     folder = Path(ex.__file__).with_name("episodes")
-    for module in folder.glob("*.py"):
+    for module in (p for p in folder.glob("*.py") if not p.name.startswith("_")):
         tree = ast.parse(module.read_text(encoding="utf-8"))
         board = next(ast.literal_eval(n.value) for n in tree.body
                      if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "BOARD")
