@@ -109,15 +109,16 @@ def _step_plan(series: Series) -> None:
                                        key_points=ep["key_points"]))
 
 
-def _step_ideas(series: Series) -> None:
-    """Đọc tin trên web (ưu tiên nguồn tiếng Trung) và lưu vài ý tưởng tập mới cho series."""
+def _step_ideas(series: Series, *focus: str) -> None:
+    """Đọc tin trên web (ưu tiên nguồn tiếng Trung) và lưu vài ý tưởng tập mới cho series.
+    focus: chủ đề người dùng gõ khi bấm "Tìm ngay" (kind "ideas:<chủ đề>"), trống = tin chung trong tuần."""
     from app.models import Idea
     from core.ideas import find_ideas
     from core.studio import memory_context
 
     context = memory_context(series.as_dict(), [e.as_dict() for e in series.episodes])
     recent = Idea.query.filter_by(series_id=series.id).order_by(Idea.created_at.desc()).limit(60).all()
-    for idea in find_ideas(context, series.topic, [i.title for i in recent]):
+    for idea in find_ideas(context, series.topic, [i.title for i in recent], focus=":".join(focus)):
         db.session.add(Idea(series_id=series.id, **idea))
 
 
@@ -685,9 +686,13 @@ def find_ideas_now(series_id: int):
     busy = _busy(series)
     if busy:
         return busy
+    from core.ideas import MAX_FOCUS
+
+    # Chủ đề đi theo kind ("ideas:<chủ đề>") vì Composer.run_studio chỉ nhận (kind, id); cột task giữ "ideas".
+    focus = " ".join(str((request.get_json(silent=True) or {}).get("focus") or "").split())[:MAX_FOCUS]
     series.task, series.error = "ideas", None
     db.session.commit()
-    start_task(current_app._get_current_object(), "ideas", series.id)
+    start_task(current_app._get_current_object(), f"ideas:{focus}" if focus else "ideas", series.id)
     return jsonify({"task": series.task}), 202
 
 
