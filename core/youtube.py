@@ -190,6 +190,16 @@ def list_playlists(token: str) -> list:
     return [{"id": item["id"], "title": (item.get("snippet") or {}).get("title", "")} for item in data.get("items") or []]
 
 
+def create_playlist(token: str, title: str, description: str = "", privacy: str = "public") -> str:
+    """Tạo danh sách phát mới trên kênh (50 đơn vị quota), trả về id."""
+    data = _check(requests.post(f"{API}/playlists", params={"part": "snippet,status"},
+                                headers={"Authorization": f"Bearer {token}"},
+                                json={"snippet": {"title": _plain(title, 150), "description": _plain(description, 5000)},
+                                      "status": {"privacyStatus": privacy}},
+                                timeout=TIMEOUT), "Không tạo được danh sách phát")
+    return data["id"]
+
+
 def add_to_playlist(token: str, playlist_id: str, video_id: str) -> None:
     _check(requests.post(f"{API}/playlistItems", params={"part": "snippet"},
                          headers={"Authorization": f"Bearer {token}"},

@@ -64,7 +64,10 @@
       <div class="lg:col-span-2 flex flex-col gap-2">
         <span class="field-label !mb-0">Danh sách phát YouTube</span>
         <p id="playlistHint" class="font-label-sm text-label-sm text-on-surface-variant">Đăng tập nào lên YouTube thì tự thêm vào danh sách phát này.</p>
-        <select id="playlistSelect" class="input !w-auto hidden"></select>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="playlistSelect" class="input !w-auto hidden"></select>
+          <button id="newPlaylist" type="button" class="btn-secondary btn-sm hidden"><span class="material-symbols-outlined text-[18px]">add_circle</span>Tạo danh sách phát mới</button>
+        </div>
       </div>
       <div><span class="field-label">Thuật ngữ Việt – Anh (<span id="termCount">0</span>)</span>
         <div id="glossary" class="max-h-[260px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div></div>
@@ -399,8 +402,10 @@
     function paintPlaylists() {
       const select = document.getElementById("playlistSelect");
       const hint = document.getElementById("playlistHint");
+      const create = document.getElementById("newPlaylist");
       if (!youtube.connected) {
         select.classList.add("hidden");
+        create.classList.add("hidden");
         hint.textContent = "Kết nối kênh YouTube (trong khối Đăng YouTube của một tập) để chọn danh sách phát.";
         return;
       }
@@ -416,6 +421,7 @@
         return '<option value="' + esc(p.id) + '"' + (p.id === series.youtube_playlist ? " selected" : "") + '>' + esc(p.title) + '</option>';
       }).join("");
       select.classList.remove("hidden");
+      create.classList.remove("hidden");
     }
 
     // ── Tự đăng lên kênh YouTube đã kết nối: video riêng tư, hẹn giờ công khai nếu muốn ──
@@ -660,6 +666,18 @@
           playingVoice = lang;
           previewAudio.play().catch(function () {});
           paintPlayButtons();
+          return;
+        }
+        if (btn.id === "newPlaylist") {
+          // Tên và mô tả lấy từ series; tạo xong gắn luôn cho series.
+          btn.disabled = true;
+          const made = await api("/api/youtube/playlists", "POST", {title: series.title, description: series.description || ""});
+          await api("/api/studio/series/" + SERIES_ID, "PATCH", {youtube_playlist: made.id});
+          series.youtube_playlist = made.id;
+          playlists = (playlists || []).concat([made]);
+          paintPlaylists();
+          btn.disabled = false;
+          Nora.toast("Đã tạo danh sách phát “" + made.title + "”.", "success");
           return;
         }
         if (btn.id === "findIdeas") {

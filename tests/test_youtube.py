@@ -163,6 +163,31 @@ def test_playlists_route_needs_connection(as_admin, app, monkeypatch):
     assert as_admin.get("/api/youtube/playlists").get_json() == [{"id": "PL1234567890", "title": "A"}]
 
 
+def test_create_playlist(monkeypatch, as_admin, app):
+    seen = {}
+
+    def post(url, params, headers, json, timeout):
+        seen.update(url=url, params=params, json=json)
+        return _Res(200, {"id": "PLnew"})
+
+    monkeypatch.setattr(yt.requests, "post", post)
+    assert yt.create_playlist("tok", "Kiểm Chứng <AI>", "mô tả") == "PLnew"
+    assert seen["url"].endswith("/playlists") and seen["params"]["part"] == "snippet,status"
+    assert seen["json"]["snippet"]["title"] == "Kiểm Chứng ‹AI›" and seen["json"]["status"]["privacyStatus"] == "public"
+
+    assert as_admin.post("/api/youtube/playlists", json={"title": "A"}).status_code == 400  # chưa kết nối
+    with app.app_context():
+        from app.extensions import db
+
+        User.query.filter_by(username="boss").one().youtube_token = yt.seal("rt", app.config["SECRET_KEY"])
+        db.session.commit()
+    monkeypatch.setattr(yt, "access_token", lambda rt, cid, sec: "at")
+    monkeypatch.setattr(yt, "create_playlist", lambda token, title, description: "PL" + title)
+    assert as_admin.post("/api/youtube/playlists", json={"title": " "}).status_code == 400
+    res = as_admin.post("/api/youtube/playlists", json={"title": "  Kiểm   chứng "})
+    assert res.status_code == 201 and res.get_json() == {"id": "PLKiểm chứng", "title": "Kiểm chứng"}
+
+
 def test_set_thumbnail_posts_png(monkeypatch):
     seen = {}
 
