@@ -19,16 +19,25 @@ from typing import Callable, List, Tuple
 from core.studio import Source, _ask_json, _strings, _text, ask_gemini_search
 
 MAX_IDEAS = 6
+#: Chủ đề người dùng gõ khi bấm "Tìm ngay" dài tối đa bấy nhiêu ký tự.
+MAX_FOCUS = 200
 #: Nguồn tiếng Trung hay viết/làm video về AI, gợi ý cho bước tìm kiếm.
 CHINESE_SOURCES = ("机器之心 (jiqizhixin.com)", "量子位 (qbitai.com)", "知乎 Zhihu", "Bilibili B站", "36氪 36kr",
                    "InfoQ 中文", "CSDN", "掘金 juejin.cn")
 CHINESE_LABS = ("DeepSeek", "Qwen / Alibaba", "Moonshot Kimi", "Zhipu GLM", "MiniMax", "ByteDance Doubao")
 
 
-def search_request(topic: str, days: int = 7) -> str:
+def search_request(topic: str, days: int = 7, focus: str = "") -> str:
+    if focus:
+        # Chủ đề cụ thể: lấy cả bài giảng giải cũ hơn, không chỉ tin trong tuần.
+        scope = (f"Search the web for explanations, tutorials, papers and recent discussion about: {focus} "
+                 f"(in the context of {topic}). Recent items are a plus but solid explainers from the last year "
+                 "are welcome too. Translate this focus into Chinese search terms and search with them as well. ")
+    else:
+        scope = (f"Search the web for what was published in the last {days} days about: {topic} "
+                 "(LLM agents, generative AI, tool use, memory, planning, multi-agent systems, RAG, evaluation). ")
     return (
-        f"Search the web for what was published in the last {days} days about: {topic} "
-        "(LLM agents, generative AI, tool use, memory, planning, multi-agent systems, RAG, evaluation). "
+        scope +
         "Prioritise CHINESE-language sources and creators — search in Chinese too, e.g. "
         "\"AI Agent 原理\", \"大模型 智能体 教程\", \"Agent 架构 解读\", \"RAG 实战\" — on: "
         f"{', '.join(CHINESE_SOURCES)}; and notable releases, papers or open-source projects from Chinese labs "
@@ -39,13 +48,14 @@ def search_request(topic: str, days: int = 7) -> str:
     )
 
 
-def pick_request(context: str, notes: str, sources: List[Source], avoid: List[str]) -> str:
+def pick_request(context: str, notes: str, sources: List[Source], avoid: List[str], focus: str = "") -> str:
     numbered = "\n".join(f"[{i}] {s.get('title')} — {s.get('url')}" for i, s in enumerate(sources))
     avoided = "\n".join(f"- {t}" for t in avoid) or "(none)"
     return (
         f"{context}\n\nResearch notes from today's web search:\n{notes}\n\nSources (index, title, url):\n{numbered}\n\n"
         f"Ideas already suggested recently (do NOT repeat them):\n{avoided}\n\n"
-        "You help the author pick topics for the next educational videos of this series. From the notes, "
+        + (f"The author asked for this focus: {focus}. Every idea must be about it.\n" if focus else "")
+        + "You help the author pick topics for the next educational videos of this series. From the notes, "
         f"choose 3-{MAX_IDEAS} ideas that teach something real (an idea, a technique, how something works), "
         "fit the series audience, and are not already covered by earlier episodes. Use the material as a "
         "source of knowledge only: the video will be the author's own explanation.\n"
@@ -81,8 +91,9 @@ def clean_ideas(data: dict, sources: List[Source]) -> List[dict]:
 
 def find_ideas(context: str, topic: str, avoid: List[str],
                search: Callable[[str], Tuple[str, List[Source]]] = ask_gemini_search,
-               ask: Callable[[str], dict] = _ask_json) -> List[dict]:
-    notes, sources = search(search_request(topic))
+               ask: Callable[[str], dict] = _ask_json, focus: str = "") -> List[dict]:
+    focus = _text(focus, MAX_FOCUS)
+    notes, sources = search(search_request(topic, focus=focus))
     if not sources:
         raise RuntimeError("Tìm kiếm không trả về nguồn nào.")
-    return clean_ideas(ask(pick_request(context, _text(notes, 12000), sources, avoid)), sources)
+    return clean_ideas(ask(pick_request(context, _text(notes, 12000), sources, avoid, focus)), sources)

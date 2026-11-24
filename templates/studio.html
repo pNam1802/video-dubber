@@ -76,6 +76,9 @@
   <summary class="cursor-pointer font-body-md text-body-md text-primary">Ý tưởng mỗi ngày <span id="ideasCount" class="text-on-surface-variant"></span></summary>
   <div class="flex items-center gap-2 flex-wrap mt-2">
     <p class="font-label-sm text-label-sm text-on-surface-variant flex-1 min-w-[240px]">Mỗi sáng agent đọc tin AI trên web (ưu tiên 机器之心, 量子位, 知乎, B站…) và gợi ý chủ đề hợp series. Nguồn chỉ để tham khảo kiến thức: kịch bản, hình và giọng là của kênh.</p>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap mt-2">
+    <input id="ideasFocus" type="text" maxlength="200" class="input flex-1 min-w-[240px]" placeholder="Chủ đề muốn tìm (không bắt buộc), vd: kiểm chứng output của AI">
     <button id="findIdeas" type="button" class="btn-secondary btn-sm"><span class="material-symbols-outlined text-[18px]">travel_explore</span>Tìm ngay</button>
   </div>
   <div id="ideasList" class="flex flex-col gap-md mt-md"></div>
@@ -661,7 +664,7 @@
         }
         if (btn.id === "findIdeas") {
           btn.disabled = true;
-          await api("/api/studio/series/" + SERIES_ID + "/ideas", "POST");
+          await api("/api/studio/series/" + SERIES_ID + "/ideas", "POST", {focus: document.getElementById("ideasFocus").value.trim()});
           await load();
           return;
         }

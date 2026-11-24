@@ -36,6 +36,22 @@ def test_find_ideas_searches_chinese_sources_and_avoids_repeats():
     assert "Ý tưởng cũ" in seen["pick"] and "[1] zhihu.com — https://b" in seen["pick"]
 
 
+def test_find_ideas_with_focus():
+    seen = {}
+
+    def search(prompt):
+        seen["search"] = prompt
+        return "n", SOURCES
+
+    def ask(prompt):
+        seen["pick"] = prompt
+        return {"ideas": []}
+
+    ci.find_ideas("ctx", "LLM Agent", [], search=search, ask=ask, focus="kiểm chứng output của AI")
+    assert "kiểm chứng output của AI" in seen["search"] and "last 7 days" not in seen["search"]
+    assert "focus: kiểm chứng output của AI" in seen["pick"]
+
+
 def test_find_ideas_without_sources_fails():
     import pytest
 
@@ -61,10 +77,11 @@ def test_ideas_flow(app, as_admin, monkeypatch):
     import app.studio as st
 
     monkeypatch.setattr(st, "start_task", lambda flask_app, kind, target_id: st.run_task(flask_app, kind, target_id))
-    calls = []
+    calls, focuses = [], []
 
-    def fake_find(context, topic, avoid):
+    def fake_find(context, topic, avoid, focus=""):
         calls.append(list(avoid))
+        focuses.append(focus)
         return [{"title": f"Ý tưởng {len(calls)}", "summary": "tóm tắt", "angle": "cách giảng", "key_points": ["a", "b"],
                  "sources": [{"title": "qbitai.com", "url": "https://q"}]}]
 
@@ -73,8 +90,11 @@ def test_ideas_flow(app, as_admin, monkeypatch):
     assert as_admin.post(f"/api/studio/series/{sid}/ideas").status_code == 202
     assert as_admin.post(f"/api/studio/series/{sid}/ideas").status_code == 202
     assert calls == [[], ["Ý tưởng 1"]]  # lần sau tránh lặp ý tưởng đã gợi ý
+    res = as_admin.post(f"/api/studio/series/{sid}/ideas", json={"focus": "  kiểm chứng:   output AI "})
+    assert res.status_code == 202
+    assert focuses == ["", "", "kiểm chứng: output AI"]  # gọn khoảng trắng, giữ dấu ":"
     rows = as_admin.get(f"/api/studio/series/{sid}/ideas").get_json()
-    assert sorted(r["title"] for r in rows) == ["Ý tưởng 1", "Ý tưởng 2"]
+    assert sorted(r["title"] for r in rows) == ["Ý tưởng 1", "Ý tưởng 2", "Ý tưởng 3"]
     first = next(r for r in rows if r["title"] == "Ý tưởng 1")
 
     assert as_admin.patch(f"/api/studio/ideas/{first['id']}", json={"status": "lung tung"}).status_code == 400
@@ -102,7 +122,7 @@ def test_daily_run_covers_active_admin_series_only(app, monkeypatch):
     from app.extensions import db
     from app.models import Episode, Idea, Job, JobStatus, Role, Series, User
 
-    monkeypatch.setattr("core.ideas.find_ideas", lambda context, topic, avoid: [
+    monkeypatch.setattr("core.ideas.find_ideas", lambda context, topic, avoid, focus="": [
         {"title": "Ý tưởng", "summary": "", "angle": "", "key_points": [], "sources": [{"title": "a", "url": "u"}]}])
     with app.app_context():
         admin = User(username="boss2", role=Role.ADMIN)
