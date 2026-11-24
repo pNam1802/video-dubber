@@ -45,6 +45,22 @@ def test_review_falls_back_to_draft_when_reviewer_returns_nothing():
     assert out == {"issues": ["x"], "script": "Bản nháp."}
 
 
+def test_write_and_review_use_relaxed_teaching_voice():
+    """Viết và soát kịch bản đều mang giọng giảng chung, không còn công thức hook/recap cứng."""
+    prompts = []
+
+    def ask(prompt):
+        prompts.append(prompt)
+        return {"script": "Câu một."}
+
+    episode = {"number": 1, "title": "T", "goal": "g"}
+    cs.write_script("ctx", episode, "notes", ask=ask)
+    cs.review_script("ctx", episode, "notes", "Bản nháp.", ask=ask)
+    for prompt in prompts:
+        assert cs.TEACHING_VOICE in prompt
+        assert "Hook the viewer" not in prompt and "missing hook" not in prompt
+
+
 def test_dedupe_sources():
     assert cs.dedupe_sources([{"title": "A", "url": "u"}, {"title": "A2", "url": "u"}, {"title": "", "url": ""}]) \
         == [{"title": "A", "url": "u"}]

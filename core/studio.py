@@ -95,6 +95,25 @@ def _text(value, chars: int = 4000) -> str:
     return str(value or "").strip()[:chars]
 
 
+# ── Giọng giảng ──────────────────────────────────────────────
+#: Lối giảng chung cho mọi tập, kiểu Andrew Ng: thoải mái, đi vào bản chất, không văn mẫu.
+#: Đưa vào cả bước viết, bước soát và bước dịch; đứng trên style guide riêng của series.
+TEACHING_VOICE = (
+    "Teaching voice (this overrides any style guide above): talk like Andrew Ng in his courses, a calm, "
+    "friendly teacher explaining one-on-one, not a presenter or a YouTuber. In Vietnamese say \"mình\" for "
+    "yourself and \"bạn\" for the viewer. Start from the problem or a simple question, build intuition with a "
+    "tiny concrete example (small real numbers) BEFORE any formal definition, and always explain WHY "
+    "something works, not only what it is. Use everyday words; when a technical term is needed, say it once "
+    "and explain it in plain words right away. It is fine to say a part is tricky, to reassure (\"không sao "
+    "nếu chỗ này chưa thấm ngay\"), to restate a key idea more simply, or to add a short aside. Vary the "
+    "structure to fit the content; no fixed formula. AVOID: greetings and channel intros (\"Chào mừng các "
+    "bạn...\", \"Trong video hôm nay...\"), dramatic or clickbait hooks, flowery or emotional adjectives "
+    "(\"vô cùng thú vị\", \"kỳ diệu\", \"đầy mê hoặc\"), stock transitions (\"Hãy cùng khám phá\", \"Không "
+    "những thế\"), rhetorical questions stacked in a row, and a formal end-of-video recap list. End simply: "
+    "one or two sentences on the core intuition to remember, and at most one sentence about what comes next."
+)
+
+
 # ── Trí nhớ series ───────────────────────────────────────────
 def memory_context(series: dict, episodes: List[dict], current_number: int | None = None) -> str:
     """Mọi thứ agent cần nhớ về series, dạng văn bản đưa thẳng vào prompt."""
@@ -128,8 +147,8 @@ def plan_series(topic: str, audience: str, count: int, ask: Callable[[str], dict
         f"Topic: {topic}\nAudience: {audience or 'Vietnamese developers and students'}\n"
         f"Number of episodes: {count}\n"
         "Return JSON: {\"title\": series title in Vietnamese, \"description\": 2-3 sentences, "
-        "\"style_guide\": 4-6 short rules for voice and structure (hook in the first 15 seconds, one concrete "
-        "running example, recap at the end...), \"glossary\": [{\"vi\", \"en\", \"definition\"}] for the "
+        "\"style_guide\": 4-6 short rules for a relaxed, intuition-first teaching voice like Andrew Ng "
+        "(plain words, small concrete examples, explain why before how, no flowery language), \"glossary\": [{\"vi\", \"en\", \"definition\"}] for the "
         f"10-20 core terms, \"episodes\": [{{\"title\", \"goal\": one sentence on what the viewer will "
         f"understand, \"key_points\": 3-5 points}}] — exactly {count} episodes}}. All text in Vietnamese "
         "except the English column of the glossary."
@@ -183,10 +202,10 @@ def write_script(context: str, episode: dict, notes: str, ask: Callable[[str], d
         f"Key points: {'; '.join(episode.get('key_points') or [])}\n"
         f"Rules: Vietnamese narration of {lo}-{hi} words, read aloud by a TTS voice over an animated "
         "explainer, so: plain spoken sentences, no markdown, no bullet symbols, no emoji, no code, spell out "
-        "symbols; one idea per paragraph (a paragraph = one line); short sentences. Hook the viewer in the "
-        "first two sentences, use ONE running example throughout, briefly refer back to earlier episodes "
-        "instead of re-explaining them, end with a recap and a teaser for the next episode. Follow the "
-        "glossary exactly. Only state facts supported by the research notes.\n"
+        "symbols; one idea per paragraph (a paragraph = one line); short, natural sentences. Keep one "
+        "concrete example running through the episode when it helps, briefly refer back to earlier episodes "
+        "instead of re-explaining them. Follow the glossary exactly. Only state facts supported by the "
+        f"research notes.\n{TEACHING_VOICE}\n"
         "Return JSON: {\"outline\": [6-10 section titles], \"script\": the full narration with paragraphs "
         "separated by newlines, \"quiz\": [{\"q\", \"a\"}] 3-5 self-check questions with short answers, "
         "\"new_terms\": [{\"vi\", \"en\", \"definition\"}] important terms not in the glossary yet}"
@@ -226,8 +245,10 @@ def review_script(context: str, episode: dict, notes: str, script: str,
         "You are a strict technical reviewer and script editor. Check: (1) technical errors or claims not "
         "supported by the notes, (2) content that repeats what earlier episodes already covered, "
         f"(3) length outside {lo}-{hi} words, (4) sentences hard to read aloud (symbols, code, very long "
-        "sentences), (5) glossary terms used inconsistently, (6) missing hook, running example or recap. "
-        "Fix every problem you find while keeping the author's structure.\n"
+        "sentences), (5) glossary terms used inconsistently, (6) template-like or flowery phrasing that "
+        "breaks the teaching voice below (greetings, hype, stock transitions, formal recap lists): rewrite it "
+        "in plain, relaxed words, (7) ideas stated without the intuition or the why behind them. "
+        f"Fix every problem you find while keeping the author's structure.\n{TEACHING_VOICE}\n"
         "Return JSON: {\"issues\": [short Vietnamese descriptions of what you fixed], \"script\": the full "
         "corrected script, one paragraph per line}"
     )
@@ -239,7 +260,8 @@ def translate(context: str, script: str, ask: Callable[[str], dict] = _ask_json)
     data = ask(
         f"{context}\n\nTranslate this Vietnamese narration into natural spoken English for the English "
         "version of the video. Keep one paragraph per line, the same structure and the running example; "
-        "use the glossary's English terms exactly; adapt Vietnamese-specific jokes or phrases naturally.\n"
+        "use the glossary's English terms exactly; adapt Vietnamese-specific jokes or phrases naturally. "
+        "Keep the same relaxed, plain teaching voice (\"I\" and \"you\", like Andrew Ng), no flowery words.\n"
         f"Script:\n{script}\n\nReturn JSON: {{\"script\": the English narration}}"
     )
     english = clean_script(data.get("script"))
