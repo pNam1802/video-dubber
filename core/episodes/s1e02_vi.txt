@@ -1,0 +1,21 @@
+Tập trước mình nói agent là một mô hình ngôn ngữ được đặt vào vòng lặp: làm, nhìn kết quả, rồi sửa. Hôm nay mình mở cái hộp đó ra, xem bên trong có những phần nào và chúng nói chuyện với nhau ra sao.
+Mình sẽ dùng một ví dụ nhỏ. Bạn hỏi agent: quý vừa rồi cửa hàng A bán được bao nhiêu, cửa hàng B bán được bao nhiêu, và A hơn B bao nhiêu phần trăm?
+Câu hỏi nghe đơn giản, nhưng một mô hình ngôn ngữ đứng một mình thì khó trả lời đúng. Nó không biết số liệu bán hàng của bạn. Và kể cả khi biết, tính phần trăm bằng cách đoán chữ tiếp theo cũng rất dễ sai.
+Vậy agent cần những gì? Cách dễ nhớ nhất là hình dung bốn phần, giống bốn người trong một nhóm nhỏ.
+Phần thứ nhất là mô hình ngôn ngữ, mình gọi là bộ não. Nó không tự làm việc nặng. Việc của nó là đọc tình hình rồi quyết định bước tiếp theo.
+Phần thứ hai là lập kế hoạch. Với câu hỏi của mình, kế hoạch có ba bước: tra doanh thu A, tra doanh thu B, rồi tính phần trăm. Chia nhỏ như vậy thì bước nào cũng dễ làm và dễ kiểm tra.
+Phần thứ ba là công cụ. Ở đây có hai thứ: một hàm tra số liệu bán hàng, và một cái máy tính. Bộ não không tự tính, nó nhờ máy tính.
+Phần thứ tư là bộ nhớ. Bộ nhớ ngắn hạn chính là ngữ cảnh, tức là toàn bộ chữ mà mô hình được đọc trong lần gọi đó. Còn bộ nhớ dài hạn là kho lưu bên ngoài, ví dụ một cơ sở dữ liệu, cần thì lấy ra đưa vào ngữ cảnh.
+Giờ mình cho bốn phần này chạy thật, từng vòng một.
+Vòng một. Ngữ cảnh lúc này chỉ có câu hỏi của bạn và mô tả các công cụ, giả sử khoảng một nghìn hai trăm token. Bộ não đọc và quyết định: gọi hàm tra doanh thu cửa hàng A. Kết quả trả về là năm mươi triệu. Con số này được ghi thêm vào ngữ cảnh.
+Vòng hai. Bộ não đọc lại, thấy đã có số của A, nên gọi tiếp hàm tra cửa hàng B. Kết quả là bốn mươi triệu. Ngữ cảnh lại dài thêm một chút.
+Vòng ba. Đã đủ hai con số. Thay vì tự tính nhẩm, bộ não gửi cho máy tính phép tính: năm mươi trừ bốn mươi, chia cho bốn mươi, nhân một trăm. Máy tính trả về hai mươi lăm.
+Vòng bốn. Bộ não nhìn lại kế hoạch, thấy cả ba bước đã xong, nên viết câu trả lời: A bán nhiều hơn B hai mươi lăm phần trăm. Vòng lặp dừng ở đây.
+Bạn để ý một điều. Ở mỗi vòng, bộ não không tự nhớ gì từ vòng trước. Nó biết đã có số của A chỉ vì con số đó đang nằm trong ngữ cảnh. Nói cách khác, trạng thái của agent chính là những gì đang có trong ngữ cảnh.
+Đây cũng là lý do ngữ cảnh cứ dài dần sau mỗi vòng. Bài toán bốn vòng thì không sao. Nhưng với bài toán vài chục vòng, ngữ cảnh có thể đầy, và lúc đó phải tóm tắt bớt hoặc chuyển bớt sang bộ nhớ dài hạn. Chuyện này mình sẽ nói kỹ ở tập về bộ nhớ.
+Vậy ai giữ nhịp cho cả quá trình? Không phải mô hình. Mô hình chỉ trả lời mỗi khi được hỏi. Người giữ nhịp là một đoạn code vòng lặp do lập trình viên viết.
+Đoạn code đó làm đúng bốn việc, lặp đi lặp lại: gửi ngữ cảnh cho mô hình, nhận về quyết định, nếu là gọi công cụ thì chạy công cụ, rồi ghi kết quả vào ngữ cảnh. Khi mô hình báo đã xong, hoặc chạy quá số vòng cho phép, thì dừng.
+Cái giới hạn số vòng đó quan trọng hơn bạn nghĩ. Thiếu nó, một agent bị kẹt có thể gọi công cụ mãi không dừng, và bạn trả tiền cho từng lần gọi.
+Có một hiểu lầm hay gặp mà mình muốn nói luôn. Trong lúc chạy, agent không học thêm gì vào bên trong mô hình. Trọng số của mô hình giữ nguyên. Mọi thứ nó nhớ chỉ là chữ được ghi thêm vào ngữ cảnh, hoặc vào kho bên ngoài.
+Nếu chỉ nhớ một hình ảnh từ hôm nay, thì là thế này: một vòng lặp do code giữ nhịp, ở giữa là bộ não đọc ngữ cảnh và ra quyết định, xung quanh là kế hoạch, công cụ và bộ nhớ.
+Tập sau mình sẽ đi vào cách viết lời dặn cho bộ não, tức là system prompt, để agent hiểu nó là ai và được phép làm gì.
