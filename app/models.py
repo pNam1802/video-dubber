@@ -87,6 +87,10 @@ class User(UserMixin, db.Model):
     # Nhu tren, cho giong mau TIENG ANH (Chatterbox clone) — xem
     # voice_sample_file("en").
     voice_sample_en_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Kênh YouTube để Xưởng kịch bản tự đăng video (app/youtube.py). Refresh token đã mã hoá
+    # bằng khoá suy ra từ FLASK_SECRET_KEY (core/youtube.seal), không bao giờ lưu dạng thô.
+    youtube_token = db.Column(db.Text, nullable=True)
+    youtube_channel = db.Column(db.String(200), nullable=True)
 
     jobs = db.relationship("Job", backref="user", lazy=True, cascade="all, delete-orphan")
 

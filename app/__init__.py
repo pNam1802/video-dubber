@@ -102,6 +102,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     from app.auth import bp as auth_bp
     from app.main import bp as main_bp
     from app.studio import bp as studio_bp
+    from app.youtube import bp as youtube_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -109,6 +110,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(oauth_bp)
     app.register_blueprint(studio_bp)
+    app.register_blueprint(youtube_bp)
     init_oauth(app)
 
     register_error_handlers(app)
