@@ -1,0 +1,21 @@
+Đây là series mới về một câu hỏi rất thực tế: làm sao biết câu trả lời của AI là đúng, trước khi mình tin và dùng nó. Tập đầu tiên mình bắt đầu từ cách đơn giản nhất mà ai cũng từng thử: bảo AI tự kiểm tra lại.
+Ví dụ thế này. Bạn hỏi: cửa hàng có hai mươi ba quả táo, bán hai mươi quả, rồi nhập thêm sáu quả, hỏi còn bao nhiêu? Mô hình trả lời chín. Đúng rồi.
+Rồi bạn hỏi thêm một câu: bạn chắc chưa, kiểm tra lại đi. Mô hình xin lỗi, nói là mình đã nhầm, và đổi đáp án thành ba. Đang đúng thành sai.
+Cũng có lúc ngược lại. Câu đầu sai, kiểm tra lại vẫn sai, chỉ là sai theo một kiểu khác. Có những lần nó sửa đúng thật, nhưng không đều như mình mong.
+Chuyện này không chỉ là cảm giác. Năm hai nghìn không trăm hai mươi ba, một nhóm ở Google DeepMind đo kỹ hiện tượng này, trong bài báo có tên: các mô hình ngôn ngữ lớn chưa thể tự sửa lỗi suy luận. Bài được nhận ở hội nghị ICLR năm sau đó.
+Họ cho mô hình làm bài toán, câu hỏi kiến thức thường thức, và câu hỏi cần suy luận nhiều bước. Sau đó họ bảo mô hình tự xem lại câu trả lời và sửa nếu thấy sai, không đưa thêm thông tin nào. Cách này gọi là tự sửa nội tại.
+Kết quả là độ chính xác không tăng, có bài còn giảm. Mô hình hay sửa một câu đúng thành sai hơn là sửa một câu sai thành đúng.
+Điều thú vị là trước đó đã có bài báo báo cáo rằng tự sửa giúp tăng điểm khá nhiều. Nhóm DeepMind chỉ ra một chi tiết: trong các thí nghiệm đó, đáp án đúng được dùng để quyết định khi nào dừng sửa.
+Nghĩa là sửa xong thì đem so với đáp án. Đúng rồi thì dừng, còn sai thì cho sửa tiếp. Như vậy đáp án đúng đã lọt vào vòng lặp. Bỏ thông tin đó đi, phần lớn cái lợi cũng biến mất.
+Vậy vì sao lại như thế? Bạn hình dung một học sinh làm bài thi trong phòng kín, không sách, không máy tính. Giám thị đi ngang qua và hỏi: em chắc chưa?
+Câu hỏi đó không cho em thêm thông tin nào. Kiến thức trong đầu em vẫn y như lúc nãy. Thứ mới duy nhất là cảm giác: chắc mình sai rồi. Thế là em hoặc giữ nguyên, hoặc đổi đáp án theo cảm giác đó.
+Mô hình cũng vậy. Lần kiểm tra lại dùng đúng bộ não vừa viết ra câu trả lời. Nếu nó đủ hiểu để nhìn ra lỗi, thì ngay từ đầu nó đã ít mắc lỗi đó. Còn câu hỏi chắc chưa lại ngầm gợi ý là có gì đó sai, và mô hình thì hay chiều theo người hỏi.
+Nói gọn lại, phần khó nhất không phải là sửa, mà là biết mình sai ở đâu. Và việc biết đó, mô hình tự làm thì không đáng tin.
+Nhưng không phải lúc nào tự kiểm tra cũng vô ích. Với lỗi về hình thức, như câu trả lời quá dài, giọng chưa hợp, hay thiếu một mục người dùng yêu cầu, tự xem lại thường giúp được. Bài báo cũng ghi nhận điều này với những việc như chỉnh giọng văn.
+Khác biệt nằm ở chỗ này. Lỗi hình thức thì nhìn vào là thấy. Còn lỗi suy luận thì phải có một thứ gì đó bên ngoài để so.
+Thứ bên ngoài đó là gì? Quay lại phòng thi. Đưa cho em một cái máy tính bỏ túi, hoặc cho em thế ngược đáp án vào đề bài. Lúc này em có một tín hiệu mới thật sự.
+Với AI cũng vậy: chạy code xem có lỗi không, chạy test xem qua hay trượt, tra lại dữ liệu thật, hoặc nhờ máy tính làm phép tính. Những tín hiệu này không phụ thuộc vào việc mô hình nghĩ gì về chính nó.
+Với bài toán quả táo, thay vì hỏi chắc chưa, agent có thể gọi công cụ tính: hai mươi ba trừ hai mươi, cộng sáu. Ra chín. Giờ thì giữ hay đổi đáp án đều có căn cứ.
+Nên khi bạn xây một agent, đừng coi một dòng lệnh kiểu hãy kiểm tra lại câu trả lời của bạn là lớp bảo vệ. Nếu đó là bước kiểm tra duy nhất, thì đó là dấu hiệu nên lo.
+Tóm lại, hỏi lại chắc chưa không mang thêm thông tin nào. Muốn kiểm chứng thật, cần một tín hiệu đến từ bên ngoài mô hình.
+Tập sau mình đi vào chính những tín hiệu đó: test, công cụ, dữ liệu thật, và cách nối chúng vào vòng lặp của agent.
