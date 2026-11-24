@@ -73,3 +73,63 @@ def test_next_param_cannot_redirect_offsite(as_admin, monkeypatch):
         state = s["youtube_oauth_state"]
     res = as_admin.get(f"/quan-tri/youtube/callback?state={state}&error=access_denied")
     assert "evil" not in res.location
+
+
+class _Res:
+    def __init__(self, status=200, data=None, headers=None):
+        self.status_code, self._data, self.headers, self.text = status, data or {}, headers or {}, ""
+
+    def json(self):
+        return self._data
+
+
+def test_video_body_cleans_fields():
+    body = yt.video_body({"title": "<b>Agent</b> " + "x" * 200, "description": "a > b", "tags": ['"llm"', "x" * 70] * 20},
+                         "vi", "2099-01-01T00:00:00Z")
+    assert "<" not in body["snippet"]["title"] and len(body["snippet"]["title"]) == 100
+    assert "›" in body["snippet"]["description"]
+    assert body["snippet"]["tags"][0] == "llm" and sum(len(t) + 3 for t in body["snippet"]["tags"]) <= 480
+    assert body["snippet"]["categoryId"] == "27" and body["status"]["publishAt"] == "2099-01-01T00:00:00Z"
+    assert "publishAt" not in yt.video_body({"title": "t"}, "vi")["status"]
+
+
+def test_upload_video_resumable(monkeypatch, tmp_path):
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"12345")
+    seen = {}
+
+    def post(url, params, headers, json, timeout):
+        seen["post"] = (params, headers["X-Upload-Content-Length"], json)
+        return _Res(200, {}, {"Location": "https://upload/session"})
+
+    def put(url, data, headers, timeout):
+        seen["put"] = (url, data.read(), headers["Content-Length"])
+        return _Res(200, {"id": "VID"})
+
+    monkeypatch.setattr(yt.requests, "post", post)
+    monkeypatch.setattr(yt.requests, "put", put)
+    assert yt.upload_video("tok", video, {"snippet": {}}) == "VID"
+    assert seen["post"][0] == {"uploadType": "resumable", "part": "snippet,status"} and seen["post"][1] == "5"
+    assert seen["put"] == ("https://upload/session", b"12345", "5")
+
+
+def test_upload_errors_are_readable(monkeypatch, tmp_path):
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"1")
+    monkeypatch.setattr(yt.requests, "post", lambda *a, **k: _Res(403, {"error": {"message": "quotaExceeded"}}))
+    with pytest.raises(yt.YouTubeError, match="quotaExceeded"):
+        yt.upload_video("tok", video, {})
+
+
+def test_upload_caption_multipart(monkeypatch):
+    seen = {}
+
+    def post(url, params, headers, data, timeout):
+        seen.update(url=url, params=params, ctype=headers["Content-Type"], data=data)
+        return _Res(200, {"id": "CAP"})
+
+    monkeypatch.setattr(yt.requests, "post", post)
+    assert yt.upload_caption("tok", "VID", "vi", "Tiếng Việt", b"1\n00:00:00,000 --> 00:00:01,000\nchao\n") == "CAP"
+    boundary = seen["ctype"].split("boundary=")[1]
+    assert seen["data"].startswith(f"--{boundary}\r\n".encode()) and seen["data"].endswith(f"--{boundary}--\r\n".encode())
+    assert '"videoId": "VID"'.encode() in seen["data"] and "Tiếng Việt".encode() in seen["data"]

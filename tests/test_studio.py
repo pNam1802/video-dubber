@@ -313,3 +313,56 @@ def test_music_upload_and_video_options(app, as_admin, as_user, fake_agent, monk
 
     assert as_admin.delete(f"/api/studio/series/{series_id}/music").get_json() == {"has_music": False}
     assert as_admin.post("/api/script", data=form).status_code == 400
+
+
+def test_youtube_step_uploads_private_video_and_both_captions(app, as_admin, fake_agent, monkeypatch, tmp_path):
+    from app.extensions import db
+    from app.models import Episode, Job, JobStatus, User
+    from core import youtube as yt
+
+    monkeypatch.setattr("config.settings.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("app.storage.locate_file", lambda path: path)
+    (tmp_path / "abc_script.mp4").write_bytes(b"mp4")
+    (tmp_path / "abc.vi.srt").write_bytes(b"1\nvi")
+    (tmp_path / "abc.en.srt").write_bytes(b"1\nen")
+    calls = {}
+    monkeypatch.setattr(yt, "access_token", lambda rt, cid, sec: "at-" + rt)
+    monkeypatch.setattr(yt, "upload_video", lambda token, path, body: calls.update(video=(token, path.name, body)) or "VID1")
+
+    def caption(token, vid, lang, name, srt):
+        if lang == "en":
+            raise yt.YouTubeError("hết quota")
+        calls.setdefault("captions", []).append((vid, lang, srt))
+
+    monkeypatch.setattr(yt, "upload_caption", caption)
+    series_id, ep_id = _drafted_episode(as_admin)
+    url = f"/api/studio/episodes/{ep_id}/youtube"
+    assert as_admin.post(url, json={"lang": "vi"}).status_code == 400  # chưa soạn gói
+
+    with app.app_context():
+        admin = User.query.filter_by(role="admin").first()
+        job = Job(user_id=admin.id, status=JobStatus.DONE, video_name="abc_script.mp4", message="xong")
+        db.session.add(job)
+        db.session.flush()
+        db.session.get(Episode, ep_id).publish = {"vi": {"title": "Token", "description": "Mô tả", "tags": ["llm"],
+                                                         "job_id": job.id, "srt": {"vi": "abc.vi.srt", "en": "abc.en.srt"}}}
+        db.session.commit()
+    assert as_admin.post(url, json={"lang": "vi"}).get_json()["error"] == "Chưa kết nối kênh YouTube."
+    with app.app_context():
+        User.query.filter_by(role="admin").first().youtube_token = yt.seal("rt", app.config["SECRET_KEY"])
+        db.session.commit()
+    assert as_admin.post(url, json={"lang": "vi", "publish_at": "2020-01-01T00:00:00Z"}).status_code == 400
+    assert as_admin.post(url, json={"lang": "vi", "publish_at": "2099-01-01T19:00"}).status_code == 400  # thiếu múi giờ
+
+    assert as_admin.post(url, json={"lang": "vi", "publish_at": "2099-01-02T02:00:00+07:00"}).status_code == 202
+    ep = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]
+    tube = ep["publish"]["vi"]["youtube"]
+    assert ep["error"] is None and tube["id"] == "VID1" and tube["url"] == "https://youtu.be/VID1"
+    assert tube["publish_at"] == "2099-01-01T19:00:00Z" and tube["captions"] == ["vi"]
+    assert "hết quota" in tube["caption_errors"][0]
+    token, name, body = calls["video"]
+    assert token == "at-rt" and name == "abc_script.mp4"
+    assert body["status"] == {"privacyStatus": "private", "selfDeclaredMadeForKids": False, "embeddable": True,
+                              "publishAt": "2099-01-01T19:00:00Z"}
+    assert calls["captions"] == [("VID1", "vi", "1\nvi".encode())]
+    assert as_admin.post(url, json={"lang": "vi"}).status_code == 409  # không đăng trùng
