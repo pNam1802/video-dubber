@@ -69,6 +69,25 @@ def run_task(flask_app: Flask, kind: str, target_id: int) -> None:
             db.session.commit()
 
 
+def run_daily_ideas(flask_app: Flask, limit: int = 3) -> list[int]:
+    """Lượt tìm ý tưởng buổi sáng (Modal cron, xem modal_app.daily_ideas): các series của admin đã có
+    ít nhất một tập làm video, mới nhất trước, đang rảnh. Trả về id series đã chạy."""
+    from app.models import Role, User
+
+    with flask_app.app_context():
+        rows = (Series.query.join(User, Series.user_id == User.id)
+                .filter(User.role == Role.ADMIN, Series.task.is_(None))
+                .order_by(Series.created_at.desc()).all())
+        active = [s for s in rows if any(e.job_vi_id or e.job_en_id for e in s.episodes)][:limit]
+        for series in active:
+            series.task, series.error = "ideas", None
+        db.session.commit()
+        ids = [s.id for s in active]
+    for series_id in ids:
+        run_task(flask_app, "ideas", series_id)
+    return ids
+
+
 def _context(episode: Episode) -> str:
     from core.studio import memory_context
 

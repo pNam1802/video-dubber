@@ -95,3 +95,33 @@ def test_ideas_are_admin_and_owner_only(app, as_user, as_admin):
     assert as_user.get(f"/api/studio/series/{sid}/ideas").status_code == 403
     assert as_admin.get("/api/studio/series/9999/ideas").status_code == 404
     assert as_admin.patch("/api/studio/ideas/9999", json={"status": "new"}).status_code == 404
+
+
+def test_daily_run_covers_active_admin_series_only(app, monkeypatch):
+    import app.studio as st
+    from app.extensions import db
+    from app.models import Episode, Idea, Job, JobStatus, Role, Series, User
+
+    monkeypatch.setattr("core.ideas.find_ideas", lambda context, topic, avoid: [
+        {"title": "Ý tưởng", "summary": "", "angle": "", "key_points": [], "sources": [{"title": "a", "url": "u"}]}])
+    with app.app_context():
+        admin = User(username="boss2", role=Role.ADMIN)
+        user = User(username="u2")
+        db.session.add_all([admin, user])
+        db.session.flush()
+        job = Job(user_id=admin.id, status=JobStatus.DONE, message="xong")
+        db.session.add(job)
+        db.session.flush()
+        active = Series(user_id=admin.id, topic="t", title="Có video")
+        active.episodes = [Episode(number=1, title="e", job_vi_id=job.id)]
+        idle = Series(user_id=admin.id, topic="t", title="Chưa có video")
+        idle.episodes = [Episode(number=1, title="e")]
+        other = Series(user_id=user.id, topic="t", title="Của người dùng thường")
+        other.episodes = [Episode(number=1, title="e", job_vi_id=job.id)]
+        db.session.add_all([active, idle, other])
+        db.session.commit()
+        active_id = active.id
+    assert st.run_daily_ideas(app) == [active_id]
+    with app.app_context():
+        assert [i.series_id for i in Idea.query.all()] == [active_id]
+        assert db.session.get(Series, active_id).task is None

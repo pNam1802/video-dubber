@@ -393,6 +393,17 @@ class ImageGenerator:
         return generate_with(self.pipe, prompts, sizes=[tuple(s) for s in sizes] if sizes else None)
 
 
+# "Ý tưởng mỗi ngày" của Xưởng kịch bản: 7h sáng giờ Việt Nam, agent đọc tin AI (ưu tiên nguồn tiếng
+# Trung) và gợi ý tập mới cho các series đang làm. Chỉ CPU + vài lượt Gemini, chạy vài chục giây.
+@app.function(region="us", secrets=secrets, env=RUNTIME_ENV, timeout=900,
+              schedule=modal.Cron("0 7 * * *", timezone="Asia/Ho_Chi_Minh"))
+def daily_ideas() -> None:
+    from app import create_app
+    from app.studio import run_daily_ideas
+
+    run_daily_ideas(create_app())
+
+
 @app.function(volumes=VOLUMES, secrets=secrets, env=RUNTIME_ENV, timeout=600)
 def migrate() -> None:
     """Chạy `flask db upgrade` trên Postgres trước mỗi lần deploy."""
