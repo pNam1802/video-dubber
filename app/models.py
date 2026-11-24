@@ -507,3 +507,34 @@ class Episode(db.Model):
             "job_vi_id": self.job_vi_id, "job_en_id": self.job_en_id,
             "task": self.task, "error": self.error,
         }
+
+
+class IdeaStatus:
+    NEW = "new"            # agent vừa gợi ý
+    USED = "used"          # đã thành một tập trong series
+    DISMISSED = "dismissed"
+
+
+class Idea(db.Model):
+    """"Ý tưởng mỗi ngày" (core/ideas.py): agent đọc tin trên web, gợi ý chủ đề cho tập sau.
+    Nguồn chỉ là tài liệu tham khảo kiến thức; kịch bản, hình và giọng là của kênh."""
+
+    __tablename__ = "idea"
+
+    id = db.Column(db.Integer, primary_key=True)
+    series_id = db.Column(db.Integer, db.ForeignKey("series.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    summary = db.Column(db.Text, nullable=False, default="", server_default="")
+    angle = db.Column(db.Text, nullable=False, default="", server_default="")
+    key_points = db.Column(db.JSON, nullable=False, default=list)
+    #: [{"title", "url"}] — chỉ lấy từ kết quả Google Search của bước tìm kiếm.
+    sources = db.Column(db.JSON, nullable=False, default=list)
+    status = db.Column(db.String(12), nullable=False, default=IdeaStatus.NEW, server_default=IdeaStatus.NEW)
+    episode_id = db.Column(db.Integer, db.ForeignKey("episode.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "series_id": self.series_id, "title": self.title, "summary": self.summary,
+                "angle": self.angle, "key_points": self.key_points or [], "sources": self.sources or [],
+                "status": self.status, "episode_id": self.episode_id,
+                "created_at": self.created_at.isoformat() if self.created_at else None}
