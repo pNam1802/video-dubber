@@ -189,12 +189,15 @@
     // ── Trang một series ──
     let series = null;
     let current = null;   // id tập đang mở
+    let youtube = {connected: false, channel: null};   // kênh YouTube đã kết nối (app/youtube.py)
     let timer = null;
 
     function busy() { return series && (series.task || series.episodes.some(function (e) { return e.task; })); }
 
     async function load() {
-      series = await api("/api/studio/series/" + SERIES_ID);
+      const loaded = await Promise.all([api("/api/studio/series/" + SERIES_ID), api("/api/youtube")]);
+      series = loaded[0];
+      youtube = loaded[1];
       if (current === null && series.episodes.length) {
         const next = series.episodes.find(function (e) { return e.status !== "done"; }) || series.episodes[0];
         current = next.id;
@@ -340,9 +343,45 @@
           copyField("Tiêu đề", pack.title, 1) +
           copyField("Mô tả" + (pack.chapters.length ? " (kèm " + pack.chapters.length + " chapters)" : ""), pack.description, 10) +
           copyField("Tags", pack.tags.join(", "), 2) +
+          youtubeBlock(e, lang, pack, locked) +
           '</div>';
       }
       return html + '</details>';
+    }
+
+    // ── Tự đăng lên kênh YouTube đã kết nối: video riêng tư, hẹn giờ công khai nếu muốn ──
+    function youtubeBlock(e, lang, pack, locked) {
+      const tube = pack.youtube;
+      let html = '<div class="border-t border-outline-variant/40 pt-md flex flex-col gap-2">';
+      if (tube && tube.id) {
+        const when = tube.publish_at ? new Date(tube.publish_at).toLocaleString("vi-VN", {dateStyle: "medium", timeStyle: "short"}) : "";
+        html += '<p class="font-body-md text-body-md text-on-surface">Đã đăng lên YouTube, đang ở chế độ riêng tư' +
+          (when ? ", tự công khai lúc " + esc(when) : ". Vào YouTube Studio để công khai") + '.</p>' +
+          '<div class="flex gap-2 flex-wrap">' +
+          '<a class="btn-secondary btn-sm" target="_blank" rel="noopener" href="' + esc(tube.url) + '"><span class="material-symbols-outlined text-[18px]">smart_display</span>Xem video</a>' +
+          '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(tube.studio_url) + '"><span class="material-symbols-outlined text-[18px]">edit</span>Mở YouTube Studio</a></div>' +
+          (tube.captions && tube.captions.length ? '<p class="font-label-sm text-label-sm text-on-surface-variant">Phụ đề đã gắn: ' + tube.captions.join(", ") + '</p>' : "") +
+          (tube.caption_errors && tube.caption_errors.length ? '<p class="font-label-sm text-label-sm text-error">Phụ đề lỗi: ' + esc(tube.caption_errors.join("; ")) +
+            ' — tải file phụ đề ở trên rồi thêm tay trong YouTube Studio.</p>' : "");
+        return html + '</div>';
+      }
+      if (!youtube.connected) {
+        return html + '<p class="font-label-sm text-label-sm text-on-surface-variant">Kết nối kênh YouTube một lần để đăng thẳng từ đây.</p>' +
+          '<a class="btn-secondary btn-sm self-start" href="/quan-tri/youtube/ket-noi?next=' + encodeURIComponent(location.pathname) + '">' +
+          '<span class="material-symbols-outlined text-[18px]">link</span>Kết nối kênh YouTube</a></div>';
+      }
+      const tomorrow = new Date(Date.now() + 86400000);
+      tomorrow.setHours(19, 0, 0, 0);
+      const pad = function (n) { return String(n).padStart(2, "0"); };
+      const local = tomorrow.getFullYear() + "-" + pad(tomorrow.getMonth() + 1) + "-" + pad(tomorrow.getDate()) + "T19:00";
+      return html + '<p class="font-label-sm text-label-sm text-on-surface-variant">Kênh: ' + esc(youtube.channel || "") +
+        '. Video lên ở chế độ riêng tư kèm phụ đề Việt + Anh; bạn duyệt rồi công khai, hoặc hẹn giờ tự công khai.' +
+        ' <button type="button" data-yt-disconnect class="underline">Ngắt kết nối</button></p>' +
+        '<div class="flex items-center gap-2 flex-wrap">' +
+        '<label class="flex items-center gap-1 font-body-md text-body-md"><input type="checkbox" data-yt-schedule="' + lang + '" class="w-4 h-4">Hẹn giờ công khai</label>' +
+        '<input type="datetime-local" data-yt-time="' + lang + '" value="' + local + '" class="input !w-auto">' +
+        '<button data-youtube="' + lang + '" class="btn-primary btn-sm"' + (locked ? " disabled" : "") + '>' +
+        '<span class="material-symbols-outlined text-[18px]">upload</span>Đăng lên YouTube</button></div></div>';
     }
 
     // ── Giọng tự thu: máy nhắc chữ, mỗi đoạn một bản thu, đọc vấp thì thu lại đúng đoạn đó ──
@@ -578,6 +617,24 @@
           btn.disabled = true;
           await saveBoard(e, parts[0]);   // vẽ đúng bản đang sửa trên trang
           await api("/api/studio/episodes/" + e.id + "/preview", "POST", {lang: parts[0], index: Number(parts[1])});
+          await load();
+          return;
+        }
+        if (btn.hasAttribute("data-yt-disconnect")) {
+          youtube = await api("/api/youtube", "DELETE");
+          Nora.toast("Đã ngắt kết nối kênh YouTube.", "success");
+          render();
+          return;
+        }
+        if (btn.dataset.youtube) {
+          const lang = btn.dataset.youtube;
+          const scheduled = document.querySelector('[data-yt-schedule="' + lang + '"]').checked;
+          const value = document.querySelector('[data-yt-time="' + lang + '"]').value;
+          if (scheduled && !value) throw new Error("Chọn giờ công khai.");
+          btn.disabled = true;
+          await api("/api/studio/episodes/" + e.id + "/youtube", "POST",
+                    {lang: lang, publish_at: scheduled ? new Date(value).toISOString() : ""});
+          Nora.toast("Đang tải video lên YouTube...", "success");
           await load();
           return;
         }
