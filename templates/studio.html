@@ -72,6 +72,15 @@
   </details>
 </div>
 
+<details id="ideasBox" class="card mb-lg" open>
+  <summary class="cursor-pointer font-body-md text-body-md text-primary">Ý tưởng mỗi ngày <span id="ideasCount" class="text-on-surface-variant"></span></summary>
+  <div class="flex items-center gap-2 flex-wrap mt-2">
+    <p class="font-label-sm text-label-sm text-on-surface-variant flex-1 min-w-[240px]">Mỗi sáng agent đọc tin AI trên web (ưu tiên 机器之心, 量子位, 知乎, B站…) và gợi ý chủ đề hợp series. Nguồn chỉ để tham khảo kiến thức: kịch bản, hình và giọng là của kênh.</p>
+    <button id="findIdeas" type="button" class="btn-secondary btn-sm"><span class="material-symbols-outlined text-[18px]">travel_explore</span>Tìm ngay</button>
+  </div>
+  <div id="ideasList" class="flex flex-col gap-md mt-md"></div>
+</details>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
   <ol id="episodeList" class="flex flex-col gap-2 lg:col-span-1"></ol>
   <div id="episodePanel" class="lg:col-span-2 card flex flex-col gap-md">
@@ -195,15 +204,18 @@
     let series = null;
     let current = null;   // id tập đang mở
     let youtube = {connected: false, channel: null};   // kênh YouTube đã kết nối (app/youtube.py)
-    let playlists = null;   // danh sách phát của kênh, tải một lần khi đã kết nối
+    let playlists = null;
+    let ideas = [];   // ý tưởng mỗi ngày của series (core/ideas.py)   // danh sách phát của kênh, tải một lần khi đã kết nối
     let timer = null;
 
     function busy() { return series && (series.task || series.episodes.some(function (e) { return e.task; })); }
 
     async function load() {
-      const loaded = await Promise.all([api("/api/studio/series/" + SERIES_ID), api("/api/youtube")]);
+      const loaded = await Promise.all([api("/api/studio/series/" + SERIES_ID), api("/api/youtube"),
+                                        api("/api/studio/series/" + SERIES_ID + "/ideas")]);
       series = loaded[0];
       youtube = loaded[1];
+      ideas = loaded[2];
       if (current === null && series.episodes.length) {
         const next = series.episodes.find(function (e) { return e.status !== "done"; }) || series.episodes[0];
         current = next.id;
@@ -220,6 +232,7 @@
       if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
       document.getElementById("termCount").textContent = series.glossary.length;
       paintPlaylists();
+      paintIdeas();
       const player = document.getElementById("musicPlayer");
       player.classList.toggle("hidden", !series.has_music);
       document.getElementById("musicDelete").classList.toggle("hidden", !series.has_music);
@@ -354,6 +367,30 @@
           '</div>';
       }
       return html + '</details>';
+    }
+
+    function paintIdeas() {
+      const fresh = ideas.filter(function (i) { return i.status === "new"; });
+      document.getElementById("ideasCount").textContent = fresh.length ? "(" + fresh.length + " mới)" : "";
+      document.getElementById("findIdeas").disabled = !!series.task;
+      const box = document.getElementById("ideasList");
+      if (!fresh.length) {
+        box.innerHTML = '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có ý tưởng mới. Bấm “Tìm ngay” hoặc đợi lượt tìm buổi sáng.</p>';
+        return;
+      }
+      box.innerHTML = fresh.map(function (i) {
+        const day = i.created_at ? new Date(i.created_at).toLocaleDateString("vi-VN") : "";
+        return '<div class="border border-outline-variant/40 rounded-2xl p-md flex flex-col gap-2">' +
+          '<div class="flex items-start justify-between gap-3"><span class="font-body-lg text-body-lg text-on-surface">' + esc(i.title) + '</span>' +
+          '<span class="font-label-sm text-label-sm text-on-surface-variant whitespace-nowrap">' + esc(day) + '</span></div>' +
+          '<p class="font-body-md text-body-md text-on-surface">' + esc(i.summary) + '</p>' +
+          (i.angle ? '<p class="font-body-md text-body-md text-on-surface-variant"><span class="text-primary">Cách giảng:</span> ' + esc(i.angle) + '</p>' : "") +
+          '<div class="flex gap-2 flex-wrap">' + i.sources.map(function (s) {
+            return '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(s.url) + '"><span class="material-symbols-outlined text-[18px]">open_in_new</span>' + esc(s.title) + '</a>';
+          }).join("") + '</div>' +
+          '<div class="flex gap-2 flex-wrap"><button data-idea-use="' + i.id + '" class="btn-primary btn-sm"><span class="material-symbols-outlined text-[18px]">add_circle</span>Làm thành tập</button>' +
+          '<button data-idea-dismiss="' + i.id + '" class="btn-ghost btn-sm">Bỏ qua</button></div></div>';
+      }).join("");
     }
 
     function paintPlaylists() {
@@ -620,6 +657,25 @@
           playingVoice = lang;
           previewAudio.play().catch(function () {});
           paintPlayButtons();
+          return;
+        }
+        if (btn.id === "findIdeas") {
+          btn.disabled = true;
+          await api("/api/studio/series/" + SERIES_ID + "/ideas", "POST");
+          await load();
+          return;
+        }
+        if (btn.dataset.ideaDismiss) {
+          await api("/api/studio/ideas/" + btn.dataset.ideaDismiss, "PATCH", {status: "dismissed"});
+          await load();
+          return;
+        }
+        if (btn.dataset.ideaUse) {
+          btn.disabled = true;
+          const made = await api("/api/studio/ideas/" + btn.dataset.ideaUse + "/episode", "POST");
+          current = made.episode.id;
+          Nora.toast("Đã thêm tập " + made.episode.number + ". Bấm “Nghiên cứu & viết kịch bản” để agent viết.", "success");
+          await load();
           return;
         }
         if (btn.id === "saveStyle") {
