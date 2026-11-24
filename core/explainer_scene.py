@@ -104,7 +104,9 @@ class ExplainerScene(Scene):
             return []
         end = max(start + 0.1, self.scene_sec * 0.7)
         even = [start] if n == 1 else [start + i * (end - start) / (n - 1) for i in range(n)]
-        marks = [start] + [b for b in self.beats if start + 0.4 < b < self.scene_sec - 0.8]
+        # Chỉ dùng mốc câu trong ~70% đầu cảnh: phần tử cuối mà bám câu cuối thì chỉ kịp hiện
+        # một hai giây rồi cảnh đã mờ đi (đo 24/11/2026: câu trả lời chat hiện ở giây 19/20).
+        marks = [start] + [b for b in self.beats if start + 0.4 < b <= end]
         if n == 1 or len(marks) < n:
             return even
         picked = [marks[round(i * (len(marks) - 1) / (n - 1))] for i in range(n)]
@@ -270,7 +272,9 @@ class ExplainerScene(Scene):
         q.to_edge(RIGHT, buff=1.0)
         a.to_edge(LEFT, buff=1.0)
         self.run(FadeIn(q, shift=LEFT * 0.4), run_time=0.7)
-        self.wait_until(self.reveal_times(2)[1])
+        # Câu trả lời hiện khi lời đọc sang câu thứ hai (thường là lúc kể máy trả lời gì).
+        later = [b for b in self.beats if b > self.clock + 0.4]
+        self.wait_until(later[0] if later and later[0] <= self.scene_sec * 0.7 else self.reveal_times(2)[1])
         self.run(FadeIn(a, shift=RIGHT * 0.4), run_time=0.8)
 
     def layout_statement(self, s):

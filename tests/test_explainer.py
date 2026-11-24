@@ -176,3 +176,16 @@ def test_make_video_mixes_looped_music_under_voice(tmp_path):
     seconds = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                                     str(out)], capture_output=True, text=True, check=True).stdout)
     assert seconds == pytest.approx(3.0, abs=0.15)
+
+
+def test_reveal_times_stay_in_first_part_of_scene():
+    """Phần tử cuối không được bám câu cuối cảnh: phải hiện trong ~70% đầu để người xem kịp đọc."""
+    from types import SimpleNamespace
+
+    from core.explainer_scene import ExplainerScene
+
+    fake = SimpleNamespace(scene_sec=20.0, beats=[4.0, 9.0, 13.0, 19.0])
+    times = ExplainerScene.reveal_times(fake, 2)
+    assert times[0] == 0.9 and times[1] <= 14.0
+    # Đủ mốc thì vẫn bám lời đọc.
+    assert ExplainerScene.reveal_times(fake, 3) == [0.9, 9.0, 13.0]
