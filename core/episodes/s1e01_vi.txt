@@ -1,0 +1,19 @@
+Giả sử bạn nhờ một AI thế này: đặt giúp mình chuyến Đà Nẵng ba ngày hai đêm cho hai người, cuối tuần này, tổng chi phí không quá mười triệu.
+Nếu hỏi một chatbot bình thường, nó sẽ trả lời ngay bằng một đoạn văn rất trơn tru. Bay chuyến sáng thứ bảy, vé khoảng một triệu hai. Ở khách sạn bốn sao, tám trăm nghìn một đêm. Nghe rất ổn.
+Nhưng những con số đó từ đâu ra? Chatbot không hề xem lịch bay hôm nay. Nó chỉ dựa vào những gì đã học lúc huấn luyện, rồi đoán ra câu trả lời nghe hợp lý nhất.
+Nên rất có thể chuyến bay đó không tồn tại, hoặc giá vé thật đã lên gấp rưỡi. Khi mô hình nói sai mà vẫn nói rất tự tin như vậy, người ta gọi là ảo giác, tiếng Anh là hallucination.
+Mình muốn bạn để ý một điểm. Lỗi ở đây không hẳn vì mô hình kém. Lỗi nằm ở cách nó làm việc. Nó nhận câu hỏi, viết ra câu trả lời, và xong. Thông tin chỉ đi một chiều. Nó không bao giờ được nhìn lại xem câu trả lời của mình có khớp với thực tế không.
+Bây giờ thử nghĩ xem một người trợ lý giỏi sẽ làm việc này thế nào.
+Họ sẽ không viết lịch trình ngay. Họ mở trang hãng bay ra xem giá trước đã. Giả sử vé thật là một triệu tám mỗi chiều, mỗi người. Hai người, hai chiều, vậy là bảy triệu hai.
+Họ nhìn con số đó và tính tiếp. Mười triệu trừ bảy triệu hai, chỉ còn hai triệu tám cho hai đêm khách sạn. Mà khách sạn bốn sao lúc này là một triệu tám một đêm, hai đêm là ba triệu sáu. Vượt ngân sách rồi.
+Thế là họ đổi kế hoạch. Tìm khách sạn ba sao, chín trăm nghìn một đêm, hai đêm là một triệu tám. Cộng lại chín triệu, còn dư một triệu để ăn uống, đi lại. Lúc đó họ mới bấm đặt.
+Bạn thấy điểm khác nhau chưa? Người trợ lý này không cần biết nhiều hơn chatbot. Họ chỉ làm thêm một việc: hành động, nhìn kết quả, rồi điều chỉnh. Và cứ lặp lại như vậy cho đến khi xong việc.
+Đó chính là ý tưởng của một LLM agent. Từ giờ mình gọi tắt là agent.
+Bên trong agent vẫn là một mô hình ngôn ngữ lớn, y hệt chatbot. Khác ở chỗ, mô hình đó được đặt vào một vòng lặp. Mỗi vòng, mô hình đọc tình hình hiện tại và quyết định bước tiếp theo, ví dụ tra giá vé. Chương trình thực hiện việc đó, lấy kết quả thật, rồi đưa ngược lại cho mô hình đọc ở vòng sau.
+Việc cho mô hình dùng công cụ như vậy gọi là tool use, hay function calling. Thật ra mô hình không tự mở trang hãng bay. Nó chỉ viết ra một yêu cầu, kiểu như: gọi hàm tra vé, điểm đến Đà Nẵng, ngày thứ bảy. Phần còn lại do chương trình làm.
+Vì sao vòng lặp này giúp bớt ảo giác? Vì mỗi lần mô hình đoán sai, chẳng hạn tưởng vé chỉ một triệu hai, thì kết quả thật từ công cụ sẽ sửa nó ngay ở vòng sau. Nó không phải đoán mò nữa.
+Chỗ này hay bị hiểu nhầm nên mình nói luôn. Agent không có ý thức hay ý chí gì cả. Mô hình bên trong vẫn chỉ làm đúng một việc: dựa vào những gì đang thấy, đoán ra bước tiếp theo hợp lý nhất. Cái tạo ra khác biệt là vòng lặp do lập trình viên viết, liên tục đưa kết quả thật vào cho nó đọc.
+Nhìn kỹ hơn một chút, một agent thường có bốn phần. Mô hình ngôn ngữ để suy nghĩ và quyết định. Bộ nhớ để giữ lại những gì đã làm, như giá vé vừa tra. Công cụ để chạm vào thế giới bên ngoài. Và lập kế hoạch, tức là chia một việc lớn như đặt cả chuyến đi thành từng bước nhỏ.
+Mấy phần này mình sẽ đi qua lần lượt ở các tập sau, nên bây giờ bạn chưa cần nhớ hết đâu.
+Nếu chỉ nhớ một điều từ hôm nay, thì là thế này: chatbot trả lời một lần rồi thôi, còn agent thì làm, nhìn kết quả, sửa, và lặp lại cho đến khi xong.
+Tập sau mình sẽ vẽ ra kiến trúc của một agent, để bạn thấy bốn phần này nối với nhau thế nào.

@@ -11,6 +11,7 @@ Bố cục: title, bullets, flow, vectors, compare, chat, statement (xem core/ex
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import os
@@ -18,6 +19,7 @@ import random
 import textwrap
 import unicodedata
 from pathlib import Path
+from types import SimpleNamespace
 
 import manimpango
 from manim import (
@@ -40,6 +42,9 @@ PURPLE = "#b189f5"
 ORANGE = "#f19c65"
 PALETTE = (ACCENT, GOLD, GREEN, PINK, PURPLE, ORANGE)
 FRAME_W = 12.6       # bề ngang dùng được (đơn vị Manim, khung 14.2 x 8)
+#: Cảnh viết tay riêng cho từng tập (bố cục "custom"): core/episodes/<module>.py, mỗi cảnh một hàm
+#: draw(scene, spec, kit) — kit là các hàm/màu dùng chung của file này.
+EPISODES_DIR = Path(__file__).with_name("episodes")
 
 for _font in FONT_DIR.glob("*.ttf"):
     manimpango.register_font(str(_font))
@@ -113,6 +118,20 @@ class ExplainerScene(Scene):
         if any(b - a < 0.45 for a, b in zip(picked, picked[1:])):
             return even
         return picked
+
+    def at(self, k: int) -> float:
+        """Lúc câu thứ k của cảnh bắt đầu được đọc (câu 0 = đầu cảnh). Thiếu mốc thì ~70% cảnh."""
+        if k <= 0:
+            return 0.0
+        return self.beats[k - 1] if k - 1 < len(self.beats) else self.scene_sec * 0.7
+
+    def layout_custom(self, s):
+        path = EPISODES_DIR / f"{s.get('module')}.py"
+        spec = importlib.util.spec_from_file_location(f"episode_{s.get('module')}", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        kit = SimpleNamespace(**{k: v for k, v in globals().items() if not k.startswith("_") or k == "_nfc"})
+        getattr(module, str(s.get("scene")))(self, s, kit)
 
     def heading(self, text: str):
         if not text:

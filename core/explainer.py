@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,9 @@ from core.script_images import Slide, ask_gemini_json, group_by_duration, number
 from utils.proc import run_command
 
 SCENE_FILE = Path(__file__).with_name("explainer_scene.py")
+#: Cảnh viết tay riêng cho từng tập (bố cục "custom", xem core/episodes/README.md).
+EPISODES_DIR = Path(__file__).with_name("episodes")
+CUSTOM_NAME = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 SCENE_SEC = 8.0
 MIN_SCENE_SEC = 3.0
 MAX_SCENES = 80
@@ -133,6 +137,8 @@ def _token(value) -> str:
 def clean_scene(raw: dict) -> dict | None:
     """Chỉ giữ các trường của bố cục đã chọn, cắt chữ dài. Bố cục lạ hoặc thiếu dữ liệu thì bỏ."""
     layout = str(raw.get("layout", "")).strip().lower()
+    if layout == "custom":
+        return clean_custom(raw)
     if layout not in LAYOUTS:
         return None
     texts, lists = LAYOUTS[layout]
@@ -191,6 +197,18 @@ def clean_scene(raw: dict) -> dict | None:
     if not lists and layout in TEXT_LAYOUTS | {"chat", "compare"} and not any(scene.get(k) for k in texts):
         return None
     return scene
+
+
+def clean_custom(raw: dict) -> dict | None:
+    """Cảnh viết tay của một tập: chỉ nhận tên module/hàm hợp lệ và có thật trong core/episodes.
+    Không import ở đây (container web không cài Manim): chỉ dò dòng `def <hàm>(` trong file."""
+    module, scene = str(raw.get("module", "")).strip(), str(raw.get("scene", "")).strip()
+    if not (CUSTOM_NAME.match(module) and CUSTOM_NAME.match(scene)):
+        return None
+    path = EPISODES_DIR / f"{module}.py"
+    if not path.is_file() or not re.search(rf"^def {scene}\(", path.read_text(encoding="utf-8"), re.M):
+        return None
+    return {"layout": "custom", "module": module, "scene": scene}
 
 
 def parse_scenes(raw: str, sentence_count: int) -> List[Tuple[int, dict]]:

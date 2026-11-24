@@ -189,3 +189,30 @@ def test_reveal_times_stay_in_first_part_of_scene():
     assert times[0] == 0.9 and times[1] <= 14.0
     # Đủ mốc thì vẫn bám lời đọc.
     assert ExplainerScene.reveal_times(fake, 3) == [0.9, 9.0, 13.0]
+
+
+def test_custom_scene_must_exist_in_episode_module():
+    """Cảnh viết tay: chỉ nhận module/hàm có thật trong core/episodes, tên an toàn."""
+    ok = ex.clean_scene({"layout": "custom", "module": "s1e01", "scene": "takeaway", "x": 1})
+    assert ok == {"layout": "custom", "module": "s1e01", "scene": "takeaway"}
+    assert ex.clean_scene({"layout": "custom", "module": "s1e01", "scene": "khong_co"}) is None
+    assert ex.clean_scene({"layout": "custom", "module": "../app", "scene": "takeaway"}) is None
+    assert ex.clean_scene({"layout": "custom", "module": "s1e01", "scene": "os.system"}) is None
+
+
+def test_episode_board_points_at_real_scenes():
+    import ast
+    from pathlib import Path
+
+    from core.script_reader import split_script
+
+    folder = Path(ex.__file__).with_name("episodes")
+    for module in folder.glob("*.py"):
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        board = next(ast.literal_eval(n.value) for n in tree.body
+                     if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "BOARD")
+        sentences = split_script((folder / f"{module.stem}_vi.txt").read_text(encoding="utf-8"))
+        assert board[0][0] == 0 and [s for s, _ in board] == sorted({s for s, _ in board})
+        assert board[-1][0] < len(sentences)
+        for _, name in board:
+            assert ex.clean_scene({"layout": "custom", "module": module.stem, "scene": name}), name
