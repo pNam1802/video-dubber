@@ -348,41 +348,97 @@
           '<p class="font-body-md text-body-md text-on-surface-variant">' + esc(e.goal) + '</p></div>' +
         (e.error ? '<p class="font-body-md text-body-md text-error flex items-start gap-2"><span class="material-symbols-outlined text-[18px]">error</span>' + esc(e.error) + '</p>' : "") +
         stepper(e, locked) +
-        (e.key_points.length ? '<ul class="list-disc pl-5 font-body-md text-body-md text-on-surface-variant">' +
-          e.key_points.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : "") +
-        (e.summary ? '<div><span class="field-label">Tóm tắt trong trí nhớ series</span><p class="font-body-md text-body-md text-on-surface">' + esc(e.summary) + '</p></div>' : "") +
-        (e.review.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Agent tự soát đã sửa ' + e.review.length + ' lỗi</summary>' +
-          '<ul class="list-disc pl-5 mt-2 font-body-md text-body-md text-on-surface-variant">' + e.review.map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + '</ul></details>' : "") +
-        (e.sources.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Nguồn tham khảo (' + e.sources.length + ')</summary>' +
-          '<ul class="list-disc pl-5 mt-2 font-body-md text-body-md">' + e.sources.map(function (s) {
-            return '<li><a class="text-primary break-all" target="_blank" rel="noopener" href="' + esc(s.url) + '">' + esc(s.title) + '</a></li>';
-          }).join("") + '</ul></details>' : "") +
-        (e.notes ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Ghi chú nghiên cứu</summary>' +
-          '<p class="mt-2 whitespace-pre-line font-body-md text-body-md text-on-surface-variant">' + esc(e.notes) + '</p></details>' : "") +
-        (e.quiz.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Câu hỏi tự kiểm tra (' + e.quiz.length + ')</summary>' +
-          '<ol class="list-decimal pl-5 mt-2 flex flex-col gap-2 font-body-md text-body-md">' + e.quiz.map(function (q) {
-            return '<li><span class="text-on-surface">' + esc(q.q) + '</span><details><summary class="cursor-pointer text-on-surface-variant">Đáp án</summary>' +
-              '<span class="text-on-surface-variant">' + esc(q.a) + '</span></details></li>';
-          }).join("") + '</ol></details>' : "") +
+        '<div class="flex items-end justify-between gap-2 flex-wrap tab-bar">' +
+          '<div class="flex gap-1" role="tablist" aria-label="Phần của tập">' + EP_TABS.map(function (t) {
+            return '<button type="button" role="tab" class="tab" data-ep-tab="' + t[0] + '">' +
+              '<span class="material-symbols-outlined text-[18px]">' + t[1] + '</span>' + t[2] + '</button>';
+          }).join("") + '</div>' +
+          '<div class="segmented mb-1.5" data-lang-switch role="group" aria-label="Ngôn ngữ">' +
+            '<button type="button" data-lang="vi">Tiếng Việt</button><button type="button" data-lang="en">Tiếng Anh</button></div>' +
+        '</div>' +
+        '<section data-ep-pane="overview" class="flex flex-col gap-md">' + overviewPane(e) + '</section>' +
         ["vi", "en"].map(function (lang) {
           const key = "script_" + lang;
           const job = lang === "vi" ? e.job_vi_id : e.job_en_id;
-          return '<div class="flex flex-col gap-2"><span class="field-label !mb-0">Kịch bản ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") +
-            ' · <span data-count="' + lang + '">' + words(e[key]) + '</span> từ</span>' +
-            '<textarea data-script="' + lang + '" rows="14" class="input font-body-md"' + (locked ? " disabled" : "") + '>' + esc(e[key]) + '</textarea>' +
-            '<div class="flex gap-2 flex-wrap items-center">' +
-              '<button data-save="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>Lưu</button>' +
-              voiceSelect(lang) +
-              '<select data-quality="' + lang + '" class="input !w-auto" title="Chất lượng video">' +
-                '<option value="1080p">1080p</option><option value="720p"' + (localStorage.getItem("studioQuality") === "720p" ? " selected" : "") +
-                '>720p</option></select>' +
-              (series.has_music ? '<label class="flex items-center gap-1 font-body-md text-body-md"><input type="checkbox" data-music="' + lang + '" checked class="w-4 h-4">Nhạc nền</label>' : "") +
-              '<button data-video="' + lang + '" class="btn-secondary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
-                '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
-              '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
-            '</div>' + publishBlock(e, lang, locked) + recordBlock(e, lang, locked) + storyboardBlock(e, lang, locked) + '</div>';
+          const publish = publishBlock(e, lang, locked);
+          return '<section data-ep-pane="script" data-lang-pane="' + lang + '" class="flex flex-col gap-2">' +
+              '<div class="flex items-center justify-between gap-2"><span class="field-label !mb-0">Kịch bản ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") +
+              ' · <span data-count="' + lang + '">' + words(e[key]) + '</span> từ</span>' +
+              '<button data-save="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>' +
+              '<span class="material-symbols-outlined text-[18px]">check</span>Lưu</button></div>' +
+              (e[key] ? "" : '<p class="font-label-sm text-label-sm text-on-surface-variant">' +
+                (lang === "vi" ? "Chưa có kịch bản — bấm “Nghiên cứu & viết” ở bước 1, hoặc tự gõ vào đây rồi Lưu."
+                               : "Chưa có bản Anh — bấm “Dịch sang Anh” ở bước 2, hoặc tự gõ vào đây rồi Lưu.") + '</p>') +
+              '<textarea data-script="' + lang + '" rows="18" class="input font-body-md leading-relaxed"' + (locked ? " disabled" : "") + '>' + esc(e[key]) + '</textarea>' +
+            '</section>' +
+            '<section data-ep-pane="video" data-lang-pane="' + lang + '" class="flex flex-col gap-md">' +
+              '<div class="flex gap-2 flex-wrap items-center">' +
+                voiceSelect(lang) +
+                '<select data-quality="' + lang + '" class="input !w-auto" title="Chất lượng video">' +
+                  '<option value="1080p">1080p</option><option value="720p"' + (localStorage.getItem("studioQuality") === "720p" ? " selected" : "") +
+                  '>720p</option></select>' +
+                (series.has_music ? '<label class="flex items-center gap-1 font-body-md text-body-md"><input type="checkbox" data-music="' + lang + '" checked class="w-4 h-4">Nhạc nền</label>' : "") +
+                '<button data-video="' + lang + '" class="btn-primary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
+                  '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
+                '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
+              '</div>' +
+              (e[key] ? "" : '<p class="font-body-md text-body-md text-on-surface-variant">Cần có kịch bản ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") + ' trước khi tạo video.</p>') +
+              storyboardBlock(e, lang, locked) + recordBlock(e, lang, locked) +
+            '</section>' +
+            '<section data-ep-pane="publish" data-lang-pane="' + lang + '" class="flex flex-col gap-md">' +
+              (publish || '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có video ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") +
+                ' — tạo ở tab Video rồi quay lại đây để soạn phụ đề và đăng YouTube.</p>') +
+            '</section>';
         }).join("");
+      applyEpisodePanes();
       paintPlayButtons();
+    }
+
+    // ── Tab con của panel tập. Mọi phần đều nằm sẵn trong DOM, chỉ ẩn/hiện, nên chuyển tab
+    // không mất chữ đang gõ và các hàm đọc ô nhập (makeVideo...) vẫn tìm thấy phần tử.
+    const EP_TABS = [["overview", "info", "Tổng quan"], ["script", "description", "Kịch bản"],
+                     ["video", "animation", "Video"], ["publish", "smart_display", "Đăng YouTube"]];
+    let epTab = localStorage.getItem("studioEpTab") || "script";
+    let epLang = localStorage.getItem("studioLang") === "en" ? "en" : "vi";
+    function applyEpisodePanes() {
+      const panel = document.getElementById("episodePanel");
+      panel.querySelectorAll("[data-ep-tab]").forEach(function (tab) {
+        tab.setAttribute("aria-selected", String(tab.dataset.epTab === epTab));
+      });
+      panel.querySelectorAll("[data-lang]").forEach(function (btn) {
+        btn.setAttribute("aria-pressed", String(btn.dataset.lang === epLang));
+      });
+      const langSwitch = panel.querySelector("[data-lang-switch]");
+      if (langSwitch) langSwitch.classList.toggle("invisible", epTab === "overview");
+      panel.querySelectorAll("[data-ep-pane]").forEach(function (pane) {
+        const lang = pane.dataset.langPane;
+        pane.classList.toggle("hidden", pane.dataset.epPane !== epTab || Boolean(lang && lang !== epLang));
+      });
+    }
+
+    function overviewPane(e) {
+      const section = function (title, body) {
+        return '<div class="flex flex-col gap-1"><span class="field-label !mb-0">' + title + '</span>' + body + '</div>';
+      };
+      const parts = [];
+      if (e.key_points.length) parts.push(section("Nội dung chính", '<ul class="list-disc pl-5 font-body-md text-body-md text-on-surface">' +
+        e.key_points.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>'));
+      if (e.summary) parts.push(section("Tóm tắt trong trí nhớ series", '<p class="font-body-md text-body-md text-on-surface">' + esc(e.summary) + '</p>'));
+      if (e.sources.length) parts.push(section("Nguồn tham khảo (" + e.sources.length + ")", '<ul class="flex flex-col gap-1 font-body-md text-body-md">' +
+        e.sources.map(function (s) {
+          return '<li class="flex items-start gap-2"><span class="material-symbols-outlined text-[16px] text-outline mt-0.5">open_in_new</span>' +
+            '<a class="text-primary break-all hover:underline" target="_blank" rel="noopener" href="' + esc(s.url) + '">' + esc(s.title) + '</a></li>';
+        }).join("") + '</ul>'));
+      if (e.review.length) parts.push(section("Agent tự soát đã sửa " + e.review.length + " lỗi", '<ul class="list-disc pl-5 font-body-md text-body-md text-on-surface-variant">' +
+        e.review.map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + '</ul>'));
+      if (e.notes) parts.push('<details class="rounded-xl border border-outline-variant/60 p-3"><summary class="cursor-pointer font-body-md text-body-md text-on-surface">Ghi chú nghiên cứu</summary>' +
+        '<p class="mt-2 whitespace-pre-line font-body-md text-body-md text-on-surface-variant">' + esc(e.notes) + '</p></details>');
+      if (e.quiz.length) parts.push('<details class="rounded-xl border border-outline-variant/60 p-3"><summary class="cursor-pointer font-body-md text-body-md text-on-surface">Câu hỏi tự kiểm tra (' + e.quiz.length + ')</summary>' +
+        '<ol class="list-decimal pl-5 mt-2 flex flex-col gap-2 font-body-md text-body-md">' + e.quiz.map(function (q) {
+          return '<li><span class="text-on-surface">' + esc(q.q) + '</span><details><summary class="cursor-pointer text-on-surface-variant">Đáp án</summary>' +
+            '<span class="text-on-surface-variant">' + esc(q.a) + '</span></details></li>';
+        }).join("") + '</ol></details>');
+      return parts.join("") || '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có tư liệu — agent sẽ ghi nguồn, ghi chú và câu hỏi tự kiểm tra khi viết kịch bản.</p>';
     }
 
     // ── Ba bước của một tập: viết (nghiên cứu) → dịch sang Anh → chốt vào trí nhớ series.
@@ -737,6 +793,8 @@
       try {
         if (btn.dataset.viewTab) { showView(btn.dataset.viewTab); return; }
         if (btn.dataset.ep) { current = Number(btn.dataset.ep); render(); return; }
+        if (btn.dataset.epTab) { epTab = btn.dataset.epTab; localStorage.setItem("studioEpTab", epTab); applyEpisodePanes(); return; }
+        if (btn.dataset.lang) { epLang = btn.dataset.lang; localStorage.setItem("studioLang", epLang); applyEpisodePanes(); return; }
         if (btn.dataset.preview) {
           const lang = btn.dataset.preview;
           if (playingVoice === lang && !previewAudio.paused) { previewAudio.pause(); return; }
