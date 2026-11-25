@@ -129,16 +129,18 @@
     const CSRF = "{{ csrf_token() }}";
     const SERIES_ID = {{ series_id|tojson }};
     const STATUS = {planned: "Mới lên lộ trình", drafted: "Đã có kịch bản", translated: "Đã có bản Anh", done: "Đã chốt"};
-    // Icon trạng thái ở danh sách tập: [icon, class màu, tô đặc?].
+    // Icon trạng thái ở danh sách tập. Viết nguyên thẻ span (không chỉ tên icon) để
+    // tests/test_assets.py thấy tên icon trong HTML đã render và giữ nó trong bộ font lọc.
     const STATUS_ICON = {
-      planned: ["radio_button_unchecked", "text-outline", false], drafted: ["edit_note", "text-on-surface-variant", false],
-      translated: ["translate", "text-info", false], done: ["check_circle", "text-primary", true]
+      planned: '<span class="material-symbols-outlined text-[20px] text-outline">radio_button_unchecked</span>',
+      drafted: '<span class="material-symbols-outlined text-[20px] text-on-surface-variant">edit_note</span>',
+      translated: '<span class="material-symbols-outlined text-[20px] text-info">translate</span>',
+      done: '<span class="material-symbols-outlined text-[20px] text-primary filled">check_circle</span>'
     };
     function statusIcon(e) {
       if (e.task) return '<span class="material-symbols-outlined text-[20px] text-primary animate-spin">progress_activity</span>';
       if (e.error) return '<span class="material-symbols-outlined text-[20px] text-error">error</span>';
-      const icon = STATUS_ICON[e.status] || STATUS_ICON.planned;
-      return '<span class="material-symbols-outlined text-[20px] ' + icon[1] + (icon[2] ? " filled" : "") + '">' + icon[0] + '</span>';
+      return STATUS_ICON[e.status] || STATUS_ICON.planned;
     }
     // Giọng cho từng bản: [engine:khoá, nhãn]. Khoá khớp config.settings.TTS_VOICES.
     const VOICES = {
@@ -374,8 +376,7 @@
         stepper(e, locked) +
         '<div class="flex items-end justify-between gap-2 flex-wrap tab-bar">' +
           '<div class="flex gap-1" role="tablist" aria-label="Phần của tập">' + EP_TABS.map(function (t) {
-            return '<button type="button" role="tab" class="tab" data-ep-tab="' + t[0] + '">' +
-              '<span class="material-symbols-outlined text-[18px]">' + t[1] + '</span>' + t[2] + '</button>';
+            return '<button type="button" role="tab" class="tab" data-ep-tab="' + t[0] + '">' + t[1] + t[2] + '</button>';
           }).join("") + '</div>' +
           '<div class="segmented mb-1.5" data-lang-switch role="group" aria-label="Ngôn ngữ">' +
             '<button type="button" data-lang="vi">Tiếng Việt</button><button type="button" data-lang="en">Tiếng Anh</button></div>' +
@@ -425,8 +426,11 @@
 
     // ── Tab con của panel tập. Mọi phần đều nằm sẵn trong DOM, chỉ ẩn/hiện, nên chuyển tab
     // không mất chữ đang gõ và các hàm đọc ô nhập (makeVideo...) vẫn tìm thấy phần tử.
-    const EP_TABS = [["overview", "info", "Tổng quan"], ["script", "description", "Kịch bản"],
-                     ["video", "animation", "Video"], ["publish", "smart_display", "Đăng YouTube"]];
+    const EP_TABS = [
+      ["overview", '<span class="material-symbols-outlined text-[18px]">info</span>', "Tổng quan"],
+      ["script", '<span class="material-symbols-outlined text-[18px]">description</span>', "Kịch bản"],
+      ["video", '<span class="material-symbols-outlined text-[18px]">animation</span>', "Video"],
+      ["publish", '<span class="material-symbols-outlined text-[18px]">smart_display</span>', "Đăng YouTube"]];
     let epTab = localStorage.getItem("studioEpTab") || "script";
     let epLang = localStorage.getItem("studioLang") === "en" ? "en" : "vi";
     function applyEpisodePanes() {
@@ -474,11 +478,11 @@
     // Bước kế tiếp chưa làm là nút chính; bước đã xong vẫn bấm lại được (viết lại, dịch lại...).
     function stepper(e, locked) {
       const steps = [
-        {key: "write", icon: "travel_explore", label: "Kịch bản Việt", done: Boolean(e.script_vi),
+        {key: "write", icon: '<span class="material-symbols-outlined text-[18px]">travel_explore</span>', label: "Kịch bản Việt", done: Boolean(e.script_vi),
          todo: "Nghiên cứu & viết", redo: "Viết lại", hint: "Agent nghiên cứu có nguồn rồi viết và tự soát."},
-        {key: "translate", icon: "translate", label: "Bản tiếng Anh", done: Boolean(e.script_en), needs: Boolean(e.script_vi),
+        {key: "translate", icon: '<span class="material-symbols-outlined text-[18px]">translate</span>', label: "Bản tiếng Anh", done: Boolean(e.script_en), needs: Boolean(e.script_vi),
          todo: "Dịch sang Anh", redo: "Dịch lại", hint: "Dịch theo thuật ngữ của series."},
-        {key: "wrap", icon: "task_alt", label: "Chốt tập", done: e.status === "done", needs: Boolean(e.script_vi),
+        {key: "wrap", icon: '<span class="material-symbols-outlined text-[18px]">task_alt</span>', label: "Chốt tập", done: e.status === "done", needs: Boolean(e.script_vi),
          todo: "Chốt tập", redo: "Chốt lại", hint: "Lưu tóm tắt + thuật ngữ vào trí nhớ để tập sau nối đúng."}
       ];
       const next = steps.find(function (st) { return !st.done; });
@@ -494,7 +498,7 @@
             '<span class="font-body-md text-body-md text-on-surface">' + (i + 1) + ". " + st.label + '</span></div>' +
           '<p class="font-label-sm text-label-sm text-on-surface-variant flex-1">' + st.hint + '</p>' +
           '<button data-step="' + st.key + '" class="' + (isNext ? "btn-primary" : "btn-secondary") + ' btn-sm self-start"' +
-            (blocked ? " disabled" : "") + '><span class="material-symbols-outlined text-[18px]">' + st.icon + '</span>' +
+            (blocked ? " disabled" : "") + '>' + st.icon +
             (st.done ? st.redo : st.todo) + '</button></li>';
       }).join("") + '</ol>';
     }
