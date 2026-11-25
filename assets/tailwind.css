@@ -142,6 +142,25 @@
   .page-title {
     @apply font-headline-xl text-headline-xl text-on-surface flex items-center gap-3;
   }
+
+  /* Thanh tab: gạch chân màu nhấn ở tab đang mở. Trạng thái đặt bằng
+     aria-selected để trình đọc màn hình cũng biết tab nào đang chọn. */
+  .tab-bar {
+    @apply flex gap-1 overflow-x-auto overflow-y-hidden;
+    /* Đường kẻ đáy vẽ bằng bóng trong để gạch chân của tab đè lên được mà
+       không phải kéo tab xuống -1px (làm khung cuộn hiện thanh dọc). */
+    box-shadow: inset 0 -1px 0 theme("colors.outline-variant");
+  }
+  .tab {
+    @apply inline-flex items-center gap-2 px-3 py-2.5 border-b-2 border-transparent whitespace-nowrap
+      font-body-md text-body-md text-on-surface-variant hover:text-on-surface transition-colors;
+  }
+  .tab[aria-selected="true"] {
+    @apply border-primary text-on-surface;
+  }
+  .tab-count {
+    @apply min-w-[20px] px-1.5 rounded-full bg-surface-container-high font-label-sm text-label-sm text-on-surface-variant text-center;
+  }
 }
 
 /* Chrome tự điền mật khẩu sẽ tô nền ô nhập màu trắng xanh, lạc tông nền tối.
