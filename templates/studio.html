@@ -91,6 +91,13 @@
 </section>
 
 <section data-view="memory" role="tabpanel" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-lg">
+  <div class="card flex flex-col gap-2 lg:col-span-2">
+    <h3 class="font-body-lg text-body-lg text-on-surface">Tên & mô tả series</h3>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Agent tự đặt khi lên lộ trình; sửa lại cho đúng ý bạn. Tên danh sách phát mới tạo cũng lấy từ đây.</p>
+    <input id="seriesTitleInput" maxlength="200" class="input" aria-label="Tên series">
+    <textarea id="seriesDescInput" rows="2" maxlength="2000" class="input" aria-label="Mô tả series"></textarea>
+    <button id="saveSeriesInfo" class="btn-secondary btn-sm self-start" type="button">Lưu tên & mô tả</button>
+  </div>
   <div class="card flex flex-col gap-2">
     <h3 class="font-body-lg text-body-lg text-on-surface">Văn phong</h3>
     <p class="font-label-sm text-label-sm text-on-surface-variant">Agent tuân theo khi viết mọi tập.</p>
@@ -311,6 +318,10 @@
       document.getElementById("episodeCount").textContent = total;
       const styleBox = document.getElementById("styleGuide");
       if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
+      ["seriesTitleInput", "seriesDescInput"].forEach(function (id, i) {
+        const box = document.getElementById(id);
+        if (document.activeElement !== box) box.value = i ? series.description : series.title;
+      });
       document.getElementById("termCount").textContent = series.glossary.length;
       paintPlaylists();
       paintIdeas();
@@ -882,6 +893,19 @@
           showView("episodes");
           Nora.toast("Đã thêm tập " + made.episode.number + ". Bấm “Nghiên cứu & viết kịch bản” để agent viết.", "success");
           await load();
+          return;
+        }
+        if (btn.id === "saveSeriesInfo") {
+          btn.disabled = true;
+          const saved = await api("/api/studio/series/" + SERIES_ID, "PATCH", {
+            title: document.getElementById("seriesTitleInput").value,
+            description: document.getElementById("seriesDescInput").value
+          });
+          series.title = saved.title;
+          series.description = saved.description;
+          btn.disabled = false;
+          render();
+          Nora.toast("Đã lưu tên & mô tả series.", "success");
           return;
         }
         if (btn.id === "saveStyle") {

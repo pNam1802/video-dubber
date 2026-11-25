@@ -495,6 +495,14 @@ def get_series(series_id: int):
 def update_series(series_id: int):
     series = _own_series(series_id)
     body = request.get_json(silent=True) or {}
+    if "title" in body:
+        # Agent lên lộ trình tự đặt tên; người dùng sửa lại được, nhưng không để trống.
+        title = " ".join(str(body["title"]).split())[:200]
+        if not title:
+            return jsonify({"error": "Tên series không được để trống."}), 400
+        series.title = title
+    if "description" in body:
+        series.description = str(body["description"]).strip()[:2000]
     if "style_guide" in body:
         series.style_guide = str(body["style_guide"])[:4000]
     if "youtube_playlist" in body:
