@@ -2,19 +2,17 @@
 {% block title %}Xưởng kịch bản · Nora{% endblock %}
 
 {% block content %}
-<div class="mb-lg flex items-start justify-between gap-4 flex-wrap">
-  <div>
-    <h2 class="page-title">
-      <span class="material-symbols-outlined text-[32px] text-primary">movie_edit</span>Xưởng kịch bản
-    </h2>
-    <p class="font-body-md text-body-md text-on-surface-variant mt-1">
-      Agent lên lộ trình series, nghiên cứu có nguồn, viết và tự soát kịch bản Việt–Anh. Trí nhớ series
-      (thuật ngữ, tóm tắt các tập) lưu trong hệ thống nên tập sau luôn nối đúng tập trước.
-    </p>
-  </div>
-  {% if series_id %}<a href="{{ url_for('studio.page') }}" class="btn-secondary btn-sm">
-    <span class="material-symbols-outlined text-[18px]">arrow_back</span>Tất cả series</a>{% endif %}
+{% if not series_id %}
+<div class="mb-lg">
+  <h2 class="page-title">
+    <span class="material-symbols-outlined text-[32px] text-primary">movie_edit</span>Xưởng kịch bản
+  </h2>
+  <p class="font-body-md text-body-md text-on-surface-variant mt-1">
+    Agent lên lộ trình series, nghiên cứu có nguồn, viết và tự soát kịch bản Việt–Anh. Trí nhớ series
+    (thuật ngữ, tóm tắt các tập) lưu trong hệ thống nên tập sau luôn nối đúng tập trước.
+  </p>
 </div>
+{% endif %}
 
 {% if not series_id %}
 {# ── Danh sách + tạo series ─────────────────────────────── #}
@@ -37,62 +35,86 @@
 </div>
 {% else %}
 {# ── Một series ─────────────────────────────────────────── #}
-<div id="taskBanner" class="hidden card mb-lg font-body-md text-body-md text-on-surface flex items-center gap-3">
+<div class="mb-md flex flex-col gap-1">
+  <a href="{{ url_for('studio.page') }}" class="self-start inline-flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface">
+    <span class="material-symbols-outlined text-[16px]">arrow_back</span>Xưởng kịch bản</a>
+  <div class="flex items-start justify-between gap-4 flex-wrap">
+    <div class="min-w-0">
+      <h2 id="seriesTitle" class="font-headline-lg text-headline-lg text-on-surface"></h2>
+      <p id="seriesDesc" class="font-body-md text-body-md text-on-surface-variant mt-1 max-w-3xl"></p>
+    </div>
+    <div class="flex flex-col items-end gap-1 min-w-[160px]">
+      <span id="seriesProgressText" class="font-label-sm text-label-sm text-on-surface-variant tabular"></span>
+      <div class="w-40 h-1.5 rounded-full bg-surface-container-high overflow-hidden">
+        <div id="seriesProgressBar" class="h-full bg-primary transition-all" style="width:0"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="taskBanner" class="hidden card !p-md mb-md font-body-md text-body-md text-on-surface flex items-center gap-3">
   <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span><span></span>
 </div>
-<div id="errorBanner" class="hidden bg-error-container/20 border border-error/50 rounded-2xl p-md mb-lg font-body-md text-body-md text-error"></div>
+<div id="errorBanner" class="hidden bg-error-container/20 border border-error/50 rounded-2xl p-md mb-md font-body-md text-body-md text-error"></div>
 
-<div class="card mb-lg">
-  <h3 id="seriesTitle" class="font-headline-md text-headline-md text-on-surface"></h3>
-  <p id="seriesDesc" class="font-body-md text-body-md text-on-surface-variant mt-1"></p>
-  <details class="mt-md">
-    <summary class="cursor-pointer font-body-md text-body-md text-primary">Trí nhớ series: văn phong & thuật ngữ</summary>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-lg mt-md">
-      <label><span class="field-label">Văn phong (agent tuân theo khi viết mọi tập)</span>
-        <textarea id="styleGuide" rows="8" class="input"></textarea>
-        <button id="saveStyle" class="btn-secondary btn-sm mt-2" type="button">Lưu văn phong</button></label>
-      <div class="lg:col-span-2 flex flex-col gap-2">
-        <span class="field-label !mb-0">Nhạc nền cho video giải thích</span>
-        <p class="font-label-sm text-label-sm text-on-surface-variant">Tải lên một bản nhạc không lời (ví dụ từ YouTube Audio Library — miễn phí dùng trên YouTube). Nhạc lặp cho đủ dài, nhỏ và tự hạ thấp mỗi khi có giọng đọc.</p>
-        <div class="flex items-center gap-2 flex-wrap">
-          <label class="btn-secondary btn-sm cursor-pointer"><span class="material-symbols-outlined text-[18px]">upload</span><span id="musicLabel">Tải nhạc lên</span>
-            <input id="musicInput" type="file" accept="audio/*" class="hidden"></label>
-          <audio id="musicPlayer" controls preload="none" class="h-9 hidden"></audio>
-          <button id="musicDelete" type="button" class="btn-ghost btn-sm hidden">Bỏ nhạc</button>
-        </div>
-      </div>
-      <div class="lg:col-span-2 flex flex-col gap-2">
-        <span class="field-label !mb-0">Danh sách phát YouTube</span>
-        <p id="playlistHint" class="font-label-sm text-label-sm text-on-surface-variant">Đăng tập nào lên YouTube thì tự thêm vào danh sách phát này.</p>
-        <div class="flex items-center gap-2 flex-wrap">
-          <select id="playlistSelect" class="input !w-auto hidden"></select>
-          <button id="newPlaylist" type="button" class="btn-secondary btn-sm hidden"><span class="material-symbols-outlined text-[18px]">add_circle</span>Tạo danh sách phát mới</button>
-        </div>
-      </div>
-      <div><span class="field-label">Thuật ngữ Việt – Anh (<span id="termCount">0</span>)</span>
-        <div id="glossary" class="max-h-[260px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div></div>
+<nav class="tab-bar mb-lg" role="tablist" aria-label="Phần của series">
+  <button type="button" role="tab" class="tab" data-view-tab="episodes" aria-selected="true">
+    <span class="material-symbols-outlined text-[18px]">format_list_numbered</span>Các tập <span id="episodeCount" class="tab-count"></span></button>
+  <button type="button" role="tab" class="tab" data-view-tab="ideas" aria-selected="false">
+    <span class="material-symbols-outlined text-[18px]">lightbulb</span>Ý tưởng <span id="ideasCount" class="tab-count hidden"></span></button>
+  <button type="button" role="tab" class="tab" data-view-tab="memory" aria-selected="false">
+    <span class="material-symbols-outlined text-[18px]">psychology</span>Trí nhớ & cài đặt</button>
+</nav>
+
+<section data-view="episodes" role="tabpanel">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+    <ol id="episodeList" class="flex flex-col gap-2 lg:col-span-1"></ol>
+    <div id="episodePanel" class="lg:col-span-2 card flex flex-col gap-md">
+      <p class="font-body-md text-body-md text-on-surface-variant">Chọn một tập bên trái.</p>
     </div>
-  </details>
-</div>
+  </div>
+</section>
 
-<details id="ideasBox" class="card mb-lg" open>
-  <summary class="cursor-pointer font-body-md text-body-md text-primary">Ý tưởng mỗi ngày <span id="ideasCount" class="text-on-surface-variant"></span></summary>
-  <div class="flex items-center gap-2 flex-wrap mt-2">
-    <p class="font-label-sm text-label-sm text-on-surface-variant flex-1 min-w-[240px]">Mỗi sáng agent đọc tin AI trên web (ưu tiên 机器之心, 量子位, 知乎, B站…) và gợi ý chủ đề hợp series. Nguồn chỉ để tham khảo kiến thức: kịch bản, hình và giọng là của kênh.</p>
+<section data-view="ideas" role="tabpanel" class="hidden flex flex-col gap-md">
+  <div class="card !p-md flex flex-col gap-2">
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Mỗi sáng agent đọc tin AI trên web (ưu tiên 机器之心, 量子位, 知乎, B站…) và gợi ý chủ đề hợp series. Nguồn chỉ để tham khảo kiến thức: kịch bản, hình và giọng là của kênh.</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <input id="ideasFocus" type="text" maxlength="200" class="input flex-1 min-w-[240px]" placeholder="Chủ đề muốn tìm (không bắt buộc), vd: kiểm chứng output của AI">
+      <button id="findIdeas" type="button" class="btn-primary btn-sm"><span class="material-symbols-outlined text-[18px]">travel_explore</span>Tìm ngay</button>
+    </div>
   </div>
-  <div class="flex items-center gap-2 flex-wrap mt-2">
-    <input id="ideasFocus" type="text" maxlength="200" class="input flex-1 min-w-[240px]" placeholder="Chủ đề muốn tìm (không bắt buộc), vd: kiểm chứng output của AI">
-    <button id="findIdeas" type="button" class="btn-secondary btn-sm"><span class="material-symbols-outlined text-[18px]">travel_explore</span>Tìm ngay</button>
-  </div>
-  <div id="ideasList" class="flex flex-col gap-md mt-md"></div>
-</details>
+  <div id="ideasList" class="grid grid-cols-1 xl:grid-cols-2 gap-md"></div>
+</section>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-  <ol id="episodeList" class="flex flex-col gap-2 lg:col-span-1"></ol>
-  <div id="episodePanel" class="lg:col-span-2 card flex flex-col gap-md">
-    <p class="font-body-md text-body-md text-on-surface-variant">Chọn một tập bên trái.</p>
+<section data-view="memory" role="tabpanel" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-lg">
+  <div class="card flex flex-col gap-2">
+    <h3 class="font-body-lg text-body-lg text-on-surface">Văn phong</h3>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Agent tuân theo khi viết mọi tập.</p>
+    <textarea id="styleGuide" rows="8" class="input" aria-label="Văn phong"></textarea>
+    <button id="saveStyle" class="btn-secondary btn-sm self-start" type="button">Lưu văn phong</button>
   </div>
-</div>
+  <div class="card flex flex-col gap-2">
+    <h3 class="font-body-lg text-body-lg text-on-surface">Thuật ngữ Việt – Anh <span id="termCount" class="tab-count">0</span></h3>
+    <div id="glossary" class="max-h-[300px] overflow-y-auto flex flex-col gap-1 font-body-md text-body-md"></div>
+  </div>
+  <div class="card flex flex-col gap-2">
+    <h3 class="font-body-lg text-body-lg text-on-surface">Nhạc nền cho video giải thích</h3>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Tải lên một bản nhạc không lời (ví dụ từ YouTube Audio Library — miễn phí dùng trên YouTube). Nhạc lặp cho đủ dài, nhỏ và tự hạ thấp mỗi khi có giọng đọc.</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <label class="btn-secondary btn-sm cursor-pointer"><span class="material-symbols-outlined text-[18px]">upload</span><span id="musicLabel">Tải nhạc lên</span>
+        <input id="musicInput" type="file" accept="audio/*" class="hidden"></label>
+      <audio id="musicPlayer" controls preload="none" class="h-9 hidden"></audio>
+      <button id="musicDelete" type="button" class="btn-ghost btn-sm hidden">Bỏ nhạc</button>
+    </div>
+  </div>
+  <div class="card flex flex-col gap-2">
+    <h3 class="font-body-lg text-body-lg text-on-surface">Danh sách phát YouTube</h3>
+    <p id="playlistHint" class="font-label-sm text-label-sm text-on-surface-variant">Đăng tập nào lên YouTube thì tự thêm vào danh sách phát này.</p>
+    <div class="flex items-center gap-2 flex-wrap">
+      <select id="playlistSelect" class="input !w-auto hidden"></select>
+      <button id="newPlaylist" type="button" class="btn-secondary btn-sm hidden"><span class="material-symbols-outlined text-[18px]">add_circle</span>Tạo danh sách phát mới</button>
+    </div>
+  </div>
+</section>
 {% endif %}
 {% endblock %}
 
@@ -211,8 +233,21 @@
     let current = null;   // id tập đang mở
     let youtube = {connected: false, channel: null};   // kênh YouTube đã kết nối (app/youtube.py)
     let playlists = null;
-    let ideas = [];   // ý tưởng mỗi ngày của series (core/ideas.py)   // danh sách phát của kênh, tải một lần khi đã kết nối
+    let ideas = [];   // ý tưởng mỗi ngày của series (core/ideas.py)
     let timer = null;
+
+    // Tab của trang series, giữ trên URL (#y-tuong…) để tải lại trang vẫn ở đúng chỗ.
+    const VIEW_HASH = {episodes: "", ideas: "y-tuong", memory: "tri-nho"};
+    function showView(name) {
+      document.querySelectorAll("[data-view-tab]").forEach(function (tab) {
+        tab.setAttribute("aria-selected", String(tab.dataset.viewTab === name));
+      });
+      document.querySelectorAll("[data-view]").forEach(function (panel) {
+        panel.classList.toggle("hidden", panel.dataset.view !== name);
+      });
+      history.replaceState(null, "", VIEW_HASH[name] ? "#" + VIEW_HASH[name] : location.pathname + location.search);
+    }
+    showView(Object.keys(VIEW_HASH).find(function (k) { return VIEW_HASH[k] && "#" + VIEW_HASH[k] === location.hash; }) || "episodes");
 
     function busy() { return series && (series.task || series.episodes.some(function (e) { return e.task; })); }
 
@@ -234,6 +269,11 @@
     function render() {
       document.getElementById("seriesTitle").textContent = series.title;
       document.getElementById("seriesDesc").textContent = series.description;
+      const total = series.episodes.length;
+      const doneCount = series.episodes.filter(function (e) { return e.status === "done"; }).length;
+      document.getElementById("seriesProgressText").textContent = doneCount + "/" + total + " tập đã chốt";
+      document.getElementById("seriesProgressBar").style.width = (total ? Math.round(doneCount * 100 / total) : 0) + "%";
+      document.getElementById("episodeCount").textContent = total;
       const styleBox = document.getElementById("styleGuide");
       if (document.activeElement !== styleBox) styleBox.value = series.style_guide;
       document.getElementById("termCount").textContent = series.glossary.length;
@@ -377,16 +417,18 @@
 
     function paintIdeas() {
       const fresh = ideas.filter(function (i) { return i.status === "new"; });
-      document.getElementById("ideasCount").textContent = fresh.length ? "(" + fresh.length + " mới)" : "";
+      const count = document.getElementById("ideasCount");
+      count.textContent = fresh.length;
+      count.classList.toggle("hidden", !fresh.length);
       document.getElementById("findIdeas").disabled = !!series.task;
       const box = document.getElementById("ideasList");
       if (!fresh.length) {
-        box.innerHTML = '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có ý tưởng mới. Bấm “Tìm ngay” hoặc đợi lượt tìm buổi sáng.</p>';
+        box.innerHTML = '<p class="font-body-md text-body-md text-on-surface-variant xl:col-span-2">Chưa có ý tưởng mới. Bấm “Tìm ngay” hoặc đợi lượt tìm buổi sáng.</p>';
         return;
       }
       box.innerHTML = fresh.map(function (i) {
         const day = i.created_at ? new Date(i.created_at).toLocaleDateString("vi-VN") : "";
-        return '<div class="border border-outline-variant/40 rounded-2xl p-md flex flex-col gap-2">' +
+        return '<div class="card !p-md flex flex-col gap-2">' +
           '<div class="flex items-start justify-between gap-3"><span class="font-body-lg text-body-lg text-on-surface">' + esc(i.title) + '</span>' +
           '<span class="font-label-sm text-label-sm text-on-surface-variant whitespace-nowrap">' + esc(day) + '</span></div>' +
           '<p class="font-body-md text-body-md text-on-surface">' + esc(i.summary) + '</p>' +
@@ -394,7 +436,7 @@
           '<div class="flex gap-2 flex-wrap">' + i.sources.map(function (s) {
             return '<a class="btn-ghost btn-sm" target="_blank" rel="noopener" href="' + esc(s.url) + '"><span class="material-symbols-outlined text-[18px]">open_in_new</span>' + esc(s.title) + '</a>';
           }).join("") + '</div>' +
-          '<div class="flex gap-2 flex-wrap"><button data-idea-use="' + i.id + '" class="btn-primary btn-sm"><span class="material-symbols-outlined text-[18px]">add_circle</span>Làm thành tập</button>' +
+          '<div class="flex gap-2 flex-wrap mt-auto"><button data-idea-use="' + i.id + '" class="btn-primary btn-sm"><span class="material-symbols-outlined text-[18px]">add_circle</span>Làm thành tập</button>' +
           '<button data-idea-dismiss="' + i.id + '" class="btn-ghost btn-sm">Bỏ qua</button></div></div>';
       }).join("");
     }
@@ -657,6 +699,7 @@
       if (!btn) return;
       const e = series && series.episodes.find(function (x) { return x.id === current; });
       try {
+        if (btn.dataset.viewTab) { showView(btn.dataset.viewTab); return; }
         if (btn.dataset.ep) { current = Number(btn.dataset.ep); render(); return; }
         if (btn.dataset.preview) {
           const lang = btn.dataset.preview;
@@ -695,6 +738,7 @@
           btn.disabled = true;
           const made = await api("/api/studio/ideas/" + btn.dataset.ideaUse + "/episode", "POST");
           current = made.episode.id;
+          showView("episodes");
           Nora.toast("Đã thêm tập " + made.episode.number + ". Bấm “Nghiên cứu & viết kịch bản” để agent viết.", "success");
           await load();
           return;
