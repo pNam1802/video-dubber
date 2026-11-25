@@ -67,7 +67,7 @@
 
 <section data-view="episodes" role="tabpanel">
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-    <ol id="episodeList" class="flex flex-col gap-2 lg:col-span-1"></ol>
+    <ol id="episodeList" class="lg:col-span-1 flex flex-col gap-0.5 self-start lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] overflow-y-auto card !p-2"></ol>
     <div id="episodePanel" class="lg:col-span-2 card flex flex-col gap-md">
       <p class="font-body-md text-body-md text-on-surface-variant">Chọn một tập bên trái.</p>
     </div>
@@ -124,6 +124,17 @@
     const CSRF = "{{ csrf_token() }}";
     const SERIES_ID = {{ series_id|tojson }};
     const STATUS = {planned: "Mới lên lộ trình", drafted: "Đã có kịch bản", translated: "Đã có bản Anh", done: "Đã chốt"};
+    // Icon trạng thái ở danh sách tập: [icon, class màu, tô đặc?].
+    const STATUS_ICON = {
+      planned: ["radio_button_unchecked", "text-outline", false], drafted: ["edit_note", "text-on-surface-variant", false],
+      translated: ["translate", "text-info", false], done: ["check_circle", "text-primary", true]
+    };
+    function statusIcon(e) {
+      if (e.task) return '<span class="material-symbols-outlined text-[20px] text-primary animate-spin">progress_activity</span>';
+      if (e.error) return '<span class="material-symbols-outlined text-[20px] text-error">error</span>';
+      const icon = STATUS_ICON[e.status] || STATUS_ICON.planned;
+      return '<span class="material-symbols-outlined text-[20px] ' + icon[1] + (icon[2] ? " filled" : "") + '">' + icon[0] + '</span>';
+    }
     // Giọng cho từng bản: [engine:khoá, nhãn]. Khoá khớp config.settings.TTS_VOICES.
     const VOICES = {
       vi: [["recorded:mine", "Giọng tự thu — bạn tự đọc"], ["vieneu:female", "Nora — nữ (VieNeu)"], ["vieneu:mine", "Giọng của bạn (clone)"],
@@ -299,11 +310,15 @@
 
       document.getElementById("episodeList").innerHTML = series.episodes.map(function (e) {
         const active = e.id === current;
-        return '<li><button data-ep="' + e.id + '" class="w-full text-left card !p-md flex flex-col gap-1 ' +
-          (active ? "!border-primary" : "hover:border-outline") + '">' +
-          '<span class="font-body-md text-body-md text-on-surface">' + e.number + ". " + esc(e.title || "…") + '</span>' +
-          '<span class="font-label-sm text-label-sm ' + (e.status === "done" ? "text-primary" : "text-on-surface-variant") + '">' +
-          (e.task ? "Đang chạy..." : STATUS[e.status]) + (e.error ? " · lỗi" : "") + '</span></button></li>';
+        return '<li><button data-ep="' + e.id + '"' + (active ? ' aria-current="true"' : "") +
+          ' class="w-full text-left rounded-xl px-3 py-2 flex items-start gap-3 transition-colors ' +
+          (active ? "bg-surface-container-high" : "hover:bg-surface-container-high/60") + '">' +
+          '<span class="mt-0.5 flex-shrink-0">' + statusIcon(e) + '</span>' +
+          '<span class="flex flex-col min-w-0"><span class="font-body-md text-body-md line-clamp-2 ' +
+          (active ? "text-on-surface" : "text-on-surface-variant") + '"><span class="tabular text-outline">' + e.number + '.</span> ' +
+          esc(e.title || "…") + '</span>' +
+          '<span class="font-label-sm text-label-sm ' + (e.error ? "text-error" : "text-outline") + '">' +
+          (e.task ? "Agent đang làm..." : STATUS[e.status]) + (e.error ? " · lỗi" : "") + '</span></span></button></li>';
       }).join("");
       renderEpisode();
     }
