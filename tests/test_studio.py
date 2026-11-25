@@ -428,3 +428,14 @@ def test_upload_sets_episode_thumbnail_when_board_uses_custom_scenes(app, as_adm
     as_admin.post(f"/api/studio/episodes/{ep_id}/youtube", json={"lang": "vi"})
     tube = as_admin.get(f"/api/studio/series/{series_id}").get_json()["episodes"][0]["publish"]["vi"]["youtube"]
     assert rendered == [("s1e01", "vi")] and uploaded == [("VID7", b"png")] and tube["thumbnail"] is True
+
+
+def test_series_title_and_description_can_be_edited(as_admin, fake_agent):
+    series_id = as_admin.post("/api/studio/series", json={"topic": "x", "episodes": 1}).get_json()["id"]
+    res = as_admin.patch(f"/api/studio/series/{series_id}",
+                         json={"title": "  Học AI cùng   GS. Lý  ", "description": "Kể lại bài giảng."})
+    assert res.status_code == 200
+    assert res.get_json()["title"] == "Học AI cùng GS. Lý"
+    assert res.get_json()["description"] == "Kể lại bài giảng."
+    assert as_admin.patch(f"/api/studio/series/{series_id}", json={"title": "   "}).status_code == 400
+    assert as_admin.get(f"/api/studio/series/{series_id}").get_json()["title"] == "Học AI cùng GS. Lý"
