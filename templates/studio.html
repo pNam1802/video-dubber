@@ -342,22 +342,14 @@
       };
       const jobLink = function (id) { return id ? ' <a class="text-primary" href="/job/' + id + '">Xem video #' + id + '</a>' : ""; };
       panel.innerHTML =
-        '<div class="flex items-start justify-between gap-3 flex-wrap">' +
-          '<div><h3 class="font-headline-md text-headline-md text-on-surface">Tập ' + e.number + ": " + esc(e.title) + '</h3>' +
-          '<p class="font-body-md text-body-md text-on-surface-variant mt-1">' + esc(e.goal) + '</p></div>' +
-          '<span class="chip border-outline-variant text-on-surface-variant">' + STATUS[e.status] + '</span></div>' +
-        (e.error ? '<p class="font-body-md text-body-md text-error">Lỗi: ' + esc(e.error) + '</p>' : "") +
+        '<div class="flex flex-col gap-1">' +
+          '<span class="eyebrow">Tập ' + e.number + '</span>' +
+          '<h3 class="font-headline-md text-headline-md text-on-surface">' + esc(e.title) + '</h3>' +
+          '<p class="font-body-md text-body-md text-on-surface-variant">' + esc(e.goal) + '</p></div>' +
+        (e.error ? '<p class="font-body-md text-body-md text-error flex items-start gap-2"><span class="material-symbols-outlined text-[18px]">error</span>' + esc(e.error) + '</p>' : "") +
+        stepper(e, locked) +
         (e.key_points.length ? '<ul class="list-disc pl-5 font-body-md text-body-md text-on-surface-variant">' +
           e.key_points.map(function (p) { return "<li>" + esc(p) + "</li>"; }).join("") + '</ul>' : "") +
-        '<div class="flex gap-2 flex-wrap">' +
-          '<button data-step="write" class="btn-primary btn-sm"' + (locked ? " disabled" : "") + '>' +
-            '<span class="material-symbols-outlined text-[18px]">travel_explore</span>' +
-            (e.script_vi ? "Nghiên cứu & viết lại" : "Nghiên cứu & viết kịch bản") + '</button>' +
-          '<button data-step="translate" class="btn-secondary btn-sm"' + (locked || !e.script_vi ? " disabled" : "") + '>' +
-            '<span class="material-symbols-outlined text-[18px]">translate</span>Dịch sang tiếng Anh</button>' +
-          '<button data-step="wrap" class="btn-secondary btn-sm"' + (locked || !e.script_vi ? " disabled" : "") + '>' +
-            '<span class="material-symbols-outlined text-[18px]">task_alt</span>Chốt tập (lưu vào trí nhớ)</button>' +
-        '</div>' +
         (e.summary ? '<div><span class="field-label">Tóm tắt trong trí nhớ series</span><p class="font-body-md text-body-md text-on-surface">' + esc(e.summary) + '</p></div>' : "") +
         (e.review.length ? '<details><summary class="cursor-pointer font-body-md text-body-md text-primary">Agent tự soát đã sửa ' + e.review.length + ' lỗi</summary>' +
           '<ul class="list-disc pl-5 mt-2 font-body-md text-body-md text-on-surface-variant">' + e.review.map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + '</ul></details>' : "") +
@@ -391,6 +383,35 @@
             '</div>' + publishBlock(e, lang, locked) + recordBlock(e, lang, locked) + storyboardBlock(e, lang, locked) + '</div>';
         }).join("");
       paintPlayButtons();
+    }
+
+    // ── Ba bước của một tập: viết (nghiên cứu) → dịch sang Anh → chốt vào trí nhớ series.
+    // Bước kế tiếp chưa làm là nút chính; bước đã xong vẫn bấm lại được (viết lại, dịch lại...).
+    function stepper(e, locked) {
+      const steps = [
+        {key: "write", icon: "travel_explore", label: "Kịch bản Việt", done: Boolean(e.script_vi),
+         todo: "Nghiên cứu & viết", redo: "Viết lại", hint: "Agent nghiên cứu có nguồn rồi viết và tự soát."},
+        {key: "translate", icon: "translate", label: "Bản tiếng Anh", done: Boolean(e.script_en), needs: Boolean(e.script_vi),
+         todo: "Dịch sang Anh", redo: "Dịch lại", hint: "Dịch theo thuật ngữ của series."},
+        {key: "wrap", icon: "task_alt", label: "Chốt tập", done: e.status === "done", needs: Boolean(e.script_vi),
+         todo: "Chốt tập", redo: "Chốt lại", hint: "Lưu tóm tắt + thuật ngữ vào trí nhớ để tập sau nối đúng."}
+      ];
+      const next = steps.find(function (st) { return !st.done; });
+      return '<ol class="grid grid-cols-1 sm:grid-cols-3 gap-2">' + steps.map(function (st, i) {
+        const isNext = st === next;
+        const blocked = locked || st.needs === false;
+        const running = e.task === st.key;
+        return '<li class="rounded-xl border p-3 flex flex-col gap-2 ' +
+          (isNext ? "border-primary/60 bg-primary/5" : "border-outline-variant/60") + '">' +
+          '<div class="flex items-center gap-2">' +
+            '<span class="material-symbols-outlined text-[20px] ' + (running ? "text-primary animate-spin" : st.done ? "text-primary filled" : "text-outline") + '">' +
+            (running ? "progress_activity" : st.done ? "check_circle" : "radio_button_unchecked") + '</span>' +
+            '<span class="font-body-md text-body-md text-on-surface">' + (i + 1) + ". " + st.label + '</span></div>' +
+          '<p class="font-label-sm text-label-sm text-on-surface-variant flex-1">' + st.hint + '</p>' +
+          '<button data-step="' + st.key + '" class="' + (isNext ? "btn-primary" : "btn-secondary") + ' btn-sm self-start"' +
+            (blocked ? " disabled" : "") + '><span class="material-symbols-outlined text-[18px]">' + st.icon + '</span>' +
+            (st.done ? st.redo : st.todo) + '</button></li>';
+      }).join("") + '</ol>';
     }
 
     // ── Đăng YouTube: phụ đề Việt + Anh đúng mốc từng câu, tiêu đề, mô tả có chapters, tags ──
