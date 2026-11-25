@@ -3,35 +3,40 @@
 
 {% block content %}
 {% if not series_id %}
-<div class="mb-lg">
-  <h2 class="page-title">
-    <span class="material-symbols-outlined text-[32px] text-primary">movie_edit</span>Xưởng kịch bản
-  </h2>
-  <p class="font-body-md text-body-md text-on-surface-variant mt-1">
-    Agent lên lộ trình series, nghiên cứu có nguồn, viết và tự soát kịch bản Việt–Anh. Trí nhớ series
-    (thuật ngữ, tóm tắt các tập) lưu trong hệ thống nên tập sau luôn nối đúng tập trước.
-  </p>
+<div class="mb-lg flex items-start justify-between gap-4 flex-wrap">
+  <div>
+    <h2 class="page-title">
+      <span class="material-symbols-outlined text-[32px] text-primary">movie_edit</span>Xưởng kịch bản
+    </h2>
+    <p class="font-body-md text-body-md text-on-surface-variant mt-1 max-w-3xl">
+      Agent lên lộ trình series, nghiên cứu có nguồn, viết và tự soát kịch bản Việt–Anh. Trí nhớ series
+      (thuật ngữ, tóm tắt các tập) lưu trong hệ thống nên tập sau luôn nối đúng tập trước.
+    </p>
+  </div>
+  <button id="toggleCreate" type="button" class="btn-primary" aria-expanded="false" aria-controls="createForm">
+    <span class="material-symbols-outlined text-[18px]">add</span>Series mới</button>
 </div>
 {% endif %}
 
 {% if not series_id %}
 {# ── Danh sách + tạo series ─────────────────────────────── #}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-  <form id="createForm" class="card flex flex-col gap-3 lg:col-span-1">
-    <h3 class="font-headline-md text-headline-md text-on-surface">Series mới</h3>
-    <label><span class="field-label">Chủ đề</span>
-      <textarea name="topic" rows="3" class="input" required
-        placeholder="LLM & AI Agent: từ token, embedding, attention tới RAG và agent"></textarea></label>
-    <label><span class="field-label">Người xem</span>
-      <input name="audience" class="input" placeholder="Sinh viên, lập trình viên Việt mới tìm hiểu AI"></label>
-    <label><span class="field-label">Số tập</span>
-      <input name="episodes" type="number" min="1" max="30" value="12" class="input"></label>
+<form id="createForm" class="hidden card mb-lg grid grid-cols-1 md:grid-cols-[2fr_1.5fr_auto] gap-3 items-start">
+  <h3 class="md:col-span-3 font-headline-md text-headline-md text-on-surface">Series mới</h3>
+  <label><span class="field-label">Chủ đề</span>
+    <textarea name="topic" rows="2" class="input" required
+      placeholder="LLM & AI Agent: từ token, embedding, attention tới RAG và agent"></textarea></label>
+  <label><span class="field-label">Người xem</span>
+    <textarea name="audience" rows="2" class="input" placeholder="Sinh viên, lập trình viên Việt mới tìm hiểu AI"></textarea></label>
+  <label><span class="field-label">Số tập</span>
+    <input name="episodes" type="number" min="1" max="30" value="12" class="input !w-24"></label>
+  <div class="md:col-span-3 flex items-center gap-2">
     <button class="btn-primary" type="submit">
       <span class="material-symbols-outlined text-[18px]">auto_awesome</span>Lên lộ trình</button>
-  </form>
-  <div class="lg:col-span-2 flex flex-col gap-3" id="seriesList">
-    <p class="font-body-md text-body-md text-on-surface-variant">Đang tải...</p>
+    <span class="font-label-sm text-label-sm text-on-surface-variant">Agent chia chủ đề thành các tập có mục tiêu và ý chính, thường 1–2 phút.</span>
   </div>
+</form>
+<div id="seriesList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
+  <p class="font-body-md text-body-md text-on-surface-variant">Đang tải...</p>
 </div>
 {% else %}
 {# ── Một series ─────────────────────────────────────────── #}
@@ -213,17 +218,34 @@
         const rows = await api("/api/studio/series");
         const box = document.getElementById("seriesList");
         if (!rows.length) {
-          box.innerHTML = '<p class="font-body-md text-body-md text-on-surface-variant">Chưa có series nào.</p>';
+          box.innerHTML = '<div class="md:col-span-2 xl:col-span-3 card flex flex-col items-center text-center gap-2 py-xl">' +
+            '<span class="material-symbols-outlined text-[40px] text-outline">movie_edit</span>' +
+            '<p class="font-body-lg text-body-lg text-on-surface">Chưa có series nào</p>' +
+            '<p class="font-body-md text-body-md text-on-surface-variant">Nhập một chủ đề ở trên, agent sẽ lên lộ trình các tập.</p></div>';
+          showCreate(true);
           return;
         }
         box.innerHTML = rows.map(function (s) {
-          return '<a href="/quan-tri/xuong-kich-ban/' + s.id + '" class="card flex items-center justify-between gap-3 hover:border-outline">' +
-            '<span class="flex flex-col"><span class="font-body-lg text-body-lg text-on-surface">' + esc(s.title) + '</span>' +
-            '<span class="font-label-sm text-label-sm text-on-surface-variant">' +
-            (s.task ? "Agent đang làm việc..." : s.done + "/" + s.episodes + " tập đã chốt") + '</span></span>' +
-            '<span class="material-symbols-outlined text-on-surface-variant">chevron_right</span></a>';
+          const pct = s.episodes ? Math.round(s.done * 100 / s.episodes) : 0;
+          const state = s.task ? '<span class="flex items-center gap-1 text-primary"><span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Agent đang làm việc...</span>'
+            : s.error ? '<span class="flex items-center gap-1 text-error"><span class="material-symbols-outlined text-[16px]">error</span>Có lỗi</span>'
+            : '<span class="tabular">' + s.done + "/" + s.episodes + " tập đã chốt</span>";
+          return '<a href="/quan-tri/xuong-kich-ban/' + s.id + '" class="card !p-md flex flex-col gap-3 hover:border-outline transition-colors">' +
+            '<span class="font-body-lg text-body-lg text-on-surface line-clamp-2">' + esc(s.title) + '</span>' +
+            (s.description ? '<span class="font-body-md text-body-md text-on-surface-variant line-clamp-2">' + esc(s.description) + '</span>' : "") +
+            '<span class="mt-auto flex flex-col gap-1.5"><span class="font-label-sm text-label-sm text-on-surface-variant">' + state + '</span>' +
+            '<span class="h-1.5 rounded-full bg-surface-container-high overflow-hidden"><span class="block h-full bg-primary" style="width:' + pct + '%"></span></span></span></a>';
         }).join("");
       }
+      function showCreate(open) {
+        const form = document.getElementById("createForm");
+        form.classList.toggle("hidden", !open);
+        document.getElementById("toggleCreate").setAttribute("aria-expanded", String(open));
+        if (open) form.topic.focus();
+      }
+      document.getElementById("toggleCreate").addEventListener("click", function () {
+        showCreate(document.getElementById("createForm").classList.contains("hidden"));
+      });
       document.getElementById("createForm").addEventListener("submit", async function (event) {
         event.preventDefault();
         const form = event.target;
