@@ -158,6 +158,16 @@
   .tab[aria-selected="true"] {
     @apply border-primary text-on-surface;
   }
+  /* Công tắc vài lựa chọn loại trừ nhau (Việt/Anh): nút đang chọn có aria-pressed. */
+  .segmented {
+    @apply inline-flex items-center gap-0.5 p-0.5 rounded-full border border-outline-variant/60 bg-surface-container-low;
+  }
+  .segmented > button {
+    @apply px-3 py-1 rounded-full font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface transition-colors;
+  }
+  .segmented > button[aria-pressed="true"] {
+    @apply bg-surface-container-highest text-on-surface;
+  }
   .tab-count {
     @apply min-w-[20px] px-1.5 rounded-full bg-surface-container-high font-label-sm text-label-sm text-on-surface-variant text-center;
   }
