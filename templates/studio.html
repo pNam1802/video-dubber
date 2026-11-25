@@ -340,7 +340,9 @@
           '<a href="/cai-dat" data-voice-hint="' + lang + '" class="hidden font-label-sm text-label-sm text-error">' +
           'Chưa có giọng mẫu ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") + ' — thêm ở Cài đặt</a>';
       };
-      const jobLink = function (id) { return id ? ' <a class="text-primary" href="/job/' + id + '">Xem video #' + id + '</a>' : ""; };
+      const jobLink = function (id) {
+        return id ? '<a class="btn-ghost btn-sm" href="/job/' + id + '"><span class="material-symbols-outlined text-[18px]">movie</span>Xem video #' + id + '</a>' : "";
+      };
       panel.innerHTML =
         '<div class="flex flex-col gap-1">' +
           '<span class="eyebrow">Tập ' + e.number + '</span>' +
@@ -372,15 +374,20 @@
               '<textarea data-script="' + lang + '" rows="18" class="input font-body-md leading-relaxed"' + (locked ? " disabled" : "") + '>' + esc(e[key]) + '</textarea>' +
             '</section>' +
             '<section data-ep-pane="video" data-lang-pane="' + lang + '" class="flex flex-col gap-md">' +
-              '<div class="flex gap-2 flex-wrap items-center">' +
-                voiceSelect(lang) +
-                '<select data-quality="' + lang + '" class="input !w-auto" title="Chất lượng video">' +
-                  '<option value="1080p">1080p</option><option value="720p"' + (localStorage.getItem("studioQuality") === "720p" ? " selected" : "") +
-                  '>720p</option></select>' +
-                (series.has_music ? '<label class="flex items-center gap-1 font-body-md text-body-md"><input type="checkbox" data-music="' + lang + '" checked class="w-4 h-4">Nhạc nền</label>' : "") +
-                '<button data-video="' + lang + '" class="btn-primary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
-                  '<span class="material-symbols-outlined text-[18px]">animation</span>Tạo video giải thích</button>' +
-                '<span class="font-body-md text-body-md">' + jobLink(job) + '</span>' +
+              '<div class="rounded-xl border border-outline-variant/60 p-md flex flex-col gap-3">' +
+                '<div class="flex gap-3 flex-wrap items-end">' +
+                  '<div class="flex flex-col"><span class="field-label">Giọng đọc</span><div class="flex items-center gap-1 flex-wrap">' + voiceSelect(lang) + '</div></div>' +
+                  '<label class="flex flex-col"><span class="field-label">Chất lượng</span>' +
+                    '<select data-quality="' + lang + '" class="input !w-auto">' +
+                    '<option value="1080p">1080p</option><option value="720p"' + (localStorage.getItem("studioQuality") === "720p" ? " selected" : "") +
+                    '>720p</option></select></label>' +
+                  (series.has_music ? '<label class="flex items-center gap-2 h-10 font-body-md text-body-md"><input type="checkbox" data-music="' + lang + '" checked class="w-4 h-4">Nhạc nền</label>' : "") +
+                '</div>' +
+                '<div class="flex gap-2 flex-wrap items-center">' +
+                  '<button data-video="' + lang + '" class="btn-primary btn-sm"' + (locked || !e[key] ? " disabled" : "") + '>' +
+                    '<span class="material-symbols-outlined text-[18px]">animation</span>' + (job ? "Tạo lại video" : "Tạo video giải thích") + '</button>' +
+                  jobLink(job) +
+                '</div>' +
               '</div>' +
               (e[key] ? "" : '<p class="font-body-md text-body-md text-on-surface-variant">Cần có kịch bản ' + (lang === "vi" ? "tiếng Việt" : "tiếng Anh") + ' trước khi tạo video.</p>') +
               storyboardBlock(e, lang, locked) + recordBlock(e, lang, locked) +
@@ -607,8 +614,11 @@
       if (!(navigator.mediaDevices && window.MediaRecorder)) {
         return '<p class="font-label-sm text-label-sm text-on-surface-variant">Trình duyệt này không thu âm được — hãy dùng Chrome hoặc Firefox để tự thu giọng.</p>';
       }
-      return '<details class="card !p-md" data-record-box="' + lang + '">' +
-        '<summary class="cursor-pointer font-body-md text-body-md text-primary">Tự thu giọng đọc (' + done + "/" + paras.length + ' đoạn)</summary>' +
+      return '<details class="rounded-xl border border-outline-variant/60 p-3" data-record-box="' + lang + '">' +
+        '<summary class="cursor-pointer list-none font-body-md text-body-md text-on-surface flex items-center gap-2">' +
+        '<span class="material-symbols-outlined text-[18px] text-on-surface-variant">mic</span>Tự thu giọng đọc ' +
+        '<span class="tab-count">' + done + "/" + paras.length + '</span>' +
+        '<span class="material-symbols-outlined text-[20px] text-on-surface-variant ml-auto">expand_more</span></summary>' +
         '<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">Đọc to từng đoạn rồi bấm Dừng. Đọc vấp thì thu lại riêng đoạn đó. ' +
         'Nghỉ một nhịp ngắn giữa các câu để hệ thống cắt câu chính xác (phụ đề và hình bám theo từng câu). ' +
         'Thu đủ rồi chọn giọng "Giọng tự thu" và bấm Tạo video. Sửa chữ của đoạn nào thì phải thu lại đoạn đó.</p>' +
@@ -688,24 +698,26 @@
       const board = e["storyboard_" + lang];
       const sentences = e["sentences_" + lang];
       if (!e["script_" + lang]) return "";
-      let html = '<details class="card !p-md" data-board-box="' + lang + '"' + (board.length ? " open" : "") + '>' +
-        '<summary class="cursor-pointer font-body-md text-body-md text-primary">Phân cảnh video giải thích' +
-        (board.length ? " (" + board.length + " cảnh)" : " — chưa có") + '</summary>' +
-        '<p class="font-label-sm text-label-sm text-on-surface-variant mt-2">Agent chia kịch bản thành cảnh và chọn hình cho từng cảnh. ' +
+      let html = '<div class="flex flex-col gap-2" data-board-box="' + lang + '">' +
+        '<div class="flex items-center justify-between gap-2 flex-wrap">' +
+          '<h4 class="font-body-lg text-body-lg text-on-surface flex items-center gap-2">Phân cảnh' +
+          (board.length ? ' <span class="tab-count">' + board.length + '</span>' : "") + '</h4>' +
+          '<div class="flex gap-2 flex-wrap">' +
+            (board.length ? '<button data-save-board="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>' +
+              '<span class="material-symbols-outlined text-[18px]">check</span>Lưu phân cảnh</button>' : "") +
+            '<button data-step="board_' + lang + '" class="' + (board.length ? "btn-ghost" : "btn-secondary") + ' btn-sm"' + (locked ? " disabled" : "") + '>' +
+            '<span class="material-symbols-outlined text-[18px]">auto_awesome</span>' + (board.length ? "Phân cảnh lại" : "Phân cảnh") + '</button>' +
+          '</div></div>' +
+        '<p class="font-label-sm text-label-sm text-on-surface-variant">Agent chia kịch bản thành cảnh và chọn hình cho từng cảnh. ' +
         'Sửa bố cục hoặc chữ trên màn hình, bấm Xem thử để vẽ riêng cảnh đó (~1 phút), ưng rồi mới tạo cả video. ' +
-        'Không phân cảnh thì lúc tạo video Gemini tự chia.</p>' +
-        '<div class="flex gap-2 flex-wrap mt-2">' +
-          '<button data-step="board_' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>' +
-          '<span class="material-symbols-outlined text-[18px]">auto_awesome</span>' + (board.length ? "Phân cảnh lại" : "Phân cảnh") + '</button>' +
-          (board.length ? '<button data-save-board="' + lang + '" class="btn-secondary btn-sm"' + (locked ? " disabled" : "") + '>Lưu phân cảnh</button>' : "") +
-        '</div>';
+        'Không phân cảnh thì lúc tạo video Gemini tự chia.</p>';
       html += board.map(function (scene, k) {
         const next = k + 1 < board.length ? board[k + 1].start : sentences.length;
         const said = sentences.slice(scene.start, next).join(" ");
         const fields = Object.assign({}, scene);
         delete fields.start; delete fields.layout;
         const preview = (e.previews || {})[lang + ":" + k];
-        return '<div class="border-t border-outline-variant/40 mt-md pt-md flex flex-col gap-2" data-scene="' + lang + ':' + k + '" data-start="' + scene.start + '">' +
+        return '<div class="rounded-xl border border-outline-variant/60 p-3 flex flex-col gap-2" data-scene="' + lang + ':' + k + '" data-start="' + scene.start + '">' +
           '<div class="flex items-center gap-2 flex-wrap"><span class="font-body-md text-body-md text-on-surface">Cảnh ' + (k + 1) +
           '</span><span class="font-label-sm text-label-sm text-on-surface-variant">câu ' + (scene.start + 1) + (next - 1 > scene.start ? "–" + next : "") + '</span>' +
           '<select data-scene-layout class="input !w-auto"' + (locked ? " disabled" : "") + '>' + Object.keys(LAYOUTS).map(function (name) {
@@ -720,7 +732,7 @@
             encodeURIComponent(preview) + '"></video>' : "") +
           '</div>';
       }).join("");
-      return html + '</details>';
+      return html + '</div>';
     }
 
     // Mỗi trường một dòng (mảng giữ trên cùng dòng) — dễ sửa hơn JSON thụt lề từng phần tử.
