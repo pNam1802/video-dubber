@@ -446,6 +446,7 @@ def _busy(target) -> tuple | None:
 def list_series():
     rows = Series.query.filter_by(user_id=current_user.id).order_by(Series.created_at.desc()).all()
     return jsonify([{"id": s.id, "title": s.title or s.topic, "topic": s.topic, "task": s.task,
+                     "description": s.description, "error": s.error,
                      "episodes": len(s.episodes),
                      "done": sum(e.status == EpisodeStatus.DONE for e in s.episodes)} for s in rows])
 
