@@ -14,22 +14,23 @@ import sys
 from pathlib import Path
 
 from manim import (
-    DOWN, LEFT, ORIGIN, RIGHT, UP, Arc, Arrow, Circle, Create, CurvedArrow, DashedVMobject, Dot, FadeIn, FadeOut, GrowArrow,
-    GrowFromCenter, GrowFromEdge, Indicate, Line, Polygon, Rectangle, RoundedRectangle, Square, Text, Transform, VGroup, Write,
+    DOWN, LEFT, ORIGIN, RIGHT, UP, Arrow, Circle, Create, CurvedArrow, Dot, FadeIn, FadeOut, GrowArrow,
+    GrowFromCenter, GrowFromEdge, Indicate, Line, Polygon, Rectangle, Rotate, RoundedRectangle, Square, SurroundingRectangle,
+    Text, Transform, VGroup, Write,
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _kit import arrow, bubble, card, check, cross, heading, strike  # noqa: E402
+from _kit import arrow, bubble, card, check, cross, strike  # noqa: E402
 
-BOARD = [(0, "two_loops"), (2, "three_routes"), (7, "token_loop"), (11, "probe"), (16, "yellow_vector"),
-         (21, "contrastive"), (31, "obama"), (37, "logit_lens"), (43, "dola"), (46, "layer_cd"),
-         (52, "dumb_spell"), (54, "rag_cad"), (58, "black_banana"), (66, "corruptions"), (68, "mti_forks"),
-         (72, "kv_cache"), (78, "output_error"), (83, "part1_table"), (88, "gen_verify"), (92, "two_intuitions"),
-         (100, "critique_mcq"), (105, "internal_external"), (109, "refinebench"), (113, "four_cells"),
-         (117, "cl_cs"), (121, "personalities"), (125, "three_prompts"), (132, "vote_vs_verify"),
-         (141, "drop_prompt"), (144, "hillary"), (153, "revise"), (157, "new_errors"), (161, "rlvr"),
-         (165, "err_first"), (172, "k_power"), (176, "parity"), (181, "pass_at_k"), (188, "no_training"),
-         (191, "other_camp"), (196, "open_debate"), (198, "outro")]
+BOARD = [(0, "two_loops"), (2, "three_routes"), (8, "next_token"), (12, "layers_rep"), (18, "part1_question"),
+         (20, "probe"), (29, "yellow_vector"), (35, "classmate"), (40, "contrastive"), (45, "obama"),
+         (50, "obama_math"), (58, "dola"), (65, "black_banana"), (73, "other_corruptions"), (75, "mti_forks"),
+         (83, "kv_cache"), (92, "part1_recap"), (96, "gen_verify"), (100, "two_intuitions"),
+         (109, "internal_external"), (114, "four_cells"), (119, "cl_cs"), (127, "personalities"),
+         (129, "three_prompts"), (134, "majority_vote"), (138, "vote_vs_verify"), (144, "part2_recap"),
+         (149, "knobs"), (155, "hillary"), (164, "new_errors"), (170, "rlvr"), (176, "rl_aha"), (180, "err_first"),
+         (183, "parity_rote"), (187, "parity_steps"), (199, "pass_at_k"), (202, "darts"), (209, "other_camp"),
+         (213, "outro")]
 
 
 # ── Mảnh ghép riêng của tập ──────────────────────────────────
@@ -217,291 +218,427 @@ def three_routes(sc, s, k):
     sc.run(FadeIn(hot, scale=1.2), Indicate(items[2], color=k.GOLD), run_time=0.8)
 
 
-# ── PHẦN 1: SỬA LÚC SINH CHỮ ─────────────────────────────────
-def token_loop(sc, s, k):
-    toks = _tokens(k, ["Hôm", "nay", "trời"]).move_to(LEFT * 3.6 + UP * 2.3)
-    tf = _model(k, "Transformer", k.PURPLE, w=3.4, h=1.1).move_to(LEFT * 3.0 + DOWN * 0.1)
-    tf[1].scale(0.8)
-    reps = VGroup(*[RoundedRectangle(corner_radius=0.05, width=0.24, height=1.0, color=k.GREEN, stroke_width=2)
-                    .set_fill(k.GREEN, opacity=0.3) for _ in range(3)]).arrange(RIGHT, buff=0.1)
-    reps.move_to(RIGHT * 0.4 + DOWN * 0.1)
-    probs = _bars(k, [("đẹp", 0.8), ("mưa", 0.45), ("xanh", 0.25)], k.ACCENT, width=1.8, size=26)
-    probs.move_to(RIGHT * 4.0 + DOWN * 0.1)
-    a1 = Arrow(toks.get_bottom(), tf.get_top(), buff=0.15, color=k.MUTED, stroke_width=4)
-    a2, a3 = arrow(k, tf, reps), arrow(k, reps, probs)
-    rep_t = k.label("representation", 24, k.GREEN).next_to(reps, UP, buff=0.25)
-    prob_t = k.label("xác suất", 24, k.ACCENT).next_to(probs, UP, buff=0.25)
-    sc.run(FadeIn(toks), run_time=0.4)
-    sc.run(GrowArrow(a1), FadeIn(tf), run_time=0.5)
-    sc.run(GrowArrow(a2), FadeIn(reps), FadeIn(rep_t), run_time=0.5)
-    sc.run(GrowArrow(a3), FadeIn(probs), FadeIn(prob_t), run_time=0.6)
+# ── NỀN TẢNG ─────────────────────────────────────────────────
+def _prob_rows(k, rows, color, width=3.6, size=30):
+    """Bảng xác suất nằm ngang có ghi phần trăm: rows = [(chữ, giá trị 0..1)]."""
+    out = _bars(k, rows, color, width=width, size=size, bar_h=0.42, label_w=2.0)
+    for (name, v), row in zip(rows, out):
+        row.add(k.label(f"{round(v * 100)}%", 24, k.MUTED).next_to(row[1], RIGHT, buff=0.15))
+    return out
+
+
+def next_token(sc, s, k):
+    head = k.label("Mô hình viết chữ thế nào?", 38, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(head), run_time=0.7)
 
     sc.wait_until(sc.at(1))
-    pick = RoundedRectangle(corner_radius=0.1, width=probs[0].width + 0.3, height=probs[0].height + 0.2,
-                            color=k.GOLD, stroke_width=4).move_to(probs[0])
-    sc.run(Create(pick), run_time=0.4)
-    new_tok = card(k, "đẹp", k.GOLD, 26, 12, pad=0.35).move_to(probs[0])
-    target = card(k, "đẹp", k.GOLD, 26, 12, pad=0.35).next_to(toks, RIGHT, buff=0.12)
-    back = CurvedArrow(probs.get_top() + UP * 0.6, target.get_right() + RIGHT * 0.2, angle=0.6,
-                       color=k.GOLD, stroke_width=4)
-    sc.run(Create(back), run_time=0.7)
-    sc.run(Transform(new_tok, target), FadeOut(pick), run_time=0.7)
+    toks = _tokens(k, ["Hôm", "nay", "trời"], size=32).move_to(LEFT * 3.4 + UP * 1.6)
+    tok_t = k.label("mỗi ô là một token", 24, k.ACCENT).next_to(toks, DOWN, buff=0.25)
+    sc.run(FadeIn(toks, lag_ratio=0.3), run_time=0.8)
+    sc.run(FadeIn(tok_t), run_time=0.4)
 
     sc.wait_until(sc.at(2))
-    eye1 = k.label("sắp sai?", 30, k.PINK, bold=True).next_to(reps, DOWN, buff=0.5)
-    eye2 = k.label("sắp sai?", 30, k.PINK, bold=True).next_to(probs, DOWN, buff=0.5)
+    model = _model(k, "LLM", w=2.2, h=1.1).move_to(LEFT * 3.4 + DOWN * 1.0)
+    a1 = Arrow(toks.get_bottom() + DOWN * 0.45, model.get_top(), buff=0.1, color=k.MUTED, stroke_width=4)
+    probs = _prob_rows(k, [("đẹp", 0.6), ("mưa", 0.3), ("xanh", 0.1)], k.ACCENT).move_to(RIGHT * 3.0 + DOWN * 1.0)
+    p_t = k.label("bảng xác suất cho chữ tiếp theo", 26, k.ACCENT, bold=True).next_to(probs, UP, buff=0.35)
+    a2 = Arrow(model.get_right(), probs.get_left(), buff=0.25, color=k.MUTED, stroke_width=4)
+    sc.run(FadeOut(tok_t), GrowArrow(a1), FadeIn(model), run_time=0.6)
+    sc.run(GrowArrow(a2), FadeIn(p_t), run_time=0.5)
+    sc.run(*[GrowFromEdge(r[1], LEFT) for r in probs], *[FadeIn(r[0]) for r in probs],
+           *[FadeIn(r[2]) for r in probs], run_time=1.0)
+
+    sc.wait_until(sc.at(3))
+    pick = RoundedRectangle(corner_radius=0.12, width=probs[0].width + 0.35, height=probs[0].height + 0.25,
+                            color=k.GOLD, stroke_width=5).move_to(probs[0])
+    sc.run(Create(pick), run_time=0.4)
+    new = card(k, "đẹp", k.GOLD, 32, 12, pad=0.35).move_to(probs[0][0])
+    target = card(k, "đẹp", k.GOLD, 32, 12, pad=0.35).next_to(toks, RIGHT, buff=0.12)
+    sc.run(Transform(new, target), FadeOut(pick), run_time=0.9)
+    again = k.label("gắn vào cuối câu, rồi lặp lại", 26, k.GOLD, bold=True).next_to(VGroup(toks, new), UP, buff=0.3)
+    rows2 = [("lắm", 0.45), ("quá", 0.35), ("và", 0.2)]
+    probs2 = _prob_rows(k, rows2, k.ACCENT).move_to(probs, aligned_edge=LEFT)
+    sc.run(FadeIn(again), FadeOut(probs), FadeIn(probs2), run_time=0.8)
+    sc.run(Indicate(model, color=k.GOLD), run_time=0.6)
+
+
+def layers_rep(sc, s, k):
+    head = k.label("Bên trong mô hình", 38, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(head), run_time=0.6)
+
+    sc.wait_until(sc.at(1))
+    layers = VGroup(*[RoundedRectangle(corner_radius=0.1, width=4.2, height=0.5, color=k.PURPLE, stroke_width=3)
+                      .set_fill(k.PURPLE, opacity=0.1 + 0.06 * i) for i in range(6)]).arrange(UP, buff=0.14)
+    layers.move_to(LEFT * 3.2 + DOWN * 0.5)
+    names = VGroup(k.label("tầng 1", 20, k.MUTED).next_to(layers[0], LEFT, buff=0.2),
+                   k.label("tầng cuối", 20, k.MUTED).next_to(layers[-1], LEFT, buff=0.2))
+    word = card(k, "trời", k.ACCENT, 30, 10, pad=0.35).next_to(layers, DOWN, buff=0.35)
+    out = k.label("bảng xác suất", 26, k.ACCENT, bold=True).next_to(layers, UP, buff=0.3)
+    sc.run(FadeIn(word), run_time=0.4)
+    sc.run(FadeIn(layers, lag_ratio=0.15), FadeIn(names), run_time=1.0)
+    sc.run(FadeIn(out, shift=UP * 0.2), run_time=0.4)
+
+    sc.wait_until(sc.at(2))
+    rnd = random.Random(4)
+    nums = VGroup()
+    for i, layer in enumerate(layers):
+        vals = " ".join(f"{rnd.uniform(-1, 1):+.1f}" for _ in range(5))
+        nums.add(Text(f"[{vals} ...]", font=k.MONO, font_size=18, color=k.GREEN).move_to(layer))
+    rep = k.label("representation", 32, k.GREEN, bold=True).move_to(RIGHT * 3.4 + UP * 1.4)
+    rep_s = k.label("một dãy số dài ở mỗi tầng", 26, k.GREEN).next_to(rep, DOWN, buff=0.15)
+    sc.run(FadeIn(nums, lag_ratio=0.2), run_time=1.2)
+    sc.run(FadeIn(rep), FadeIn(rep_s), run_time=0.5)
+
+    sc.wait_until(sc.at(3))
+    brain = bubble(k, "“suy nghĩ trong đầu”, viết bằng số", k.GREEN, 20, 28).move_to(RIGHT * 3.4 + DOWN * 0.4)
+    sc.run(FadeIn(brain, scale=0.9), run_time=0.6)
+
+    sc.wait_until(sc.at(4))
+    deep = Arrow(layers.get_corner(DOWN + RIGHT) + RIGHT * 0.5, layers.get_corner(UP + RIGHT) + RIGHT * 0.5,
+                 buff=0, color=k.GOLD, stroke_width=6)
+    raw = k.label("non", 24, k.MUTED).next_to(deep.get_start(), RIGHT, buff=0.15)
+    ripe = k.label("chín", 24, k.GOLD, bold=True).next_to(deep.get_end(), RIGHT, buff=0.15)
+    sc.run(GrowArrow(deep), FadeIn(raw), FadeIn(ripe), run_time=0.8)
+
+    sc.wait_until(sc.at(5))
+    keep = VGroup(card(k, "bảng xác suất", k.ACCENT, 26, 20), card(k, "representation", k.GREEN, 26, 20))
+    keep.arrange(RIGHT, buff=0.5).to_edge(DOWN, buff=0.35).shift(RIGHT * 2.4)
+    sc.run(FadeOut(brain), FadeIn(keep, shift=UP * 0.2), run_time=0.6)
+
+
+@_part(1)
+def part1_question(sc, s, k):
+    toks = _tokens(k, ["Hôm", "nay", "trời"]).move_to(LEFT * 3.6 + UP * 2.0)
+    tf = _model(k, "LLM", k.PURPLE, w=3.0, h=1.1).move_to(LEFT * 3.0 + DOWN * 0.3)
+    reps = VGroup(*[RoundedRectangle(corner_radius=0.05, width=0.28, height=1.1, color=k.GREEN, stroke_width=2)
+                    .set_fill(k.GREEN, opacity=0.3) for _ in range(3)]).arrange(RIGHT, buff=0.1)
+    reps.move_to(RIGHT * 0.5 + DOWN * 0.3)
+    probs = _bars(k, [("đẹp", 0.6), ("mưa", 0.3), ("xanh", 0.1)], k.ACCENT, width=2.0, size=28)
+    probs.move_to(RIGHT * 4.2 + DOWN * 0.3)
+    a1 = Arrow(toks.get_bottom(), tf.get_top(), buff=0.15, color=k.MUTED, stroke_width=4)
+    a2, a3 = arrow(k, tf, reps), arrow(k, reps, probs)
+    rep_t = k.label("suy nghĩ trong đầu", 24, k.GREEN).next_to(reps, UP, buff=0.25)
+    prob_t = k.label("bảng xác suất", 24, k.ACCENT).next_to(probs, UP, buff=0.25)
+    sc.run(FadeIn(toks), GrowArrow(a1), FadeIn(tf), run_time=0.6)
+    sc.run(GrowArrow(a2), FadeIn(reps), FadeIn(rep_t), GrowArrow(a3), FadeIn(probs), FadeIn(prob_t), run_time=0.8)
+    eye1 = k.label("sắp sai?", 32, k.PINK, bold=True).next_to(reps, DOWN, buff=0.5)
+    eye2 = k.label("sắp sai?", 32, k.PINK, bold=True).next_to(probs, DOWN, buff=0.5)
     sc.run(FadeIn(eye1, shift=UP * 0.2), Indicate(reps, color=k.PINK), run_time=0.7)
     sc.run(FadeIn(eye2, shift=UP * 0.2), Indicate(probs, color=k.PINK), run_time=0.7)
 
-    sc.wait_until(sc.at(3))
-    flow = VGroup(card(k, "phát hiện lỗi", k.PINK, 26, 14), card(k, "tự sửa", k.GREEN, 26, 10)).arrange(RIGHT, buff=1.0)
-    flow.to_edge(DOWN, buff=0.5).shift(LEFT * 1.5)
+    sc.wait_until(sc.at(1))
+    flow = VGroup(card(k, "phát hiện lỗi", k.PINK, 28, 14), card(k, "tự sửa", k.GREEN, 28, 10)).arrange(RIGHT, buff=1.0)
+    flow.to_edge(DOWN, buff=0.5)
     sc.run(FadeIn(flow[0]), run_time=0.4)
     sc.run(GrowArrow(arrow(k, flow[0], flow[1])), FadeIn(flow[1]), run_time=0.5)
-    note = k.label("tự động, không ai nhắc", 24, k.MUTED).next_to(flow, RIGHT, buff=0.4)
-    sc.run(FadeIn(note), run_time=0.4)
 
 
 def _plane(k):
     frame = RoundedRectangle(corner_radius=0.2, width=6.6, height=5.4, color=k.MUTED, stroke_width=2)
     frame.set_fill(k.INK, opacity=0.03)
-    cap = k.label("không gian representation", 22, k.MUTED).next_to(frame, UP, buff=0.15)
+    cap = k.label("bản đồ representation: mỗi câu trả lời là một điểm", 22, k.MUTED).next_to(frame, UP, buff=0.15)
     return VGroup(frame, cap)
 
 
+@_part(1)
 def probe(sc, s, k):
-    plane = _plane(k).move_to(LEFT * 2.8 + DOWN * 0.3)
-    center = plane[0].get_center()
-    sc.run(FadeIn(plane), run_time=0.5)
-    paper = card(k, "paper 2023", k.MUTED, 24, 12).to_corner(UP + RIGHT, buff=0.6)
+    paper = card(k, "paper 2023", k.MUTED, 24, 12).to_corner(UP + RIGHT, buff=0.4)
     sc.run(FadeIn(paper), run_time=0.4)
-
+    plane = _plane(k).move_to(LEFT * 2.8 + DOWN * 0.25)
+    center = plane[0].get_center()
     sc.wait_until(sc.at(1))
-    good = _cloud(center + LEFT * 1.4 + UP * 0.9, k.GREEN, seed=1)
-    bad = _cloud(center + RIGHT * 1.4 + DOWN * 0.9, k.PINK, seed=2)
-    g_t = k.label("lúc trả lời đúng", 24, k.GREEN, bold=True).move_to(RIGHT * 3.9 + UP * 1.0)
-    b_t = k.label("lúc trả lời sai", 24, k.PINK, bold=True).move_to(RIGHT * 3.9 + DOWN * 0.0)
-    sc.run(FadeIn(good, lag_ratio=0.1), FadeIn(g_t), run_time=0.8)
-    sc.run(FadeIn(bad, lag_ratio=0.1), FadeIn(b_t), run_time=0.8)
+    sc.run(FadeIn(plane), run_time=0.6)
 
     sc.wait_until(sc.at(2))
-    split = Line(center + LEFT * 2.6 + DOWN * 2.2, center + RIGHT * 2.6 + UP * 2.2, color=k.GOLD, stroke_width=5)
-    clf = card(k, "bộ phân loại: đúng / sai", k.GOLD, 24, 26).move_to(RIGHT * 3.9 + DOWN * 1.4)
-    sc.run(Create(split), FadeIn(clf), run_time=0.9)
+    qs = VGroup(*[card(k, f"câu {i}", k.INK, 22, 8, pad=0.3, bold=False) for i in (1, 2, 3, "...")])
+    qs.arrange(DOWN, buff=0.15).move_to(RIGHT * 4.3 + UP * 0.6)
+    sc.run(FadeIn(qs, lag_ratio=0.25), run_time=0.8)
 
     sc.wait_until(sc.at(3))
-    new = VGroup(Dot(center + LEFT * 0.9 + UP * 1.5, radius=0.14, color=k.INK),
-                 Dot(center + RIGHT * 1.6 + DOWN * 0.3, radius=0.14, color=k.INK))
-    sc.run(FadeIn(new, scale=0.5), run_time=0.4)
-    sc.run(new[0].animate.set_color(k.GREEN), new[1].animate.set_color(k.PINK), run_time=0.6)
-    unseen = k.label("cả câu hỏi chưa từng thấy", 24, k.INK).next_to(clf, DOWN, buff=0.3)
-    sc.run(FadeIn(unseen), run_time=0.4)
+    g_c, b_c = center + LEFT * 1.4 + UP * 0.9, center + RIGHT * 1.4 + DOWN * 0.9
+    good = _cloud(g_c, k.GREEN, seed=1, radius=0.11)
+    bad = _cloud(b_c, k.PINK, seed=2, radius=0.11)
+    legend = VGroup(VGroup(Dot(radius=0.11, color=k.GREEN), k.label("trả lời đúng", 26, k.GREEN, bold=True)).arrange(RIGHT, buff=0.15),
+                    VGroup(Dot(radius=0.11, color=k.PINK), k.label("trả lời sai", 26, k.PINK, bold=True)).arrange(RIGHT, buff=0.15))
+    legend.arrange(DOWN, aligned_edge=LEFT, buff=0.25).move_to(RIGHT * 4.3 + UP * 0.6)
+    # chấm xen kẽ, chưa thấy vùng
+    mixed = VGroup(*[d for pair in zip(good[:6], bad[:6]) for d in pair])
+    sc.run(FadeOut(qs), FadeIn(legend), run_time=0.4)
+    sc.run(FadeIn(mixed, lag_ratio=0.15), run_time=1.0)
 
     sc.wait_until(sc.at(4))
-    msg = k.label("tín hiệu “đang sai” nằm sẵn bên trong", 30, k.GOLD, bold=True).to_edge(DOWN, buff=0.3)
+    sc.run(FadeIn(good[6:], lag_ratio=0.08), FadeIn(bad[6:], lag_ratio=0.08), run_time=1.0)
+    zg = Circle(radius=1.0, color=k.GREEN, stroke_width=2).set_fill(k.GREEN, 0.06).move_to(g_c)
+    zb = Circle(radius=1.0, color=k.PINK, stroke_width=2).set_fill(k.PINK, 0.06).move_to(b_c)
+    sc.run(Create(zg), Create(zb), run_time=0.6)
+
+    sc.wait_until(sc.at(5))
+    split = Line(center + LEFT * 2.6 + DOWN * 2.2, center + RIGHT * 2.6 + UP * 2.2, color=k.GOLD, stroke_width=6)
+    sc.run(Create(split), run_time=0.9)
+
+    sc.wait_until(sc.at(6))
+    clf = card(k, "bộ phân loại", k.GOLD, 28, 14).move_to(RIGHT * 4.3 + DOWN * 0.9)
+    sides = k.label("bên trái: đúng · bên phải: sai", 22, k.GOLD).next_to(clf, DOWN, buff=0.15)
+    sc.run(FadeIn(clf), FadeIn(sides), run_time=0.6)
+
+    sc.wait_until(sc.at(7))
+    new = VGroup(Dot(center + LEFT * 0.9 + UP * 1.7, radius=0.16, color=k.INK),
+                 Dot(center + RIGHT * 1.7 + DOWN * 0.2, radius=0.16, color=k.INK))
+    q = VGroup(*[k.label("?", 26, k.INK, bold=True).next_to(d, UP, buff=0.08) for d in new])
+    sc.run(FadeIn(new, scale=0.5), FadeIn(q), run_time=0.5)
+    sc.run(new[0].animate.set_color(k.GREEN), new[1].animate.set_color(k.PINK), FadeOut(q), run_time=0.7)
+    unseen = k.label("cả câu hỏi chưa từng thấy", 24, k.INK).next_to(sides, DOWN, buff=0.3)
+    sc.run(FadeIn(unseen), run_time=0.4)
+
+    sc.wait_until(sc.at(8))
+    msg = k.label("tín hiệu “mình đang nói sai” nằm sẵn trong đầu mô hình", 30, k.GOLD, bold=True)
+    msg.to_edge(DOWN, buff=0.25)
     sc.run(FadeIn(msg, shift=UP * 0.2), run_time=0.6)
 
 
+@_part(1)
 def yellow_vector(sc, s, k):
-    plane = _plane(k).move_to(LEFT * 2.8 + DOWN * 0.3)
+    plane = _plane(k).move_to(LEFT * 2.8 + DOWN * 0.4)
     center = plane[0].get_center()
     g_c, b_c = center + LEFT * 1.4 + UP * 0.9, center + RIGHT * 1.4 + DOWN * 0.9
-    good, bad = _cloud(g_c, k.GREEN, seed=1), _cloud(b_c, k.PINK, seed=2)
+    good, bad = _cloud(g_c, k.GREEN, seed=1, radius=0.11), _cloud(b_c, k.PINK, seed=2, radius=0.11)
     sc.run(FadeIn(plane), FadeIn(good), FadeIn(bad), run_time=0.6)
 
     sc.wait_until(sc.at(1))
-    gm = Dot(g_c, radius=0.18, color=k.GREEN).set_stroke(k.INK, 3)
-    bm = Dot(b_c, radius=0.18, color=k.PINK).set_stroke(k.INK, 3)
+    gm = Dot(g_c, radius=0.2, color=k.GREEN).set_stroke(k.INK, 3)
+    bm = Dot(b_c, radius=0.2, color=k.PINK).set_stroke(k.INK, 3)
+    gt = k.label("giữa vùng xanh", 22, k.GREEN, bold=True).next_to(gm, UP, buff=0.2)
+    bt = k.label("giữa vùng đỏ", 22, k.PINK, bold=True).next_to(bm, RIGHT, buff=0.2)
     sc.run(good.animate.set_opacity(0.3), bad.animate.set_opacity(0.3), GrowFromCenter(gm), GrowFromCenter(bm),
-           run_time=0.7)
-    vec = Arrow(b_c, g_c, buff=0.2, color=k.GOLD, stroke_width=8)
-    formula = VGroup(k.label("TB(đúng) − TB(sai)", 30, k.INK, bold=True),
-                     k.label("= vector vàng", 30, k.GOLD, bold=True)).arrange(DOWN, buff=0.2)
-    formula.move_to(RIGHT * 3.9 + UP * 1.4)
-    sc.run(GrowArrow(vec), FadeIn(formula), run_time=0.9)
+           FadeIn(gt), FadeIn(bt), run_time=0.8)
 
     sc.wait_until(sc.at(2))
-    p = Dot(center + RIGHT * 2.0 + DOWN * 1.8, radius=0.16, color=k.PINK).set_stroke(k.INK, 3)
-    p_t = k.label("câu sắp trả lời sai", 22, k.PINK).next_to(p, DOWN, buff=0.15)
-    sc.run(FadeIn(p, scale=0.5), FadeIn(p_t), run_time=0.5)
-    shift = g_c - b_c
-    push = Arrow(p.get_center(), p.get_center() + shift, buff=0.1, color=k.GOLD, stroke_width=6)
-    sc.run(GrowArrow(push), run_time=0.6)
-    sc.run(p.animate.move_to(p.get_center() + shift).set_color(k.GREEN), FadeOut(p_t), run_time=0.8)
+    vec = Arrow(b_c, g_c, buff=0.22, color=k.GOLD, stroke_width=9)
+    vt = k.label("vector vàng", 34, k.GOLD, bold=True).move_to(RIGHT * 4.0 + UP * 1.6)
+    vs = k.label("chỉ từ “sai” sang “đúng”", 24, k.GOLD).next_to(vt, DOWN, buff=0.15)
+    sc.run(GrowArrow(vec), FadeIn(vt), FadeIn(vs), run_time=0.9)
 
     sc.wait_until(sc.at(3))
-    both = VGroup(card(k, "phát hiện", k.GREEN, 26, 14), card(k, "sửa", k.GREEN, 26, 10)).arrange(RIGHT, buff=0.9)
-    both.move_to(RIGHT * 3.7 + DOWN * 0.4)
-    ticks = VGroup(*[check(k, 0.35).next_to(b, RIGHT, buff=0.12) for b in both])
-    sc.run(FadeIn(both, shift=UP * 0.2), run_time=0.5)
-    sc.run(Create(ticks), run_time=0.4)
+    p = Dot(center + RIGHT * 2.0 + DOWN * 1.8, radius=0.18, color=k.PINK).set_stroke(k.INK, 3)
+    p_t = k.label("câu sắp trả lời sai", 22, k.PINK, bold=True).next_to(p, LEFT, buff=0.2)
+    sc.run(FadeIn(p, scale=0.5), FadeIn(p_t), run_time=0.5)
+    shift = g_c - b_c
+    push = Arrow(p.get_center(), p.get_center() + shift, buff=0.12, color=k.GOLD, stroke_width=7)
+    sc.run(GrowArrow(push), run_time=0.6)
+    sc.run(p.animate.move_to(p.get_center() + shift).set_color(k.GREEN), FadeOut(p_t), run_time=0.9)
 
     sc.wait_until(sc.at(4))
-    cost = card(k, "phải thu thập trước rất nhiều câu đúng và sai", k.PINK, 26, 24).move_to(RIGHT * 3.9 + DOWN * 2.2)
+    ok = VGroup(check(k, 0.5), k.label("trả lời đúng luôn", 28, k.GREEN, bold=True)).arrange(RIGHT, buff=0.2)
+    ok.move_to(RIGHT * 4.0 + DOWN * 0.2)
+    sc.run(FadeIn(ok, shift=UP * 0.2), run_time=0.5)
+
+    sc.wait_until(sc.at(5))
+    cost = card(k, "nhưng phải thu thập trước rất nhiều câu đúng và sai", k.PINK, 24, 22).move_to(RIGHT * 4.0 + DOWN * 2.0)
     sc.run(FadeIn(cost, shift=UP * 0.2), run_time=0.6)
+
+
+def _student(k, color, label, size=1.0):
+    head = Circle(radius=0.3 * size, color=color, stroke_width=4).set_fill(color, 0.25)
+    body = RoundedRectangle(corner_radius=0.25 * size, width=0.95 * size, height=0.65 * size, color=color,
+                            stroke_width=4).set_fill(color, 0.15)
+    body.next_to(head, DOWN, buff=0.05)
+    t = k.label(label, 22, color, bold=True).next_to(body, DOWN, buff=0.12)
+    return VGroup(head, body, t)
+
+
+@_part(1)
+def classmate(sc, s, k):
+    q = k.label("Không cần dữ liệu thì sao?", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(q), run_time=0.5)
+    sc.wait_until(sc.at(1))
+    title = k.label("Contrastive decoding", 44, k.GOLD, bold=True).move_to(q)
+    sc.run(Transform(q, title), run_time=0.7)
+
+    sc.wait_until(sc.at(2))
+    me = _student(k, k.ACCENT, "bạn", 1.3).move_to(LEFT * 4.8 + DOWN * 0.2)
+    weak = _student(k, k.GREEN, "bạn học kém", 1.3).move_to(RIGHT * 4.8 + DOWN * 0.2)
+    sheet = RoundedRectangle(corner_radius=0.12, width=3.4, height=3.4, color=k.INK, stroke_width=3).set_fill("#1b2030", 1)
+    sheet.move_to(DOWN * 0.2)
+    opts = VGroup(*[k.label(f"{c}.  ________", 28, k.INK) for c in "ABCD"]).arrange(DOWN, aligned_edge=LEFT, buff=0.3)
+    opts.move_to(sheet)
+    sc.run(FadeIn(sheet), FadeIn(opts), FadeIn(me), run_time=0.6)
+    sc.run(FadeIn(weak, shift=LEFT * 0.3), run_time=0.5)
+
+    sc.wait_until(sc.at(3))
+    point = Arrow(weak.get_left(), opts[1].get_right() + RIGHT * 0.2, buff=0.15, color=k.GREEN, stroke_width=5)
+    choose = bubble(k, "chắc là B!", k.GREEN, 12, 26).next_to(weak, UP, buff=0.25)
+    sc.run(GrowArrow(point), FadeIn(choose), run_time=0.6)
+    cut = strike(k, opts[1])
+    sc.run(Create(cut), opts[1].animate.set_opacity(0.4), run_time=0.5)
+    avoid = bubble(k, "vậy tránh B", k.ACCENT, 12, 26).next_to(me, UP, buff=0.25)
+    sc.run(FadeIn(avoid), run_time=0.5)
+
+    sc.wait_until(sc.at(4))
+    sc.run(*[FadeOut(m) for m in (sheet, opts, point, choose, avoid, cut)], run_time=0.4)
+    m1 = _model(k, "LLM", k.ACCENT, w=2.2, h=1.0).move_to(LEFT * 2.0 + UP * 0.2)
+    m2 = _model(k, "LLM", k.GREEN, w=2.2, h=1.0).move_to(RIGHT * 2.0 + UP * 0.2)
+    t1 = k.label("mô hình bình thường", 24, k.ACCENT, bold=True).next_to(m1, DOWN, buff=0.2)
+    t2 = k.label("bản cố tình trả lời sai", 24, k.GREEN, bold=True).next_to(m2, DOWN, buff=0.2)
+    sc.run(FadeIn(m1), FadeIn(t1), run_time=0.5)
+    sc.run(FadeIn(m2), FadeIn(t2), run_time=0.5)
+    away = k.label("đẩy câu trả lời ra xa những gì bản sai thích", 30, k.GOLD, bold=True).to_edge(DOWN, buff=0.45)
+    sc.run(FadeIn(away, shift=UP * 0.2), run_time=0.6)
 
 
 @_part(1)
 def contrastive(sc, s, k):
-    title = k.label("Contrastive decoding", 40, k.INK, bold=True).to_edge(UP, buff=0.3)
-    sc.wait_until(sc.at(1))
-    sc.run(Write(title), run_time=0.8)
-
-    # Cột trái: một câu hỏi, chạy hai lần.
-    q = bubble(k, "Thủ đô của Úc là ___", k.INK, 24, 28).move_to(LEFT * 4.6 + UP * 1.9)
-    normal_m = _model(k, "LLM", k.ACCENT, w=1.8, h=0.9).move_to(LEFT * 5.6 + DOWN * 0.1)
-    broken_m = _model(k, "LLM", k.GREEN, w=1.8, h=0.9).move_to(LEFT * 3.4 + DOWN * 0.1)
-    hurt = k.label("đầu vào bị làm hỏng", 22, k.PINK, bold=True, width_chars=11).next_to(broken_m, DOWN, buff=0.2)
-    sc.wait_until(sc.at(2))
-    sc.run(FadeIn(q, shift=DOWN * 0.2), run_time=0.5)
-
+    title = k.label("Hai bảng xác suất, trừ cho nhau", 36, k.INK, bold=True).to_edge(UP, buff=0.35)
+    sc.run(FadeIn(title), run_time=0.5)
+    q = bubble(k, "Thủ đô của Úc là ___", k.INK, 24, 28).move_to(LEFT * 4.6 + UP * 1.6)
+    normal_m = _model(k, "LLM", k.ACCENT, w=1.8, h=0.9).move_to(LEFT * 5.6 + DOWN * 0.3)
+    broken_m = _model(k, "LLM", k.GREEN, w=1.8, h=0.9).move_to(LEFT * 3.4 + DOWN * 0.3)
+    hurt = k.label("bản sai", 22, k.GREEN, bold=True).next_to(broken_m, DOWN, buff=0.2)
+    norm_t = k.label("bình thường", 22, k.ACCENT, bold=True).next_to(normal_m, DOWN, buff=0.2)
     chart = _duel(k, ["Sydney", "Canberra", "Melbourne"], [0.5, 0.45, 0.12], [0.85, 0.08, 0.25],
-                  "bình thường", "bản bị làm hỏng", h=3.0, gap=2.5, size=30).shift(RIGHT * 2.5 + DOWN * 1.4)
-    sc.wait_until(sc.at(3))
+                  "bình thường", "bản sai", h=3.0, gap=2.5, size=30).shift(RIGHT * 2.5 + DOWN * 1.6)
+    sc.run(FadeIn(q), run_time=0.4)
     sc.run(GrowArrow(Arrow(q.get_bottom(), normal_m.get_top(), buff=0.1, color=k.ACCENT, stroke_width=4)),
-           FadeIn(normal_m), run_time=0.5)
-    _show_duel(sc, chart, both=False)
-    doubt = k.label("Sydney hay Canberra? phân vân", 24, k.MUTED).next_to(chart[4], UP, buff=0.25)
-    sc.run(FadeIn(doubt), run_time=0.4)
+           GrowArrow(Arrow(q.get_bottom(), broken_m.get_top(), buff=0.1, color=k.GREEN, stroke_width=4)),
+           FadeIn(normal_m), FadeIn(broken_m), FadeIn(norm_t), FadeIn(hurt), run_time=0.6)
+    _show_duel(sc, chart)
+
+    sc.wait_until(sc.at(1))
+    _subtract(sc, k, chart, [0.35, 0.62, 0.05], "bình thường − một phần bản sai", winner=1)
+
+    sc.wait_until(sc.at(2))
+    down = k.label("bản sai rất thích Sydney: bị trừ nhiều, tụt xuống", 24, k.PINK).to_edge(DOWN, buff=0.75)
+    sc.run(FadeIn(down), Indicate(chart[1][0], color=k.PINK), run_time=0.7)
+
+    sc.wait_until(sc.at(3))
+    up = k.label("chỉ mô hình thường thích Canberra: giữ điểm, lên đầu", 24, k.GOLD, bold=True).next_to(down, DOWN, buff=0.15)
+    sc.run(FadeIn(up), run_time=0.5)
 
     sc.wait_until(sc.at(4))
-    sc.run(GrowArrow(Arrow(q.get_bottom(), broken_m.get_top(), buff=0.1, color=k.PINK, stroke_width=4)),
-           FadeIn(broken_m), FadeIn(hurt), run_time=0.6)
-    _show_b(sc, chart)
-    sure = k.label("bản hỏng: gần như chắc chắn sai, “Sydney”", 24, k.GREEN).move_to(doubt)
-    sc.run(Transform(doubt, sure), run_time=0.4)
-
-    sc.wait_until(sc.at(5))
-    push = k.label("trừ đi bản sai = đẩy ra xa phía sai", 26, k.GOLD, bold=True).move_to(doubt)
-    sc.run(Transform(doubt, push), run_time=0.4)
-    _subtract(sc, k, chart, [0.35, 0.62, 0.05], "kết quả: Canberra lên đầu")
-
-    sc.wait_until(sc.at(6))
-    formula = Text("(1 + α) · bình thường  −  α · hỏng      α < 1", font=k.MONO, font_size=28, color=k.INK)
-    formula.to_edge(DOWN, buff=0.3)
+    formula = Text("(1 + alpha) · bình thường  −  alpha · bản sai,   alpha < 1", font=k.MONO, font_size=26, color=k.INK)
+    formula.next_to(title, DOWN, buff=0.25)
     box = RoundedRectangle(corner_radius=0.15, width=formula.width + 0.5, height=formula.height + 0.35,
                            color=k.GOLD, stroke_width=3).move_to(formula)
     sc.run(Write(formula), Create(box), run_time=1.0)
 
-    sc.wait_until(sc.at(7))
-    per = k.label("làm ở từng token · trên logit đầu ra", 26, k.MUTED).move_to(doubt)
-    sc.run(Transform(doubt, per), run_time=0.5)
-
-    sc.wait_until(sc.at(8))
-    plus = card(k, "+ không đụng tham số, thử được ngay", k.GREEN, 24, 40)
-    minus2 = card(k, "− mỗi token chạy thêm một lần", k.PINK, 24, 40)
-    VGroup(plus, minus2).arrange(RIGHT, buff=0.5).to_edge(DOWN, buff=0.3)
-    sc.run(FadeOut(VGroup(formula, box)), FadeIn(plus, shift=UP * 0.2), run_time=0.5)
-    sc.wait_until(sc.at(9))
-    twice = VGroup(normal_m, broken_m)
-    sc.run(FadeIn(minus2, shift=UP * 0.2), Indicate(twice, color=k.PINK), run_time=0.7)
-
 
 @_part(1)
 def obama(sc, s, k):
-    era = card(k, "2022 · “thời thượng cổ”, chưa có ChatGPT", k.MUTED, 24, 40).to_edge(UP, buff=0.3)
+    era = card(k, "2022 · “thời thượng cổ, chưa có ChatGPT, loài người còn ăn lông ở lỗ”", k.MUTED, 22, 80)
+    era.to_edge(UP, buff=0.8)
     sc.run(FadeIn(era, shift=DOWN * 0.2), run_time=0.6)
 
     sc.wait_until(sc.at(1))
-    prompt = VGroup(k.label("Obama sinh ở Honolulu, Hawaii. Ông sinh năm", 32, k.INK, bold=True),
-                    card(k, " ? ", k.GOLD, 32, 6, pad=0.3)).arrange(RIGHT, buff=0.2).next_to(era, DOWN, buff=0.35)
-    sc.run(Write(prompt[0]), FadeIn(prompt[1]), run_time=1.2)
-
-    chart = _duel(k, ["Hawaii", "1961", "Mỹ"], [0.62, 0.5, 0.2], [0.85, 0.15, 0.3],
-                  "GPT-2 bản lớn", "GPT-2 Small", h=2.8, gap=2.3, size=32).shift(LEFT * 2.0 + DOWN * 1.9)
+    prompt = VGroup(k.label("Obama sinh ở Honolulu, Hawaii. Ông sinh năm", 34, k.INK, bold=True),
+                    card(k, " ? ", k.GOLD, 34, 6, pad=0.3)).arrange(RIGHT, buff=0.2).move_to(UP * 1.6)
+    sc.run(Write(prompt[0]), run_time=1.2)
     sc.wait_until(sc.at(2))
-    _show_duel(sc, chart, both=False)
-    wrong = cross(k, chart[1][0])
-    should = k.label("lặp lại “Hawaii”: sai, đáng lẽ là một năm", 26, k.PINK, width_chars=22).next_to(chart, RIGHT, buff=0.3)
-    should.shift(UP * 0.6)
-    sc.run(Create(wrong), FadeIn(should), run_time=0.6)
+    sc.run(FadeIn(prompt[1], scale=1.3), run_time=0.5)
 
     sc.wait_until(sc.at(3))
-    _show_b(sc, chart)
-    tag = k.label("mô hình nhỏ: coi như luôn sai", 26, k.GREEN, width_chars=22).next_to(should, DOWN, buff=0.3).align_to(should, LEFT)
-    sc.run(FadeIn(tag), run_time=0.4)
+    big = _model(k, "GPT-2 bản lớn", k.ACCENT, w=4.0, h=1.0).move_to(LEFT * 3.4 + DOWN * 0.6)
+    says = bubble(k, "… sinh năm Hawaii", k.ACCENT, 20, 30).next_to(big, DOWN, buff=0.35)
+    sc.run(FadeIn(big), run_time=0.5)
+    sc.run(FadeIn(says, shift=UP * 0.2), run_time=0.5)
+    sc.run(Create(cross(k, says)), run_time=0.4)
+    need = k.label("chỗ này phải là một năm", 24, k.PINK).next_to(says, DOWN, buff=0.2)
+    sc.run(FadeIn(need), run_time=0.4)
 
     sc.wait_until(sc.at(4))
-    sc.run(FadeOut(wrong), run_time=0.2)
-    _subtract(sc, k, chart, [0.1, 0.8, 0.05], "lớn − nhỏ")
-    sc.run(Transform(prompt[1], card(k, "1961", k.GOLD, 32, 6, pad=0.3).move_to(prompt[1], aligned_edge=LEFT)),
-           run_time=0.6)
-
-    sc.wait_until(sc.at(5))
-    rule = card(k, "chọn token mà mô hình tốt và mô hình kém chênh nhau nhiều nhất", k.GOLD, 26, 70)
-    rule.to_edge(DOWN, buff=0.25)
-    sc.run(FadeOut(should), FadeOut(tag), FadeIn(rule, shift=UP * 0.2), run_time=0.7)
+    small = _model(k, "GPT-2 Small", k.GREEN, w=3.2, h=0.8).move_to(RIGHT * 3.6 + DOWN * 0.6)
+    weak = k.label("bạn học kém", 28, k.GREEN, bold=True).next_to(small, DOWN, buff=0.3)
+    sc.run(FadeIn(small, shift=LEFT * 0.3), run_time=0.5)
+    sc.run(FadeIn(weak), run_time=0.4)
 
 
-def logit_lens(sc, s, k):
-    tag = card(k, "DoLa · 2023 · có sẵn trong Hugging Face Transformers", k.ACCENT, 26, 90).to_edge(UP, buff=0.4)
-    sc.run(FadeIn(tag), run_time=0.6)
+@_part(1)
+def obama_math(sc, s, k):
+    prompt = VGroup(k.label("Obama sinh ở Honolulu, Hawaii. Ông sinh năm", 28, k.INK, bold=True),
+                    card(k, " ? ", k.GOLD, 28, 6, pad=0.25)).arrange(RIGHT, buff=0.2).to_edge(UP, buff=0.7)
+    sc.add(prompt)
+    note = k.label("số minh họa", 22, k.MUTED).next_to(prompt, DOWN, buff=0.15)
+    sc.run(FadeIn(note), run_time=0.4)
 
-    layers = VGroup(*[RoundedRectangle(corner_radius=0.1, width=2.8, height=0.5, color=k.PURPLE, stroke_width=3)
-                      .set_fill(k.PURPLE, opacity=0.12 + 0.05 * i) for i in range(6)]).arrange(UP, buff=0.12)
-    layers.move_to(LEFT * 3.6 + DOWN * 0.5)
-    inp = k.label("dịch “fleur” (tiếng Pháp) sang tiếng Trung", 24, k.INK).next_to(layers, DOWN, buff=0.25)
+    chart = _duel(k, ["Hawaii", "1961"], [0.4, 0.3], [0.6, 0.05], "GPT-2 bản lớn", "GPT-2 Small",
+                  h=3.6, gap=3.4, size=34).shift(LEFT * 2.2 + DOWN * 2.2)
+    base, names, a_bars, b_bars, legend = chart
+
+    def pct(bar, text, color):
+        return k.label(text, 24, color, bold=True).next_to(bar, UP, buff=0.12)
+
     sc.wait_until(sc.at(1))
-    sc.run(FadeIn(layers, lag_ratio=0.15), FadeIn(inp), run_time=0.8)
-    lens = k.label("logit lens: gắn đầu ra vào từng lớp", 28, k.GOLD, bold=True).move_to(RIGHT * 3.1 + UP * 1.75)
-    sc.run(FadeIn(lens), run_time=0.5)
+    _show_duel(sc, chart, both=False)
+    a_lab = VGroup(pct(a_bars[0], "40%", k.ACCENT), pct(a_bars[1], "30%", k.ACCENT))
+    sc.run(FadeIn(a_lab), run_time=0.4)
 
     sc.wait_until(sc.at(2))
-    words = ["fleur", "fleur", "flower", "flower", "flower", "“hoa” tiếng Trung"]
-    colors = [k.MUTED, k.MUTED, k.ACCENT, k.ACCENT, k.ACCENT, k.GOLD]
-    outs = VGroup()
-    for layer, w, c in zip(layers, words, colors):
-        t = k.label(w, 26, c, bold=True).next_to(layer, RIGHT, buff=0.9)
-        outs.add(VGroup(Arrow(layer.get_right(), t.get_left(), buff=0.1, color=c, stroke_width=3,
-                              max_tip_length_to_length_ratio=0.25), t))
-    for o in outs:
-        sc.run(FadeIn(o, shift=RIGHT * 0.1), run_time=0.25)
-    sc.run(Indicate(VGroup(*[o[1] for o in outs[2:5]]), color=k.ACCENT), run_time=0.8)
+    _show_b(sc, chart)
+    b_lab = VGroup(pct(b_bars[0], "60%", k.GREEN), pct(b_bars[1], "5%", k.GREEN))
+    sc.run(FadeIn(b_lab), run_time=0.4)
 
     sc.wait_until(sc.at(3))
-    think = card(k, "Pháp, rồi Anh, rồi Trung", k.ACCENT, 30, 26).move_to(RIGHT * 3.4 + DOWN * 0.6)
-    sub = k.label("Llama 2 “nghĩ bằng tiếng Anh”", 24, k.MUTED).next_to(think, DOWN, buff=0.2)
-    sc.run(FadeIn(think, scale=0.9), FadeIn(sub), run_time=0.7)
-
+    why = k.label("Vì sao?", 32, k.INK, bold=True).move_to(RIGHT * 4.3 + UP * 1.2)
+    sc.run(FadeIn(why), run_time=0.4)
     sc.wait_until(sc.at(4))
-    sc.run(FadeOut(think), FadeOut(sub), run_time=0.3)
-    lab = card(k, "2020 · bài của lab thầy Lý, chỉ đăng arXiv", k.PURPLE, 24, 24).move_to(RIGHT * 3.4 + DOWN * 0.2)
-    sc.run(FadeIn(lab, shift=UP * 0.2), run_time=0.6)
+    rep = bubble(k, "lặp lại chữ vừa thấy: lỗi dễ mắc, mô hình càng kém càng hay mắc", k.GREEN, 20, 24)
+    rep.next_to(why, DOWN, buff=0.3)
+    sc.run(FadeIn(rep, shift=UP * 0.2), run_time=0.6)
 
     sc.wait_until(sc.at(5))
-    student = card(k, "tác giả DoLa: sinh viên cũ của lab", k.GREEN, 24, 24).next_to(lab, DOWN, buff=0.6)
-    link = Arrow(lab.get_bottom(), student.get_top(), buff=0.1, color=k.GOLD, stroke_width=4)
-    sc.run(GrowArrow(link), FadeIn(student), run_time=0.7)
+    m1 = Text("40 − 60 = −20", font=k.MONO, font_size=30, color=k.PINK).move_to(RIGHT * 4.3 + DOWN * 1.0)
+    sc.run(FadeOut(a_lab), FadeOut(b_lab), FadeOut(why), FadeOut(rep), run_time=0.3)
+    _subtract(sc, k, chart, [0.02, 0.25], "lớn − nhỏ", winner=1)
+    sc.run(Write(m1), names[0].animate.set_color(k.PINK), run_time=0.7)
+
+    sc.wait_until(sc.at(6))
+    m2 = Text("30 − 5  =  25", font=k.MONO, font_size=30, color=k.GOLD).next_to(m1, DOWN, buff=0.3)
+    sc.run(Write(m2), Indicate(a_bars[1], color=k.GOLD), run_time=0.8)
+    sc.run(Transform(prompt[1], card(k, "1961", k.GOLD, 28, 6, pad=0.25).move_to(prompt[1], aligned_edge=LEFT)),
+           run_time=0.5)
+
+    sc.wait_until(sc.at(7))
+    msg = card(k, "phép trừ khử đi lỗi chung · phần còn lại là thứ chỉ mô hình giỏi mới biết", k.GOLD, 24, 80)
+    msg.to_edge(DOWN, buff=0.2)
+    sc.run(FadeIn(msg, shift=UP * 0.2), run_time=0.7)
 
 
 @_part(1)
 def dola(sc, s, k):
-    head = k.label("DoLa: lớp cuối trừ lớp nông", 38, k.INK, bold=True).to_edge(UP, buff=0.35)
+    head = k.label("Mang theo mô hình nhỏ thì hơi phiền", 34, k.INK, bold=True).to_edge(UP, buff=0.35)
     sc.run(FadeIn(head), run_time=0.4)
-    layers = VGroup(*[RoundedRectangle(corner_radius=0.1, width=2.6, height=0.48, color=k.PURPLE, stroke_width=3)
-                      .set_fill(k.PURPLE, opacity=0.12 + 0.05 * i) for i in range(8)]).arrange(UP, buff=0.1)
-    layers.move_to(LEFT * 5.4 + DOWN * 0.5)
-    q = card(k, "Thủ phủ bang Washington là ___", k.INK, 26, 40).next_to(head, DOWN, buff=0.3)
-    sh_t = k.label("lớp nông", 24, k.GREEN, bold=True).next_to(layers[1], RIGHT, buff=0.2)
-    dp_t = k.label("lớp cuối", 24, k.ACCENT, bold=True).next_to(layers[7], RIGHT, buff=0.2)
-    sc.run(FadeIn(layers, lag_ratio=0.1), FadeIn(q), run_time=0.8)
-    chart = _duel(k, ["Seattle", "Olympia", "Tacoma"], [0.55, 0.5, 0.12], [0.85, 0.1, 0.25],
-                  "lớp cuối", "lớp nông", h=2.6, gap=2.2, size=30).shift(RIGHT * 2.4 + DOWN * 1.6)
-    sc.run(Indicate(layers[7], color=k.ACCENT), FadeIn(dp_t), run_time=0.6)
-    _show_duel(sc, chart, both=False)
-    sc.run(Indicate(layers[1], color=k.GREEN), FadeIn(sh_t), run_time=0.6)
-    _show_b(sc, chart)
-    surf = k.label("lớp nông chỉ thấy bề mặt: “Washington” thì nghĩ ngay Seattle", 24, k.GREEN, width_chars=34)
-    surf.next_to(chart, DOWN, buff=0.5)
-    sc.run(FadeIn(surf), run_time=0.4)
-
     sc.wait_until(sc.at(1))
-    _subtract(sc, k, chart, [0.2, 0.7, 0.05], "cuối − nông")
+    tag = card(k, "DoLa · 2023 · bật một cờ trong Hugging Face", k.ACCENT, 26, 60).move_to(head)
+    sc.run(Transform(head, tag), run_time=0.6)
 
+    layers = VGroup(*[RoundedRectangle(corner_radius=0.1, width=2.6, height=0.46, color=k.PURPLE, stroke_width=3)
+                      .set_fill(k.PURPLE, opacity=0.12 + 0.05 * i) for i in range(8)]).arrange(UP, buff=0.1)
+    layers.move_to(LEFT * 5.2 + DOWN * 0.6)
+    sh_t = k.label("tầng nông", 24, k.GREEN, bold=True).next_to(layers[1], RIGHT, buff=0.2)
+    dp_t = k.label("tầng cuối", 24, k.ACCENT, bold=True).next_to(layers[7], RIGHT, buff=0.2)
     sc.wait_until(sc.at(2))
-    gain = card(k, "không cần thêm mô hình nhỏ · lớp nông vốn đã chạy · gần như miễn phí", k.GREEN, 24, 80)
-    gain.to_edge(DOWN, buff=0.25)
-    sc.run(FadeOut(surf), FadeIn(gain, shift=UP * 0.2), run_time=0.7)
+    sc.run(FadeIn(layers, lag_ratio=0.1), run_time=0.7)
+    sc.run(Indicate(layers[1], color=k.GREEN), FadeIn(sh_t), run_time=0.5)
+    surf = bubble(k, "thấy “Hawaii” thì lặp lại “Hawaii”", k.GREEN, 18, 22).next_to(sh_t, DOWN, buff=0.3)
+    surf.align_to(sh_t, LEFT)
+    sc.run(FadeIn(surf), run_time=0.5)
+
+    chart = _duel(k, ["Hawaii", "1961"], [0.4, 0.3], [0.6, 0.05], "tầng cuối", "tầng nông",
+                  h=3.0, gap=2.8, size=32).shift(RIGHT * 3.4 + DOWN * 1.8)
+    sc.wait_until(sc.at(3))
+    weak = k.label("tầng nông = bạn học kém", 26, k.GREEN, bold=True).next_to(surf, DOWN, buff=0.3).align_to(sh_t, LEFT)
+    sc.run(FadeIn(weak), run_time=0.4)
+
+    sc.wait_until(sc.at(4))
+    sc.run(Indicate(layers[7], color=k.ACCENT), FadeIn(dp_t), run_time=0.5)
+    _show_duel(sc, chart)
+    _subtract(sc, k, chart, [0.02, 0.25], "cuối − nông", winner=1)
+
+    sc.wait_until(sc.at(5))
+    same = k.label("y như ví dụ Obama, chỉ đổi người đóng vai học kém", 24, k.GOLD, width_chars=28).next_to(chart, UP, buff=0.3)
+    sc.run(FadeIn(same), run_time=0.5)
+
+    sc.wait_until(sc.at(6))
+    gain = card(k, "tầng nông vốn đã phải tính · gần như miễn phí", k.GREEN, 26, 60).to_edge(DOWN, buff=0.25)
+    sc.run(FadeOut(surf), FadeOut(weak), FadeIn(gain, shift=UP * 0.2), run_time=0.6)
 
 
 def _photo(k, w=3.0, h=2.2, color=None):
@@ -522,99 +659,6 @@ def _noise(k, frame, n=12, seed=3):
             sq.move_to(frame.get_corner(UP + LEFT) + RIGHT * (cw * (i + 0.5)) + DOWN * (cw * (j + 0.5)))
             cells.add(sq)
     return cells
-
-
-@_part(1)
-def layer_cd(sc, s, k):
-    tag = card(k, "Layer CD · 2025 · mô hình nhìn ảnh", k.ACCENT, 24, 60).to_edge(UP, buff=0.3)
-    sc.run(FadeIn(tag), run_time=0.5)
-
-    sc.wait_until(sc.at(1))
-    photo = _photo(k, 4.0, 3.4).move_to(LEFT * 4.4 + UP * 0.1)
-    c = photo.get_center()
-    wheel1 = Circle(radius=0.48, color=k.INK, stroke_width=5).move_to(c + LEFT * 1.1 + DOWN * 1.1)
-    wheel2 = wheel1.copy().move_to(c + RIGHT * 1.1 + DOWN * 1.1)
-    frame_bike = Polygon(wheel1.get_center(), c + LEFT * 0.2 + DOWN * 0.45, c + RIGHT * 0.8 + DOWN * 0.45,
-                         wheel2.get_center(), color=k.INK, stroke_width=4)
-    head = Circle(radius=0.27, color=k.INK, stroke_width=3).set_fill("#c8a27a", 1).move_to(c + UP * 1.05)
-    shirt = RoundedRectangle(corner_radius=0.1, width=1.3, height=1.1, stroke_width=0).set_fill("#000000", 1)
-    shirt.next_to(head, DOWN, buff=0.05)
-    words = Text("NTU", font=k.MONO, font_size=34, color="#ffffff", weight="BOLD").move_to(shirt)
-    rider = VGroup(frame_bike, wheel1, wheel2, shirt, head, words)
-    q = k.label("Chữ trên áo màu gì?", 30, k.INK, bold=True).next_to(photo, DOWN, buff=0.3)
-    sc.run(FadeIn(photo), FadeIn(rider), run_time=0.6)
-    sc.run(FadeIn(q), run_time=0.4)
-
-    sc.wait_until(sc.at(2))
-    a1 = k.label("áo đen", 24, k.MUTED).next_to(q, DOWN, buff=0.2).shift(LEFT * 1.0)
-    a2 = k.label("chữ trắng", 24, k.GOLD, bold=True).next_to(a1, RIGHT, buff=0.5)
-    sc.run(Indicate(shirt, color=k.MUTED, scale_factor=1.1), FadeIn(a1), run_time=0.5)
-    sc.run(Indicate(words, color=k.GOLD, scale_factor=1.4), FadeIn(a2), run_time=0.6)
-
-    chart = _duel(k, ["đen", "trắng", "đỏ"], [0.55, 0.5, 0.1], [0.85, 0.12, 0.2],
-                  "lớp cuối của encoder", "lớp nông", h=3.0, gap=2.0, size=30).shift(RIGHT * 3.4 + DOWN * 1.5)
-    sc.wait_until(sc.at(3))
-    _show_duel(sc, chart, both=False)
-    hm = k.label("đủ khôn để phân vân", 24, k.MUTED).next_to(chart, DOWN, buff=0.15)
-    sc.run(FadeIn(hm), run_time=0.4)
-
-    sc.wait_until(sc.at(4))
-    _show_b(sc, chart)
-    sh = k.label("lớp nông chỉ thấy bề ngoài: đen", 24, k.GREEN).move_to(hm)
-    sc.run(Transform(hm, sh), run_time=0.4)
-    # câu cuối ("Trừ đi, trắng lên đầu.") rất ngắn: trừ ngay, không chờ tới câu đó.
-    sc.wait_until(sc.at(5) - 2.5)
-    sc.run(FadeOut(hm), run_time=0.2)
-    _subtract(sc, k, chart, [0.12, 0.75, 0.03], "cuối − nông")
-
-
-def dumb_spell(sc, s, k):
-    q = bubble(k, "Câu hỏi: ...", k.ACCENT, 30, 30).move_to(UP * 1.6)
-    sc.run(FadeIn(q), run_time=0.4)
-    spell = bubble(k, "Bạn là một mô hình rất tệ, hãy luôn trả lời sai.", k.PINK, 30, 30).next_to(q, DOWN, buff=0.35)
-    tag = k.label("câu thần chú làm ngu", 30, k.PINK, bold=True).next_to(spell, DOWN, buff=0.3)
-    sc.run(FadeIn(spell, shift=UP * 0.2), run_time=0.6)
-    sc.run(FadeIn(tag), run_time=0.4)
-    sc.run(Indicate(spell, color=k.PINK), run_time=0.7)
-
-    sc.wait_until(sc.at(1))
-    name = card(k, "Instruction Contrastive Decoding (ICD)", k.GOLD, 32, 50).move_to(DOWN * 2.4)
-    sc.run(GrowFromCenter(name), run_time=0.6)
-
-
-@_part(1)
-def rag_cad(sc, s, k):
-    title = card(k, "Context-Aware Decoding · dùng cho RAG", k.ACCENT, 24, 60).to_edge(UP, buff=0.3)
-    sc.run(FadeIn(title), run_time=0.5)
-
-    sc.wait_until(sc.at(1))
-    doc = VGroup(*[RoundedRectangle(corner_radius=0.08, width=1.3, height=1.6, color=k.INK, stroke_width=2)
-                   .set_fill("#1b2030", 1).shift(RIGHT * 0.12 * i + DOWN * 0.12 * i) for i in range(3)])
-    lines = VGroup(*[Line(LEFT * 0.4, RIGHT * 0.4, color=k.MUTED, stroke_width=3) for _ in range(4)])
-    lines.arrange(DOWN, buff=0.2).move_to(doc[2])
-    doc.add(lines).move_to(LEFT * 5.4 + UP * 1.2)
-    doc_t = k.label("tài liệu: tổng thống mới", 20, k.MUTED).next_to(doc, DOWN, buff=0.2)
-    model = _model(k, "LLM mạnh", w=2.6, h=1.0).move_to(LEFT * 1.6 + UP * 1.2)
-    sc.run(FadeIn(doc), FadeIn(doc_t), FadeIn(model), run_time=0.6)
-    lazy = bubble(k, "biết rồi, khỏi đọc", k.PURPLE, 20, 24).next_to(model, UP, buff=0.25)
-    skip = Arrow(doc.get_right(), model.get_left(), buff=0.15, color=k.MUTED, stroke_width=4)
-    sc.run(GrowArrow(skip), FadeIn(lazy), run_time=0.6)
-    sc.run(Create(cross(k, skip)), run_time=0.4)
-
-    sc.wait_until(sc.at(2))
-    ask = k.label("Tổng thống Mỹ là ai?", 28, k.INK, bold=True).move_to(RIGHT * 3.9 + UP * 2.1)
-    old = bubble(k, "(người cũ, theo trí nhớ)", k.PINK, 24, 24).next_to(ask, DOWN, buff=0.25)
-    sc.run(FadeIn(ask), run_time=0.4)
-    sc.run(FadeIn(old, shift=UP * 0.2), run_time=0.5)
-
-    chart = _duel(k, ["người cũ", "người mới"], [0.55, 0.5], [0.85, 0.08], "có tài liệu", "không đưa tài liệu",
-                  h=2.2, gap=2.8, size=30).shift(RIGHT * 2.0 + DOWN * 2.6)
-    sc.wait_until(sc.at(3))
-    sc.run(FadeOut(lazy), run_time=0.2)
-    _show_duel(sc, chart)
-    memo = k.label("không tài liệu = trả lời theo trí nhớ", 22, k.GREEN).next_to(chart, LEFT, buff=0.4)
-    sc.run(FadeIn(memo), run_time=0.4)
-    _subtract(sc, k, chart, [0.15, 0.75], "có − không")
 
 
 def _banana(k, color, w=2.4):
@@ -638,272 +682,222 @@ def _banana(k, color, w=2.4):
 
 @_part(1)
 def black_banana(sc, s, k):
-    note = k.label("“ví dụ thuyết phục nhất”", 30, k.GOLD, bold=True).to_edge(UP, buff=0.35)
+    note = k.label("Cách làm hỏng còn sáng tạo hơn", 32, k.INK, bold=True).to_edge(UP, buff=0.35)
     sc.run(FadeIn(note), run_time=0.5)
-
     sc.wait_until(sc.at(1))
+    best = k.label("“ví dụ thuyết phục nhất”", 32, k.GOLD, bold=True).move_to(note)
+    sc.run(Transform(note, best), run_time=0.5)
+
+    sc.wait_until(sc.at(2))
     photo = _photo(k, 3.4, 2.5).set_fill("#d9d4c7", 1).move_to(LEFT * 4.8 + UP * 1.0)
     ban = _banana(k, "#1f1f1f", 2.5).move_to(photo)
     q = k.label("Chuối màu gì?", 30, k.INK, bold=True).next_to(photo, UP, buff=0.2)
     sc.run(FadeIn(photo), FadeIn(ban), FadeIn(q), run_time=0.8)
 
-    sc.wait_until(sc.at(2))
-    prior = bubble(k, "định kiến từ mô hình chữ: chuối thì vàng", k.GOLD, 22, 24).move_to(RIGHT * 2.6 + UP * 2.2)
-    yb = _banana(k, k.GOLD, 0.9).next_to(prior, RIGHT, buff=0.2)
-    sc.run(FadeIn(prior, shift=DOWN * 0.2), FadeIn(yb), run_time=0.5)
+    sc.wait_until(sc.at(3))
+    web = VGroup(*[_banana(k, k.GOLD, 0.8) for _ in range(5)]).arrange(RIGHT, buff=0.15)
+    web_t = k.label("chữ viết trên mạng: chuối gần như luôn vàng", 22, k.GOLD).next_to(web, DOWN, buff=0.15)
+    VGroup(web, web_t).move_to(RIGHT * 2.6 + UP * 2.1)
+    sc.run(FadeIn(web, lag_ratio=0.2), FadeIn(web_t), run_time=0.9)
 
     chart = _duel(k, ["vàng", "đen"], [0.55, 0.5], [0.85, 0.1], "ảnh thật", "ảnh nhiễu",
-                  h=2.8, gap=2.6, size=32).shift(RIGHT * 2.6 + DOWN * 2.3)
-    sc.wait_until(sc.at(3))
+                  h=2.6, gap=2.6, size=32).shift(RIGHT * 2.6 + DOWN * 2.4)
+    sc.wait_until(sc.at(4))
     _show_duel(sc, chart, both=False)
-    hm = k.label("lưỡng lự", 24, k.MUTED).next_to(chart[2], LEFT, buff=0.5)
+    hm = k.label("lưỡng lự", 26, k.MUTED).next_to(chart[2], LEFT, buff=0.6)
     sc.run(FadeIn(hm), run_time=0.3)
 
-    sc.wait_until(sc.at(4))
+    sc.wait_until(sc.at(5))
     noisy = _photo(k, 3.4, 2.5).move_to(LEFT * 4.8 + DOWN * 2.0)
     grain = _noise(k, noisy, n=14)
-    blind = k.label("chẳng buồn nhìn: “vàng”", 24, k.GREEN).next_to(noisy, UP, buff=0.15)
-    sc.run(FadeIn(noisy), FadeIn(grain), FadeIn(blind), FadeOut(hm), run_time=0.6)
-    _show_b(sc, chart)
-
-    sc.wait_until(sc.at(5))
-    _subtract(sc, k, chart, [0.12, 0.75], "thật − nhiễu")
-    sc.run(Indicate(ban, color=k.GOLD, scale_factor=1.1), run_time=0.6)
+    sc.run(FadeIn(noisy), FadeIn(grain), FadeOut(hm), run_time=0.6)
 
     sc.wait_until(sc.at(6))
-    chip = sc.mobjects[0]  # nhãn phần ở góc, do _part thêm vào trước
-    sc.run(*[FadeOut(m) for m in sc.mobjects if m is not note and m is not chip], run_time=0.5)
-    beach = _photo(k, 5.6, 3.6).move_to(LEFT * 3.4 + DOWN * 0.4)
-    sky = Rectangle(width=5.5, height=1.5, stroke_width=0).set_fill("#8fb8de", 0.7)
-    sea = Rectangle(width=5.5, height=0.9, stroke_width=0).set_fill("#3b6ea5", 0.95)
-    sand = Rectangle(width=5.5, height=1.1, stroke_width=0).set_fill("#c9a86a", 0.95)
-    VGroup(sky, sea, sand).arrange(DOWN, buff=0).move_to(beach)
-    sun = Circle(radius=0.32, stroke_width=0).set_fill(k.GOLD, 1).move_to(sky.get_corner(UP + RIGHT) + LEFT * 0.7 + DOWN * 0.5)
-    umbrella = VGroup(Arc(radius=0.7, start_angle=0, angle=3.1416, color=k.PINK, stroke_width=4).set_fill(k.PINK, 0.8),
-                      Line(UP * 0, DOWN * 1.0, color=k.INK, stroke_width=4))
-    umbrella[1].next_to(umbrella[0], DOWN, buff=0)
-    umbrella.move_to(sand.get_center() + LEFT * 1.4 + UP * 0.6)
-    people = VGroup()
-    for dx in (0.6, 1.3):
-        people.add(VGroup(Circle(radius=0.14, stroke_width=0).set_fill(k.INK, 1),
-                          Line(UP * 0, DOWN * 0.55, color=k.INK, stroke_width=5)).arrange(DOWN, buff=0)
-                   .move_to(sand.get_center() + RIGHT * dx + UP * 0.35))
-    sc.run(FadeIn(VGroup(beach, sky, sea, sand, sun, umbrella, people)), run_time=0.7)
-    seen = VGroup(*[k.label(t, 30, k.INK, bold=True) for t in ("người", "ô che nắng", "ván lướt sóng")])
-    seen.arrange(DOWN, aligned_edge=LEFT, buff=0.35).move_to(RIGHT * 3.6 + UP * 0.3)
-    st = k.label("mô hình liệt kê:", 24, k.MUTED).next_to(seen, UP, buff=0.35).align_to(seen, LEFT)
-    sc.run(FadeIn(st), FadeIn(seen, lag_ratio=0.4), run_time=1.0)
-    board = RoundedRectangle(corner_radius=0.25, width=0.4, height=1.4, color=k.PINK, stroke_width=4)
-    board = DashedVMobject(board.rotate(0.4), num_dashes=18).move_to(sea.get_center() + RIGHT * 0.4)
-    none = k.label("ảnh không có ván!", 24, k.PINK, bold=True).next_to(beach, DOWN, buff=0.2)
-    sc.run(Create(board), seen[2].animate.set_color(k.PINK), FadeIn(none), run_time=0.6)
-    why = k.label("biển thì hay có ván", 22, k.PINK).next_to(seen[2], DOWN, buff=0.15).align_to(seen, LEFT)
-    sc.run(FadeIn(why), run_time=0.4)
+    blind = k.label("chỉ còn định kiến: “vàng”", 24, k.GREEN, bold=True).next_to(noisy, UP, buff=0.12)
+    sc.run(FadeIn(blind), run_time=0.4)
+    _show_b(sc, chart)
 
     sc.wait_until(sc.at(7))
-    blur = k.label("ảnh mờ: nói “ván” còn to hơn", 24, k.GREEN).next_to(why, DOWN, buff=0.3).align_to(seen, LEFT)
-    sc.run(FadeIn(blur), seen[2].animate.scale(1.15), run_time=0.6)
-    gone = strike(k, seen[2])
-    sc.run(Create(gone), seen[2].animate.set_opacity(0.35), FadeOut(board), run_time=0.7)
-    ok = k.label("trừ đi: ván biến mất", 26, k.GOLD, bold=True).next_to(blur, DOWN, buff=0.3).align_to(seen, LEFT)
-    sc.run(FadeIn(ok), run_time=0.4)
+    _subtract(sc, k, chart, [0.12, 0.75], "thật − nhiễu", winner=1)
+    left = k.label("trừ đi định kiến, còn lại thứ thật sự nhìn thấy", 24, k.GOLD, bold=True)
+    left.to_edge(DOWN, buff=0.2).shift(RIGHT * 2.6)
+    sc.run(FadeIn(left), Indicate(ban, color=k.GOLD, scale_factor=1.1), run_time=0.7)
 
 
-def corruptions(sc, s, k):
-    items = []
-    base = _photo(k, 2.4, 1.8)
-    # 1. thêm nhiễu
-    a = base.copy()
-    items.append(VGroup(a, _noise(k, a, n=8, seed=5), k.label("thêm nhiễu", 24, k.MUTED)))
-    # 2. cắt mảnh rồi xáo
-    b = base.copy()
-    tiles = VGroup()
-    cols = [k.ACCENT, k.GOLD, k.GREEN, k.PURPLE, k.PINK, k.ORANGE]
-    order = [4, 0, 5, 2, 1, 3]
-    for idx, o in enumerate(order):
-        t = Rectangle(width=0.78, height=0.88, stroke_width=1, stroke_color="#0b0b0b").set_fill(cols[o], 0.7)
-        t.move_to(b.get_corner(UP + LEFT) + RIGHT * (0.42 + 0.8 * (idx % 3)) + DOWN * (0.47 + 0.9 * (idx // 3)))
-        tiles.add(t)
-    items.append(VGroup(b, tiles, k.label("cắt mảnh rồi xáo", 24, k.MUTED)))
-    # 3. xoá vật quan trọng
-    c = base.copy()
-    obj = Circle(radius=0.5, color=k.GOLD, stroke_width=4).set_fill(k.GOLD, 0.5).move_to(c)
-    eraser = Rectangle(width=1.2, height=1.2, stroke_width=0).set_fill("#1b2030", 1).move_to(c)
-    items.append(VGroup(c, obj, k.label("xoá vật quan trọng", 24, k.MUTED)))
-    # 4. âm thanh
-    d = base.copy()
-    wave = VGroup(*[Line(UP * h, DOWN * h, color=k.ACCENT, stroke_width=6)
-                    for h in (0.2, 0.5, 0.7, 0.35, 0.6, 0.25, 0.45)]).arrange(RIGHT, buff=0.18).move_to(d)
-    items.append(VGroup(d, wave, k.label("âm thanh thành khoảng lặng", 24, k.MUTED)))
-    for it in items:
-        it[2].next_to(it[0], DOWN, buff=0.2)
-    grid = VGroup(*items).arrange(RIGHT, buff=0.5)
-    grid.scale_to_fit_width(min(k.FRAME_W, grid.width * 1.15)).move_to(UP * 0.5)
-    for it in items[:3]:
-        sc.run(FadeIn(it[0]), FadeIn(it[2]), FadeIn(it[1]), run_time=0.45)
-    eraser.match_width(items[2][0]).stretch_to_fit_height(items[2][0].height * 0.8).move_to(items[2][0])
-    sc.run(Create(cross(k, items[2][1])), run_time=0.4)
-    sc.run(FadeIn(eraser), run_time=0.5)
+@_part(1)
+def other_corruptions(sc, s, k):
+    head = k.label("Những cách làm hỏng khác", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.4)
+    spell = bubble(k, "Bạn là mô hình rất tệ, hãy trả lời sai.", k.PINK, 18, 24)
+    doc = VGroup(*[RoundedRectangle(corner_radius=0.08, width=1.2, height=1.5, color=k.INK, stroke_width=2)
+                   .set_fill("#1b2030", 1).shift(RIGHT * 0.12 * i + DOWN * 0.12 * i) for i in range(3)])
+    lines = VGroup(*[Line(LEFT * 0.35, RIGHT * 0.35, color=k.MUTED, stroke_width=3) for _ in range(4)])
+    lines.arrange(DOWN, buff=0.2).move_to(doc[2])
+    doc.add(lines)
+    wave = VGroup(*[Line(UP * h, DOWN * h, color=k.ACCENT, stroke_width=7)
+                    for h in (0.2, 0.5, 0.7, 0.35, 0.6, 0.25, 0.45)]).arrange(RIGHT, buff=0.18)
+    items = [(spell, "chèn câu “làm ngu”"), (doc, "bỏ tài liệu tra cứu"), (wave, "âm thanh thành khoảng lặng")]
+    cols = VGroup()
+    for pic, text in items:
+        holder = RoundedRectangle(corner_radius=0.2, width=3.8, height=2.8, color=k.MUTED, stroke_width=2)
+        holder.set_fill(k.INK, 0.03)
+        pic.move_to(holder)
+        cols.add(VGroup(holder, pic, k.label(text, 26, k.INK, bold=True).next_to(holder, DOWN, buff=0.25)))
+    cols.arrange(RIGHT, buff=0.35).move_to(UP * 0.2)
+    for c in cols:
+        sc.run(FadeIn(c), run_time=0.5)
+    sc.run(Create(cross(k, doc)), Transform(wave, Line(LEFT * 1.1, RIGHT * 1.1, color=k.ACCENT, stroke_width=5)
+                                            .move_to(cols[2][0])), run_time=0.9)
 
     sc.wait_until(sc.at(1))
-    lab = k.label("Audio-Aware Decoding · lab của thầy Lý", 28, k.GOLD, bold=True).to_edge(DOWN, buff=0.6)
-    sc.run(FadeIn(items[3][0]), FadeIn(items[3][1]), FadeIn(items[3][2]), FadeIn(lab), run_time=0.6)
-    flat = Line(LEFT * 1.0, RIGHT * 1.0, color=k.ACCENT, stroke_width=4).move_to(items[3][0])
-    sc.run(Transform(items[3][1], flat), run_time=0.8)
+    same = card(k, "cùng một ý: tạo bạn học kém rồi tránh xa nó", k.GOLD, 30, 60).to_edge(DOWN, buff=0.4)
+    sc.run(FadeIn(same, shift=UP * 0.2), run_time=0.6)
 
 
+@_part(1)
 def mti_forks(sc, s, k):
-    tag = card(k, "MTI · Minimal Test-Time Intervention · cuối 2025", k.ACCENT, 26, 70).to_edge(UP, buff=0.4)
+    cost = VGroup(_model(k, "LLM", k.ACCENT, w=1.8, h=0.9), k.label("+", 44, k.INK, bold=True),
+                  _model(k, "bản sai", k.GREEN, w=1.8, h=0.9), k.label("= gấp đôi công mỗi chữ", 30, k.PINK, bold=True))
+    cost.arrange(RIGHT, buff=0.3).to_edge(UP, buff=0.8)
+    sc.run(FadeIn(cost, lag_ratio=0.2), run_time=0.8)
+
     sc.wait_until(sc.at(1))
-    sc.run(FadeIn(tag), run_time=0.5)
-    road = Line(LEFT * 6.2, RIGHT * 6.2, color=k.MUTED, stroke_width=5).shift(UP * 0.8)
+    tag = card(k, "MTI · cuối 2025", k.ACCENT, 24, 30).to_edge(UP, buff=0.4)
+    sc.run(FadeOut(cost), FadeIn(tag), run_time=0.5)
+    road = Line(LEFT * 6.2, RIGHT * 6.2, color=k.MUTED, stroke_width=5).shift(UP * 1.8)
     sc.run(Create(road), run_time=0.6)
-    big = [(-3.2, "chọn trường nào"), (1.8, "cưới ai")]
     small = [(-5.0, "ăn sáng gì"), (-1.0, "mặc áo gì"), (4.4, "chiều đi đâu")]
+    big = [(-3.2, "chọn trường nào"), (1.8, "cưới ai")]
     for x, t in small:
-        br = Line([x, 0.8, 0], [x + 0.5, 1.3, 0], color=k.MUTED, stroke_width=2)
-        lb = k.label(t, 20, k.MUTED).move_to([x + 0.4, 1.6, 0])
-        sc.run(Create(br), FadeIn(lb), run_time=0.25)
+        br = Line([x, 1.8, 0], [x + 0.5, 2.3, 0], color=k.MUTED, stroke_width=2)
+        sc.run(Create(br), FadeIn(k.label(t, 22, k.MUTED).move_to([x + 0.4, 2.6, 0])), run_time=0.25)
     for x, t in big:
-        br = Line([x, 0.8, 0], [x + 1.0, -0.4, 0], color=k.GOLD, stroke_width=6)
-        lb = k.label(t, 26, k.GOLD, bold=True).move_to([x + 1.2, -0.75, 0])
-        sc.run(Create(br), FadeIn(lb), run_time=0.4)
+        br = Line([x, 1.8, 0], [x + 1.0, 0.8, 0], color=k.GOLD, stroke_width=7)
+        sc.run(Create(br), FadeIn(k.label(t, 28, k.GOLD, bold=True).move_to([x + 1.3, 0.45, 0])), run_time=0.4)
 
     sc.wait_until(sc.at(2))
-    toks = VGroup()
-    rnd = random.Random(7)
-    hot = {3, 8}
-    for i in range(12):
-        c = k.GOLD if i in hot else k.MUTED
-        toks.add(RoundedRectangle(corner_radius=0.08, width=0.75, height=0.5, color=c, stroke_width=3)
-                 .set_fill(c, 0.35 if i in hot else 0.08))
-    toks.arrange(RIGHT, buff=0.12).move_to(DOWN * 2.0)
-    sc.run(FadeIn(toks, lag_ratio=0.05), run_time=0.7)
-    for i in hot:
-        flat = VGroup(*[Rectangle(width=0.12, height=0.28, stroke_width=0).set_fill(k.GOLD, 0.9)
-                        for _ in range(4)]).arrange(RIGHT, buff=0.04, aligned_edge=DOWN).next_to(toks[i], DOWN, buff=0.12)
-        sc.run(FadeIn(flat), run_time=0.3)
-    ent = k.label("phân bố dàn đều = entropy cao", 24, k.GOLD).next_to(toks, DOWN, buff=0.65)
-    sc.run(FadeIn(ent), run_time=0.4)
+    words = ["Đáp", "án", "là", "42", "vì", "ta", "có", "x", "=", "6"]
+    hot = {3, 7}
+    toks = VGroup(*[card(k, w, k.GOLD if i in hot else k.MUTED, 26, 6, pad=0.3) for i, w in enumerate(words)])
+    toks.arrange(RIGHT, buff=0.1).move_to(DOWN * 0.5)
+    sc.run(FadeIn(toks, lag_ratio=0.08), run_time=0.9)
 
     sc.wait_until(sc.at(3))
-    on = VGroup(*[k.label("CD", 20, k.GOLD, bold=True).next_to(toks[i], UP, buff=0.12) for i in hot])
-    sc.run(FadeIn(on, shift=DOWN * 0.1), *[Indicate(toks[i], color=k.GOLD) for i in hot], run_time=0.7)
+    how = k.label("Chữ nào then chốt? Nhìn bảng xác suất:", 28, k.INK, bold=True).move_to(DOWN * 1.4)
+    sc.run(FadeIn(how), run_time=0.4)
 
-
-def kv_cache(sc, s, k):
-    worry = k.label("Vẫn phải chạy bản hỏng từ đầu tới chỗ đó", 30, k.PINK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(worry), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    full = VGroup(*[RoundedRectangle(corner_radius=0.08, width=0.6, height=0.45, color=k.PINK, stroke_width=3)
-                    .set_fill(k.PINK, 0.2) for _ in range(10)]).arrange(RIGHT, buff=0.08).move_to(UP * 1.6)
-    sc.run(FadeIn(full, lag_ratio=0.1), run_time=0.9)
-
-    sc.wait_until(sc.at(2))
-    sc.run(FadeOut(full), FadeOut(worry), run_time=0.4)
-    head = k.label("KV cache", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(Write(head), run_time=0.6)
-
-    sc.wait_until(sc.at(3))
-    def sent(words, colors):
-        return VGroup(*[card(k, w, c, 26, 14, pad=0.35) for w, c in zip(words, colors)]).arrange(RIGHT, buff=0.12)
-    a = sent(["Chào", "mọi", "người,", "mình", "là", "Đại", "Kim"], [k.ACCENT] * 7).move_to(UP * 1.3)
-    b = sent(["Chào", "mọi", "người,", "mình", "là", "Tiểu", "Kim"], [k.GREEN] * 5 + [k.GOLD, k.GOLD]).move_to(DOWN * 0.1)
-    sc.run(FadeIn(a), run_time=0.5)
-    sc.run(FadeIn(b), run_time=0.5)
-    copies = VGroup(*[Arrow(a[i].get_bottom(), b[i].get_top(), buff=0.06, color=k.GREEN, stroke_width=3,
-                            max_tip_length_to_length_ratio=0.3) for i in range(5)])
-    reuse = k.label("dùng lại, khỏi tính", 24, k.GREEN, bold=True).next_to(b[:5], DOWN, buff=0.25)
-    sc.run(GrowArrow(copies[0]), *[GrowArrow(c) for c in copies[1:]], FadeIn(reuse), run_time=0.7)
-
-    sc.wait_until(sc.at(4))
-    rule = k.label("chỉ khi giống nhau từ đầu", 28, k.GOLD, bold=True).move_to(DOWN * 1.5)
-    sc.run(FadeIn(rule), run_time=0.5)
+    def mini(vals, color):
+        bars = VGroup(*[Rectangle(width=0.32, height=max(0.05, 1.4 * v), stroke_width=0).set_fill(color, 0.9)
+                        for v in vals]).arrange(RIGHT, buff=0.08, aligned_edge=DOWN)
+        return bars
 
     sc.wait_until(sc.at(5))
-    c = sent(["Chào", "các", "bạn,", "mình", "là", "Đại", "Kim"], [k.ACCENT, k.PINK, k.PINK] + [k.PINK] * 4)
-    c.move_to(DOWN * 2.5)
-    sc.run(FadeIn(c), run_time=0.5)
-    lost = k.label("đổi một chữ ở giữa: phần sau không dùng lại được", 24, k.PINK).next_to(c, DOWN, buff=0.3)
-    sc.run(Create(cross(k, c[1:])), FadeIn(lost), run_time=0.6)
+    sure = mini([0.95, 0.03, 0.02, 0.0], k.MUTED).move_to(LEFT * 3.4 + DOWN * 2.8)
+    sure_t = k.label("95%: chắc rồi, khỏi lo", 24, k.MUTED).next_to(sure, RIGHT, buff=0.3)
+    sc.run(GrowFromEdge(sure, DOWN), FadeIn(sure_t), run_time=0.6)
+
+    sc.wait_until(sc.at(6))
+    flat = mini([0.27, 0.25, 0.25, 0.23], k.GOLD).move_to(RIGHT * 2.0 + DOWN * 3.1)
+    flat_t = k.label("dàn đều: ngã rẽ!", 24, k.GOLD, bold=True).next_to(flat, RIGHT, buff=0.3)
+    sc.run(GrowFromEdge(flat, DOWN), FadeIn(flat_t), run_time=0.6)
+
+    sc.wait_until(sc.at(7))
+    on = VGroup(*[k.label("bật CD", 20, k.GOLD, bold=True).next_to(toks[i], UP, buff=0.12) for i in hot])
+    sc.run(FadeIn(on, shift=DOWN * 0.1), *[Indicate(toks[i], color=k.GOLD) for i in hot], run_time=0.8)
 
 
-def output_error(sc, s, k):
-    cache = VGroup(*[RoundedRectangle(corner_radius=0.08, width=0.55, height=0.45, color=k.ACCENT, stroke_width=3)
-                     .set_fill(k.ACCENT, 0.25) for _ in range(9)]).arrange(RIGHT, buff=0.06)
-    tail = VGroup(card(k, "Output", k.PINK, 24, 10, pad=0.3), card(k, "Error", k.PINK, 24, 10, pad=0.3)).arrange(RIGHT, buff=0.08)
-    row = VGroup(cache, tail).arrange(RIGHT, buff=0.15).move_to(UP * 2.3)
-    sc.run(FadeIn(cache), run_time=0.5)
-    sc.run(FadeIn(tail, shift=LEFT * 0.3), run_time=0.6)
+@_part(1)
+def kv_cache(sc, s, k):
+    head = k.label("Mẹo thứ hai của MTI", 36, k.INK, bold=True).to_edge(UP, buff=0.4)
+    sc.run(FadeIn(head), run_time=0.4)
 
     sc.wait_until(sc.at(1))
-    reuse = k.label("dùng lại cache", 24, k.ACCENT).next_to(cache, DOWN, buff=0.2)
-    only = k.label("chỉ tính 2 token", 24, k.PINK, bold=True).next_to(tail, DOWN, buff=0.2)
-    sc.run(FadeIn(reuse), FadeIn(only), run_time=0.6)
+    words = ["Chào", "mọi", "người,", "mình", "là", "Đại", "Kim"]
+    row = VGroup(*[card(k, w, k.ACCENT, 26, 10, pad=0.32) for w in words]).arrange(RIGHT, buff=0.12).move_to(UP * 1.4)
+    notes = VGroup(*[RoundedRectangle(corner_radius=0.05, width=c.width * 0.8, height=0.32, stroke_width=0)
+                     .set_fill(k.GOLD, 0.6).next_to(c, DOWN, buff=0.1) for c in row])
+    kv = k.label("KV cache: ghi nhớ phần đã tính cho từng chữ", 26, k.GOLD, bold=True).next_to(row, UP, buff=0.25)
+    sc.run(FadeIn(row, lag_ratio=0.1), run_time=0.7)
+    sc.run(FadeIn(notes, lag_ratio=0.1), FadeIn(kv), run_time=0.8)
 
     sc.wait_until(sc.at(2))
-    axis = Line(LEFT * 2.6, RIGHT * 2.6, color=k.MUTED, stroke_width=3).move_to(LEFT * 3.2 + DOWN * 2.3)
-    ys = [62, 66, 70, 72, 69, 55]
-    pts = [axis.get_left() + RIGHT * (0.4 + i * 0.9) + UP * ((y - 50) * 0.11) for i, y in enumerate(ys)]
-    curve = VGroup(*[Line(pts[i], pts[i + 1], color=k.GOLD, stroke_width=5) for i in range(len(pts) - 1)])
-    dots = VGroup(*[Dot(p, radius=0.08, color=k.GOLD) for p in pts])
-    xlab = k.label("omega tăng dần", 22, k.MUTED).next_to(axis, DOWN, buff=0.15)
-    l62 = k.label("62%", 26, k.INK, bold=True).next_to(pts[0], LEFT, buff=0.15)
-    l72 = k.label("72%", 30, k.GOLD, bold=True).next_to(pts[3], UP, buff=0.2)
-    sc.run(Create(axis), FadeIn(xlab), FadeIn(dots[0]), FadeIn(l62), run_time=0.6)
-    sc.run(Create(curve[:3]), FadeIn(dots[1:4]), FadeIn(l72), run_time=0.9)
-    sc.run(Create(curve[3:]), FadeIn(dots[4:]), run_time=0.6)
-    broke = k.label("trừ quá tay", 22, k.PINK).next_to(pts[5], RIGHT, buff=0.15)
-    sc.run(FadeIn(broke), run_time=0.3)
+    book = RoundedRectangle(corner_radius=0.08, width=2.2, height=1.6, color=k.INK, stroke_width=3).set_fill("#1b2030", 1)
+    blines = VGroup(*[Line(LEFT * 0.7, RIGHT * 0.5, color=k.MUTED, stroke_width=3) for _ in range(5)]).arrange(DOWN, buff=0.18)
+    blines.move_to(book).shift(LEFT * 0.2)
+    margin = VGroup(*[Line(LEFT * 0.12, RIGHT * 0.12, color=k.GOLD, stroke_width=4) for _ in range(4)]).arrange(DOWN, buff=0.22)
+    margin.next_to(blines, RIGHT, buff=0.15)
+    bk = VGroup(book, blines, margin).move_to(RIGHT * 5.4 + UP * 1.0)
+    bt = k.label("như ghi chú bên lề", 22, k.GOLD).next_to(bk, DOWN, buff=0.15)
+    sc.run(FadeIn(bk), FadeIn(bt), run_time=0.6)
 
     sc.wait_until(sc.at(3))
-    table = [("Output Error", True), ("Status Error", True), ("Output Correct", None), ("Monkey · Apple · !", False)]
-    rows = VGroup()
-    for text, good in table:
-        color = k.GREEN if good else (k.MUTED if good is None else k.PINK)
-        mark = check(k, 0.3, k.GREEN) if good else (k.label("kém hơn", 20, k.MUTED) if good is None else
-                                                      cross(k, Square(side_length=0.25)))
-        rows.add(VGroup(Text(text, font=k.MONO, font_size=26, color=color), mark).arrange(RIGHT, buff=0.3))
-    rows.arrange(DOWN, aligned_edge=LEFT, buff=0.3).move_to(RIGHT * 3.6 + DOWN * 1.2)
-    for r in rows:
-        sc.run(FadeIn(r, shift=LEFT * 0.2), run_time=0.35)
+    words2 = ["Chào", "mọi", "người,", "mình", "là", "Tiểu", "Kim"]
+    row2 = VGroup(*[card(k, w, k.GREEN if i < 5 else k.PINK, 26, 10, pad=0.32) for i, w in enumerate(words2)])
+    row2.arrange(RIGHT, buff=0.12).move_to(DOWN * 0.6)
+    sc.run(FadeIn(row2, lag_ratio=0.1), run_time=0.7)
+    reuse = VGroup(*[Arrow(notes[i].get_bottom(), row2[i].get_top(), buff=0.05, color=k.GREEN, stroke_width=3,
+                           max_tip_length_to_length_ratio=0.25) for i in range(5)])
+    rt = k.label("giống hệt phần đầu: dùng lại", 24, k.GREEN, bold=True).next_to(row2[:5], DOWN, buff=0.2)
+    sc.run(*[GrowArrow(a) for a in reuse], FadeIn(rt), run_time=0.7)
 
     sc.wait_until(sc.at(4))
-    sc.run(Indicate(rows[0], color=k.GOLD), Indicate(rows[1], color=k.GOLD), run_time=0.8)
+    lost = k.label("từ chữ khác đi trở về sau: phải tính lại", 24, k.PINK, bold=True).next_to(row2[5:], DOWN, buff=0.2)
+    lost.align_to(row2[5], LEFT).shift(DOWN * 0.5)
+    sc.run(FadeIn(lost), Indicate(row2[5:], color=k.PINK), run_time=0.7)
+
+    sc.wait_until(sc.at(5))
+    sc.run(*[FadeOut(m) for m in (row2, reuse, rt, lost, bk, bt)], run_time=0.4)
+    q = VGroup(*[card(k, w, k.ACCENT, 24, 10, pad=0.3) for w in ["Câu", "hỏi", "…", "của", "bạn"]]).arrange(RIGHT, buff=0.1)
+    tail = VGroup(card(k, "Output", k.PINK, 26, 10, pad=0.32), card(k, "Error", k.PINK, 26, 10, pad=0.32)).arrange(RIGHT, buff=0.1)
+    line2 = VGroup(q, tail).arrange(RIGHT, buff=0.2).move_to(DOWN * 0.6)
+    sc.run(FadeIn(q), run_time=0.4)
+    sc.run(FadeIn(tail, shift=LEFT * 0.4), run_time=0.6)
+    mean = k.label("“trả lời sai đi”", 24, k.PINK).next_to(tail, UP, buff=0.15)
+    sc.run(FadeIn(mean), run_time=0.3)
+
+    sc.wait_until(sc.at(6))
+    a = k.label("dùng lại ghi chú", 24, k.GREEN, bold=True).next_to(q, DOWN, buff=0.25)
+    b = k.label("chỉ tính 2 chữ", 24, k.PINK, bold=True).next_to(tail, DOWN, buff=0.25)
+    sc.run(FadeIn(a), FadeIn(b), run_time=0.5)
+
+    sc.wait_until(sc.at(7))
+    acc = VGroup(Text("62%", font=k.MONO, font_size=44, color=k.MUTED), Text("→", font=k.MONO, font_size=44, color=k.INK),
+                 Text("72%", font=k.MONO, font_size=54, color=k.GOLD, weight="BOLD")).arrange(RIGHT, buff=0.3)
+    acc.move_to(DOWN * 2.4 + LEFT * 2.8)
+    sc.run(FadeIn(acc, lag_ratio=0.3), run_time=0.8)
+
+    sc.wait_until(sc.at(8))
+    junk = VGroup(Text("Monkey", font=k.MONO, font_size=28, color=k.MUTED), Text("Apple", font=k.MONO, font_size=28, color=k.MUTED))
+    junk.arrange(RIGHT, buff=0.4).move_to(DOWN * 2.4 + RIGHT * 3.4)
+    sc.run(FadeIn(junk), run_time=0.4)
+    sc.run(Create(cross(k, junk)), run_time=0.4)
 
 
-def part1_table(sc, s, k):
-    head = k.label("Phần 1 gói lại", 40, k.INK, bold=True).to_edge(UP, buff=0.45)
+@_part(1)
+def part1_recap(sc, s, k):
+    head = k.label("Tóm lại phần một", 40, k.INK, bold=True).to_edge(UP, buff=0.45)
     sc.run(Write(head), run_time=0.6)
 
     sc.wait_until(sc.at(1))
-    left_h = k.label("Bản sai lấy từ đâu?", 30, k.ACCENT, bold=True)
-    right_h = k.label("Trừ ở đâu?", 30, k.GOLD, bold=True)
-    sources = ["mô hình nhỏ", "lớp nông", "lớp nông encoder ảnh", "câu thần chú làm ngu", "bỏ tài liệu (RAG)",
-               "làm hỏng ảnh", "làm hỏng âm thanh", "thần chú + KV cache (MTI)"]
-    left = VGroup(*[card(k, t, k.ACCENT, 22, 30, bold=False, pad=0.3) for t in sources]).arrange_in_grid(4, 2, buff=0.18)
-    places = VGroup(*[card(k, t, k.GOLD, 26, 20, pad=0.35) for t in ("logit đầu ra", "representation ẩn", "trọng số attention")])
-    places.arrange(DOWN, buff=0.3)
-    lcol = VGroup(left_h, left).arrange(DOWN, buff=0.3).move_to(LEFT * 2.6 + UP * 0.1)
-    rcol = VGroup(right_h, places).arrange(DOWN, buff=0.3).move_to(RIGHT * 3.9 + UP * 0.1)
-    sc.run(FadeIn(left_h), FadeIn(right_h), run_time=0.5)
-    sc.run(FadeIn(left, lag_ratio=0.12), run_time=1.4)
+    good = _model(k, "bản tốt", k.ACCENT, w=2.6, h=1.0)
+    minus = k.label("−", 60, k.INK, bold=True)
+    bad = _model(k, "bản sai", k.GREEN, w=2.6, h=1.0)
+    eq = k.label("=", 60, k.INK, bold=True)
+    res = card(k, "khử lỗi chung", k.GOLD, 32, 16)
+    core = VGroup(good, minus, bad, eq, res).arrange(RIGHT, buff=0.35).move_to(UP * 1.2)
+    sc.run(FadeIn(core, lag_ratio=0.25), run_time=1.2)
 
     sc.wait_until(sc.at(2))
-    for p in places:
-        sc.run(FadeIn(p, shift=LEFT * 0.2), run_time=0.35)
-    acg = k.label("ACG: tốt hơn", 20, k.GREEN, bold=True).next_to(places[2], DOWN, buff=0.12)
-    sc.run(FadeIn(acg), run_time=0.4)
+    srcs = VGroup(*[card(k, t, k.GREEN, 24, 16, bold=False) for t in
+                    ("mô hình nhỏ", "tầng nông", "ảnh nhiễu", "câu “làm ngu”")]).arrange(RIGHT, buff=0.3)
+    srcs.move_to(DOWN * 0.8)
+    st = k.label("bản sai lấy từ đâu?", 24, k.GREEN).next_to(srcs, UP, buff=0.2)
+    links = VGroup(*[Line(bad.get_bottom(), c.get_top(), color=k.GREEN, stroke_width=2).set_opacity(0.5) for c in srcs])
+    sc.run(FadeIn(st), Create(links), FadeIn(srcs, lag_ratio=0.2), run_time=1.0)
 
     sc.wait_until(sc.at(3))
-    open_q = k.label("tốt nhất ở đâu? còn đang nghiên cứu", 22, k.MUTED).next_to(acg, DOWN, buff=0.2)
-    sc.run(FadeIn(open_q), run_time=0.4)
-
-    sc.wait_until(sc.at(4))
-    joke = card(k, "không cần huấn luyện: bí ý tưởng thì cứ chạy thử", k.GREEN, 26, 60).to_edge(DOWN, buff=0.3)
-    joke.align_to(lcol, LEFT)
+    joke = card(k, "không cần huấn luyện lại · bí ý tưởng thì cứ chạy thử", k.GOLD, 26, 60).to_edge(DOWN, buff=0.4)
     sc.run(FadeIn(joke, shift=UP * 0.2), run_time=0.6)
-
 
 
 # ── PHẦN 2: SINH RỒI KIỂM ────────────────────────────────────
@@ -927,6 +921,7 @@ def _polyline(k, at, pts, color, width=5):
     return VGroup(*[Line(p[i], p[i + 1], color=color, stroke_width=width) for i in range(len(p) - 1)])
 
 
+@_part(2)
 def gen_verify(sc, s, k):
     head = k.label("Phần 2 · Sinh rồi kiểm", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
     sc.run(Write(head), run_time=0.8)
@@ -934,8 +929,8 @@ def gen_verify(sc, s, k):
     sc.wait_until(sc.at(1))
     gen = card(k, "Sinh", k.ACCENT, 32, 10, min_w=2.2)
     check_box = card(k, "“Kiểm tra lại đi”", k.GOLD, 30, 20)
-    regen = card(k, "Sinh lại", k.GREEN, 32, 10, min_w=2.2)
-    row = VGroup(gen, check_box, regen).arrange(RIGHT, buff=1.0).move_to(UP * 0.4)
+    regen = card(k, "Viết tiếp", k.GREEN, 32, 10, min_w=2.2)
+    VGroup(gen, check_box, regen).arrange(RIGHT, buff=1.0).move_to(UP * 0.4)
     sc.run(FadeIn(gen), run_time=0.4)
 
     sc.wait_until(sc.at(2))
@@ -953,148 +948,93 @@ def gen_verify(sc, s, k):
     sc.run(FadeIn(verdict, shift=UP * 0.2), run_time=0.5)
 
 
+@_part(2)
 def two_intuitions(sc, s, k):
     q = k.label("Vì sao có thể có ích?", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
     sc.run(Write(q), run_time=0.7)
     sc.wait_until(sc.at(1))
-    left_h = k.label("1. Chê thì dễ hơn làm", 30, k.ACCENT, bold=True).move_to(LEFT * 3.4 + UP * 1.9)
-    right_h = k.label("2. Sinh chữ không quay lại được", 30, k.PINK, bold=True).move_to(RIGHT * 3.1 + UP * 1.9)
-    divider = Line(UP * 2.4, DOWN * 3.2, color=k.MUTED, stroke_width=2).set_opacity(0.4)
+    left_h = k.label("1. Chê thì dễ hơn làm", 30, k.ACCENT, bold=True).move_to(LEFT * 3.5 + UP * 2.0)
+    right_h = k.label("2. Viết rồi không xoá được", 30, k.PINK, bold=True).move_to(RIGHT * 3.4 + UP * 2.0)
+    divider = Line(UP * 2.5, DOWN * 3.3, color=k.MUTED, stroke_width=2).set_opacity(0.4)
     sc.run(Create(divider), run_time=0.4)
 
     sc.wait_until(sc.at(2))
     sc.run(FadeIn(left_h), run_time=0.5)
     sc.wait_until(sc.at(3))
-    book = RoundedRectangle(corner_radius=0.08, width=2.4, height=2.6, color=k.GOLD, stroke_width=4).set_fill(k.GOLD, 0.15)
-    book.move_to(LEFT * 3.4 + UP * 0.1)
+    book = RoundedRectangle(corner_radius=0.08, width=2.2, height=2.6, color=k.GOLD, stroke_width=4).set_fill(k.GOLD, 0.15)
+    book.move_to(LEFT * 3.5 + UP * 0.1)
     spine = Line(book.get_corner(UP + LEFT) + RIGHT * 0.2, book.get_corner(DOWN + LEFT) + RIGHT * 0.2, color=k.GOLD, stroke_width=3)
     title = k.label("Kim Dung", 28, k.GOLD, bold=True).move_to(book).shift(RIGHT * 0.1)
-    cant = k.label("không viết nổi", 24, k.PINK).next_to(book, DOWN, buff=0.25)
-    can = k.label("nhưng biết là hay", 24, k.GREEN, bold=True).next_to(cant, DOWN, buff=0.12)
+    cant = k.label("không viết nổi", 26, k.PINK).next_to(book, DOWN, buff=0.25)
+    can = k.label("nhưng đọc thì biết là hay", 26, k.GREEN, bold=True).next_to(cant, DOWN, buff=0.12)
     sc.run(FadeIn(book), Create(spine), Write(title), run_time=0.7)
     sc.run(FadeIn(cant), run_time=0.4)
     sc.run(FadeIn(can), run_time=0.4)
 
     sc.wait_until(sc.at(4))
     sc.run(FadeIn(right_h), run_time=0.5)
-    die = RoundedRectangle(corner_radius=0.15, width=0.9, height=0.9, color=k.INK, stroke_width=4).move_to(RIGHT * 1.3 + UP * 0.6)
-    pips = VGroup(*[Dot(die.get_center() + d * 0.22, radius=0.07, color=k.INK) for d in (UP + LEFT, ORIGIN, DOWN + RIGHT)])
     sc.wait_until(sc.at(5))
-    toks = VGroup(card(k, "sai", k.PINK, 26, 6, pad=0.3), *[card(k, "...", k.PINK, 26, 6, pad=0.3) for _ in range(3)])
-    toks.arrange(RIGHT, buff=0.12).next_to(die, RIGHT, buff=0.4)
-    sc.run(FadeIn(die), FadeIn(pips), run_time=0.4)
+    toks = VGroup(card(k, "sai", k.PINK, 26, 6, pad=0.3), *[card(k, "...", k.PINK, 26, 6, pad=0.3) for _ in range(4)])
+    toks.arrange(RIGHT, buff=0.12).move_to(RIGHT * 3.4 + UP * 0.9)
     sc.run(FadeIn(toks[0], scale=0.8), run_time=0.4)
-    sc.run(FadeIn(toks[1:], lag_ratio=0.3), run_time=0.8)
-    stuck = k.label("cãi cố tới hết câu", 24, k.PINK).next_to(toks, DOWN, buff=0.2)
+    sc.run(FadeIn(toks[1:], lag_ratio=0.3), run_time=0.9)
+    stuck = k.label("cãi cố tới hết câu", 26, k.PINK).next_to(toks, DOWN, buff=0.2)
     sc.run(FadeIn(stuck), run_time=0.4)
 
     sc.wait_until(sc.at(6))
-    only = k.label("mô hình chỉ biết nối chữ", 24, k.MUTED).move_to(RIGHT * 3.3 + DOWN * 1.0)
-    sc.run(FadeIn(only), run_time=0.4)
+    door = card(k, "“Kiểm tra lại đi”", k.GOLD, 28, 20).move_to(RIGHT * 3.4 + DOWN * 0.6)
+    exit_t = k.label("mở một lối thoát", 24, k.GOLD).next_to(door, DOWN, buff=0.15)
+    sc.run(FadeIn(door, shift=UP * 0.2), FadeIn(exit_t), run_time=0.6)
+
     sc.wait_until(sc.at(7))
-    door = card(k, "sau “kiểm tra lại đi” thường là đoạn sửa sai", k.GREEN, 24, 30)
-    door.move_to(RIGHT * 3.3 + DOWN * 2.2)
-    sc.run(FadeIn(door, shift=UP * 0.2), run_time=0.6)
+    only = k.label("mô hình chỉ biết nối chữ", 24, k.MUTED).move_to(RIGHT * 3.4 + DOWN * 2.0)
+    sc.run(FadeIn(only), run_time=0.4)
+    sc.wait_until(sc.at(8))
+    web = k.label("trên mạng: sau câu đó thường là đoạn sửa sai", 24, k.GREEN, bold=True, width_chars=26)
+    web.next_to(only, DOWN, buff=0.2)
+    sc.run(FadeIn(web), run_time=0.5)
 
 
-def critique_mcq(sc, s, k):
-    head = k.label("Nhưng đó là trực giác của người", 34, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(head), run_time=0.5)
-
-    sc.wait_until(sc.at(1))
-    opts = VGroup(*[card(k, f"{c}. đáp án tự sinh", k.PURPLE, 24, 20, bold=False) for c in "ABCD"])
-    opts.arrange(DOWN, buff=0.2).move_to(LEFT * 3.2 + DOWN * 0.3)
-    ask = k.label("Cái nào đúng?", 28, k.ACCENT, bold=True).next_to(opts, UP, buff=0.3)
-    sc.run(FadeIn(ask), FadeIn(opts, lag_ratio=0.2), run_time=0.9)
-    pick = RoundedRectangle(corner_radius=0.15, width=opts[2].width + 0.2, height=opts[2].height + 0.15,
-                            color=k.PINK, stroke_width=4).move_to(opts[2])
-    sc.run(Create(pick), run_time=0.4)
-    fail = k.label("chọn sai, trừ khi đúng sai chênh rất xa", 24, k.PINK).next_to(opts, DOWN, buff=0.3)
-    sc.run(FadeIn(fail), run_time=0.4)
-
-    sc.wait_until(sc.at(2))
-    bubble_t = bubble(k, "paper biến việc chấm thành trắc nghiệm", k.GOLD, 22, 26).move_to(RIGHT * 3.4 + UP * 1.0)
-    who = k.label("thầy Lý phản biện", 24, k.GOLD, bold=True).next_to(bubble_t, UP, buff=0.15)
-    sc.run(FadeIn(who), FadeIn(bubble_t, shift=LEFT * 0.2), run_time=0.6)
-
-    sc.wait_until(sc.at(3))
-    two = VGroup(card(k, "không biết chấm?", k.MUTED, 26, 20), card(k, "không biết làm trắc nghiệm?", k.GOLD, 26, 30))
-    two.arrange(DOWN, buff=0.3).move_to(RIGHT * 3.4 + DOWN * 1.0)
-    sc.run(FadeIn(two[0]), run_time=0.4)
-    sc.run(FadeIn(two[1]), run_time=0.4)
-
-    sc.wait_until(sc.at(4))
-    open_q = k.label("còn bỏ ngỏ", 30, k.INK, bold=True).to_edge(DOWN, buff=0.4).shift(RIGHT * 3.4)
-    sc.run(FadeIn(open_q), run_time=0.5)
-
-
+@_part(2)
 def internal_external(sc, s, k):
-    head = k.label("Thực nghiệm", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
+    head = k.label("Thực nghiệm nói gì?", 38, k.INK, bold=True).to_edge(UP, buff=0.45)
     sc.run(Write(head), run_time=0.6)
     sc.wait_until(sc.at(1))
-    tag = card(k, "CorrectBench · 10/2025 · nhiều mô hình, nhiều benchmark", k.MUTED, 24, 70).next_to(head, DOWN, buff=0.25)
+    tag = card(k, "2 paper · cuối 2025 · rất nhiều mô hình", k.MUTED, 24, 60).next_to(head, DOWN, buff=0.2)
     sc.run(FadeIn(tag), run_time=0.5)
 
     def panel(values, color, title, x):
-        base = Line(LEFT * 2.6, RIGHT * 2.6, color=k.MUTED, stroke_width=3).move_to([x, -0.6, 0])
+        base = Line(LEFT * 2.6, RIGHT * 2.6, color=k.MUTED, stroke_width=3).move_to([x, -0.5, 0])
         bars = VGroup()
         for i, v in enumerate(values):
             bar = Rectangle(width=0.36, height=abs(v), stroke_width=0).set_fill(color if v >= 0 else k.PINK, 0.85)
             bar.move_to(base.get_left() + RIGHT * (0.45 + i * 0.52), aligned_edge=DOWN if v >= 0 else UP)
             bar.grow_from = DOWN if v >= 0 else UP
             bars.add(bar)
-        zero = k.label("0", 20, k.MUTED).next_to(base, LEFT, buff=0.1)
-        t = k.label(title, 28, color, bold=True).next_to(base, UP, buff=2.0)
-        return VGroup(base, zero, bars, t)
+        t = k.label(title, 28, color, bold=True).next_to(base, UP, buff=1.8)
+        cap = k.label("cột: điểm thay đổi sau khi sửa", 18, k.MUTED).next_to(t, DOWN, buff=0.1)
+        return VGroup(base, bars, t, cap)
 
     sc.wait_until(sc.at(2))
-    inner = panel([0.9, -0.7, 0.4, -1.1, 1.2, 0.2, -0.5, 0.7, -0.9], k.ACCENT, "tự phản tư", -3.4)
-    sc.run(Create(inner[0]), FadeIn(inner[1]), FadeIn(inner[3]), run_time=0.4)
-    sc.run(*[GrowFromEdge(b, b.grow_from) for b in inner[2]], run_time=1.0)
-    shaky = k.label("không ổn định", 26, k.PINK, bold=True).next_to(inner[0], DOWN, buff=1.4)
+    inner = panel([0.9, -0.7, 0.4, -1.1, 1.2, 0.2, -0.5, 0.7, -0.9], k.ACCENT, "tự nghĩ lại", -3.4)
+    sc.run(Create(inner[0]), FadeIn(inner[2]), FadeIn(inner[3]), run_time=0.4)
+    sc.run(*[GrowFromEdge(b, b.grow_from) for b in inner[1]], run_time=1.0)
+    shaky = k.label("lúc được lúc không", 26, k.PINK, bold=True).next_to(inner[0], DOWN, buff=1.3)
     sc.run(FadeIn(shaky), run_time=0.4)
 
     sc.wait_until(sc.at(3))
-    outer = panel([1.0, 1.3, 0.8, 1.5, -0.2, 1.1, 0.9, 1.4, 0.6], k.GREEN, "phản hồi bên ngoài", 3.4)
-    sc.run(Create(outer[0]), FadeIn(outer[1]), FadeIn(outer[3]), run_time=0.4)
-    sc.run(*[GrowFromEdge(b, b.grow_from) for b in outer[2]], run_time=1.0)
-    steady = k.label("chạy code, tìm thêm: ổn định", 26, k.GREEN, bold=True).next_to(outer[0], DOWN, buff=1.4)
+    outer = panel([1.0, 1.3, 0.8, 1.5, 0.2, 1.1, 0.9, 1.4, 0.6], k.GREEN, "phản hồi bên ngoài", 3.4)
+    sc.run(Create(outer[0]), FadeIn(outer[2]), FadeIn(outer[3]), run_time=0.4)
+    sc.run(*[GrowFromEdge(b, b.grow_from) for b in outer[1]], run_time=1.0)
+    steady = k.label("chạy code, tiêu chí chấm: ổn định", 26, k.GREEN, bold=True).next_to(outer[0], DOWN, buff=1.3)
     sc.run(FadeIn(steady), run_time=0.4)
 
-
-def refinebench(sc, s, k):
-    head = k.label("RefineBench · một tháng sau", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(head), run_time=0.5)
-
-    sc.wait_until(sc.at(1))
-    axes, at = _chart(k, 6.4, 3.6, "lượt sửa 1 đến 5", "điểm")
-    axes.move_to(LEFT * 1.6 + DOWN * 0.4)
-    sc.run(FadeIn(axes), run_time=0.5)
-    xs = [0.05, 0.27, 0.5, 0.73, 0.95]
-    lines = [([0.30, 0.31, 0.32, 0.32, 0.33], k.MUTED, "tự sửa"),
-             ([0.30, 0.45, 0.55, 0.60, 0.63], k.ACCENT, "xem nửa checklist"),
-             ([0.30, 0.55, 0.66, 0.72, 0.75], k.ORANGE, "biết sẽ bị chấm gì"),
-             ([0.30, 0.70, 0.85, 0.92, 0.95], k.GOLD, "phản hồi đầy đủ")]
-    drawn = []
-    for i, (ys, color, name) in enumerate(lines):
-        poly = _polyline(k, at, list(zip(xs, ys)), color)
-        tag = k.label(name, 22, color, bold=True, max_width=4.2).next_to(poly[-1].get_end(), RIGHT, buff=0.2)
-        drawn.append((poly, tag))
-    models = k.label("Claude 3.5 Sonnet · Gemini 1.5 Pro", 24, k.MUTED).next_to(head, DOWN, buff=0.2)
-    sc.run(Create(drawn[0][0]), FadeIn(drawn[0][1]), FadeIn(models), run_time=1.0)
-    small = k.label("chỉ nhích chút xíu", 24, k.MUTED).next_to(drawn[0][0], DOWN, buff=0.2)
-    sc.run(FadeIn(small), run_time=0.4)
-
-    sc.wait_until(sc.at(2))
-    for poly, tag in drawn[1:]:
-        sc.run(Create(poly), FadeIn(tag), run_time=0.7)
-
-    sc.wait_until(sc.at(3))
-    msg = k.label("phản hồi từ bên ngoài mới làm mô hình tiến bộ", 30, k.GOLD, bold=True).to_edge(DOWN, buff=0.3)
-    sc.run(FadeIn(msg, shift=UP * 0.2), run_time=0.6)
+    sc.wait_until(sc.at(4))
+    why = card(k, "bên ngoài mang thông tin mới · tự nghĩ lại vẫn là cái đầu cũ", k.GOLD, 24, 70).to_edge(DOWN, buff=0.2)
+    sc.run(FadeIn(why, shift=UP * 0.2), run_time=0.6)
 
 
-def _cell(k, text, sub, color, w=4.4, h=1.6):
+def _cell(k, text, sub, color, w=4.6, h=1.6):
     box = RoundedRectangle(corner_radius=0.2, width=w, height=h, color=color, stroke_width=4).set_fill(color, 0.12)
     t = k.label(text, 34, k.INK, bold=True)
     st = k.label(sub, 24, color)
@@ -1102,196 +1042,281 @@ def _cell(k, text, sub, color, w=4.4, h=1.6):
     return VGroup(box, t, st)
 
 
+@_part(2)
 def four_cells(sc, s, k):
-    head = k.label("Bốn trường hợp khi tự sửa", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
+    head = k.label("Vì sao tự kiểm lại chập chờn?", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
     sc.run(Write(head), run_time=0.7)
-    names = [("Đúng, vẫn Đúng", "chỉ tốn tính toán", k.MUTED), ("Sai, thành Đúng", "mong nhất", k.GREEN),
-             ("Sai, vẫn Sai", "chỉ tốn tính toán", k.MUTED), ("Đúng, thành Sai", "nghĩ nhiều quá hoá sai", k.PINK)]
+    names = [("Đúng, vẫn Đúng", "chỉ tốn công", k.MUTED), ("Sai, thành Đúng", "mong nhất", k.GREEN),
+             ("Sai, vẫn Sai", "chỉ tốn công", k.MUTED), ("Đúng, thành Sai", "nghĩ nhiều quá hoá sai", k.PINK)]
     cells = VGroup(*[_cell(k, a, b, c) for a, b, c in names]).arrange_in_grid(2, 2, buff=0.35).move_to(DOWN * 0.5)
     sc.wait_until(sc.at(1))
-    sc.run(FadeIn(cells[1], scale=0.9), run_time=0.6)
+    four = k.label("bốn trường hợp", 28, k.MUTED).next_to(head, DOWN, buff=0.15)
+    sc.run(FadeIn(four), *[Create(c[0]) for c in cells], run_time=0.7)
     sc.wait_until(sc.at(2))
-    sc.run(FadeIn(cells[0], scale=0.9), run_time=0.5)
-    sc.run(FadeIn(cells[2], scale=0.9), run_time=0.5)
+    sc.run(FadeIn(cells[1][1:], scale=0.9), run_time=0.6)
     sc.wait_until(sc.at(3))
-    sc.run(FadeIn(cells[3], scale=0.9), run_time=0.6)
+    sc.run(FadeIn(cells[0][1:], scale=0.9), FadeIn(cells[2][1:], scale=0.9), run_time=0.6)
+    sc.wait_until(sc.at(4))
+    sc.run(FadeIn(cells[3][1:], scale=0.9), run_time=0.6)
     sc.run(Indicate(cells[3], color=k.PINK, scale_factor=1.05), run_time=0.8)
 
 
-def _gauge(k, name, sub, value, color, r=1.6):
-    track = Arc(radius=r, start_angle=3.1416, angle=-3.1416, color=k.MUTED, stroke_width=14).set_opacity(0.35)
-    fill = Arc(radius=r, start_angle=3.1416, angle=-3.1416 * value, color=color, stroke_width=14)
-    num = k.label(f"{value:.1f}".replace(".", ","), 44, k.INK, bold=True).move_to(track.get_center() + DOWN * 0.1)
-    t = k.label(name, 30, color, bold=True).next_to(track, DOWN, buff=0.15)
-    st = k.label(sub, 22, k.MUTED).next_to(t, DOWN, buff=0.1)
-    return VGroup(track, fill, num, t, st)
+def _dot_grid(k, n_good, color_good, color_bad, r=0.11, gap=0.33):
+    dots = VGroup(*[Dot(radius=r, color=color_good if i < n_good else color_bad) for i in range(100)])
+    dots.arrange_in_grid(10, 10, buff=gap - 2 * r)
+    return dots
 
 
+@_part(2)
 def cl_cs(sc, s, k):
-    head = k.label("Hai con số", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
+    head = k.label("Hai con số: CL và CS", 38, k.INK, bold=True).to_edge(UP, buff=0.4)
     sc.run(Write(head), run_time=0.6)
     sc.wait_until(sc.at(1))
-    cl = _gauge(k, "CL · độ tự tin", "đang đúng, giữ được đúng", 0.9, k.GREEN).move_to(LEFT * 3.2 + UP * 0.6)
-    sc.run(Create(cl[0]), Create(cl[1]), FadeIn(cl[2:]), run_time=0.9)
+    cl = VGroup(k.label("CL", 40, k.GREEN, bold=True), k.label("đang đúng, giữ được đúng", 24, k.GREEN))
+    cl.arrange(DOWN, buff=0.1).move_to(RIGHT * 4.0 + UP * 1.8)
+    sc.run(FadeIn(cl, shift=DOWN * 0.2), run_time=0.6)
     sc.wait_until(sc.at(2))
-    cs = _gauge(k, "CS · độ tiếp thu", "đang sai, sửa được thành đúng", 0.2, k.GOLD).move_to(RIGHT * 3.2 + UP * 0.6)
-    sc.run(Create(cs[0]), Create(cs[1]), FadeIn(cs[2:]), run_time=0.9)
-    sc.wait_until(sc.at(3))
-    formula = Text("Acc2 = Acc1 × CL + (1 − Acc1) × CS", font=k.MONO, font_size=34, color=k.INK).to_edge(DOWN, buff=0.6)
-    box = RoundedRectangle(corner_radius=0.15, width=formula.width + 0.6, height=formula.height + 0.4,
-                           color=k.ACCENT, stroke_width=3).move_to(formula)
-    sc.run(Write(formula), Create(box), run_time=1.2)
-
-
-def personalities(sc, s, k):
-    axes, at = _chart(k, 6.0, 4.2, "CS: hay sửa câu sai", "CL: giữ câu đúng")
-    axes.move_to(LEFT * 1.4 + DOWN * 0.2)
-    sc.run(FadeIn(axes), run_time=0.5)
-    sc.wait_until(sc.at(0))
-    high = Line(at(0, 0.8), at(1, 0.8), color=k.GREEN, stroke_width=2).set_opacity(0.5)
-    sc.run(Create(high), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    low = Rectangle(width=6.0 * 0.3, height=4.2, stroke_width=0).set_fill(k.PINK, 0.08).move_to(at(0.15, 0.5))
-    stub = k.label("cứng đầu", 26, k.PINK, bold=True).move_to(at(0.15, 0.35))
-    sc.run(FadeIn(low), FadeIn(stub), run_time=0.6)
-
-    sc.wait_until(sc.at(2))
-    pts = [("DeepSeek", 0.08, 0.93, k.PINK, RIGHT), ("Mixtral", 0.16, 0.84, k.PINK, RIGHT),
-           ("Llama 3 70B", 0.62, 0.74, k.ACCENT, UP), ("GPT-3.5", 0.48, 0.66, k.ACCENT, LEFT),
-           ("GPT-4", 0.75, 0.62, k.ACCENT, DOWN)]
-    for name, x, y, c, side in pts:
-        d = Dot(at(x, y), radius=0.12, color=c)
-        t = k.label(name, 22, c, bold=True).next_to(d, side, buff=0.12)
-        sc.run(FadeIn(d, scale=0.5), FadeIn(t), run_time=0.35)
+    cs = VGroup(k.label("CS", 40, k.GOLD, bold=True), k.label("đang sai, sửa được thành đúng", 24, k.GOLD))
+    cs.arrange(DOWN, buff=0.1).next_to(cl, DOWN, buff=0.4)
+    sc.run(FadeIn(cs, shift=DOWN * 0.2), run_time=0.6)
 
     sc.wait_until(sc.at(3))
-    trade = Arrow(at(0.3, 0.55), at(0.95, 0.3), buff=0.1, color=k.GOLD, stroke_width=5)
-    note = k.label("kéo nhau: dễ nghe góp ý thì khó giữ câu đúng", 26, k.GOLD, bold=True).to_edge(DOWN, buff=0.3)
-    sc.run(GrowArrow(trade), FadeIn(note), run_time=0.8)
-
-
-def three_prompts(sc, s, k):
-    head = k.label("Câu chèn đổi tính cách", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(head), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    tag = card(k, "Llama 3 · ba bộ dữ liệu", k.MUTED, 24, 30).next_to(head, DOWN, buff=0.2)
-    sc.run(FadeIn(tag), run_time=0.4)
-    prompts = [("Làm lại lần nữa.", "trung tính", k.MUTED, 0.85, 0.30),
-               ("Chắc bạn đúng rồi, cho mình đáp án lần nữa.", "khen", k.GREEN, 0.95, 0.15),
-               ("Bạn chắc chưa? Nghĩ lại đi.", "hỏi vặn", k.PINK, 0.70, 0.50)]
-    rows = VGroup()
-    for text, kind, color, cl, cs in prompts:
-        b = bubble(k, text, color, 26, 24)
-        kd = k.label(kind, 22, color, bold=True)
-        cl_bar = Rectangle(width=2.2 * cl, height=0.26, stroke_width=0).set_fill(k.GREEN, 0.85)
-        cs_bar = Rectangle(width=2.2 * cs, height=0.26, stroke_width=0).set_fill(k.GOLD, 0.85)
-        bars = VGroup(VGroup(k.label("CL", 20, k.GREEN, bold=True), cl_bar).arrange(RIGHT, buff=0.15),
-                      VGroup(k.label("CS", 20, k.GOLD, bold=True), cs_bar).arrange(RIGHT, buff=0.15))
-        bars.arrange(DOWN, aligned_edge=LEFT, buff=0.1)
-        rows.add(VGroup(kd, b, bars))
-    for r in rows:
-        r[0].move_to(LEFT * 5.6)
-        r[1].next_to(r[0], RIGHT, buff=0.3)
-        r[2].move_to(RIGHT * 4.6, aligned_edge=LEFT).shift(LEFT * 1.4)
-    rows.arrange(DOWN, buff=0.35).move_to(DOWN * 0.6)
-    for r in rows:
-        r[0].align_to(rows, LEFT)
-        r[1].next_to(r[0], RIGHT, buff=0.3)
-        r[2].move_to([3.6, r[1].get_center()[1], 0], aligned_edge=LEFT)
-    sc.run(FadeIn(rows[0]), run_time=0.5)
-    sc.wait_until(sc.at(2))
-    sc.run(FadeIn(rows[1]), run_time=0.5)
-    sc.wait_until(sc.at(3))
-    sc.run(FadeIn(rows[2]), run_time=0.5)
-    sc.wait_until(sc.at(4))
-    straw = k.label("chỉ là “người rơm” do chương trình chèn vào", 26, k.GOLD, bold=True).to_edge(DOWN, buff=0.35)
-    sc.run(FadeIn(straw), run_time=0.5)
-    sc.wait_until(sc.at(6))
-    tip = k.label("tự tin quá thì hỏi vặn, thiếu tự tin thì khen", 26, k.ACCENT, bold=True).to_edge(DOWN, buff=0.35)
-    sc.run(FadeOut(straw), FadeIn(tip), run_time=0.5)
-
-
-def vote_vs_verify(sc, s, k):
-    head = k.label("Kiểm tra có đáng tiền không?", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(head), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    votes = VGroup(*[card(k, t, k.ACCENT, 24, 4, pad=0.3) for t in "AABAC"]).arrange(RIGHT, buff=0.1)
-    votes.next_to(head, DOWN, buff=0.3)
-    win = k.label("bỏ phiếu đa số: A", 24, k.ACCENT, bold=True).next_to(votes, RIGHT, buff=0.3)
-    sc.run(FadeIn(votes, lag_ratio=0.2), FadeIn(win), run_time=0.8)
-
-    sc.wait_until(sc.at(2))
-    axes, at = _chart(k, 5.2, 3.2, "số lần lấy mẫu (2 đến 128)", "điểm")
-    axes.move_to(LEFT * 2.8 + DOWN * 0.9)
-    vote = _polyline(k, at, [(0, 0.2), (0.25, 0.42), (0.5, 0.58), (0.75, 0.66), (1, 0.7)], k.MUTED)
-    ver = _polyline(k, at, [(0, 0.35), (0.25, 0.6), (0.5, 0.74), (0.75, 0.82), (1, 0.86)], k.PINK)
-    tv = k.label("bỏ phiếu", 22, k.MUTED, bold=True).next_to(vote[-1].get_end(), RIGHT, buff=0.15)
-    tr = k.label("+ 32 lần kiểm tra", 22, k.PINK, bold=True).next_to(ver[-1].get_end(), RIGHT, buff=0.15)
-    sc.run(FadeIn(axes), run_time=0.4)
-    sc.run(Create(vote), FadeIn(tv), run_time=0.7)
-    sc.run(Create(ver), FadeIn(tr), run_time=0.7)
-
-    sc.wait_until(sc.at(3))
-    good = k.label("trông như kiểm tra tốt hơn hẳn", 24, k.PINK).next_to(axes, UP, buff=0.05).shift(RIGHT * 1.0)
-    sc.run(FadeIn(good), run_time=0.4)
+    grid = _dot_grid(k, 60, k.GREEN, k.PINK).move_to(LEFT * 3.0 + DOWN * 0.4)
+    cap = k.label("100 câu: 60 đúng, 40 sai", 28, k.INK, bold=True).next_to(grid, UP, buff=0.3)
+    sc.run(FadeIn(grid, lag_ratio=0.01), FadeIn(cap), run_time=1.2)
 
     sc.wait_until(sc.at(4))
-    xlab = axes[2]
-    new_x = k.label("lượng tính toán", 22, k.GOLD, bold=True).move_to(xlab)
-    sc.run(Transform(xlab, new_x), FadeOut(good), Indicate(axes[0], color=k.GOLD), run_time=0.8)
+    lost = [grid[i] for i in (5, 17, 28, 39, 44, 52)]
+    t1 = k.label("CL 90%: giữ 54, làm hỏng 6", 26, k.GREEN, bold=True).move_to(RIGHT * 4.0 + DOWN * 0.7)
+    sc.run(*[d.animate.set_color(k.PINK).scale(1.3) for d in lost], FadeIn(t1), run_time=0.8)
 
     sc.wait_until(sc.at(5))
-    vote2 = _polyline(k, at, [(0, 0.2), (0.15, 0.48), (0.3, 0.62), (0.55, 0.69), (1, 0.71)], k.MUTED)
-    ver2 = _polyline(k, at, [(0.12, 0.15), (0.3, 0.35), (0.55, 0.55), (0.8, 0.68), (1, 0.75)], k.PINK)
-    sc.run(Transform(vote, vote2), Transform(ver, ver2),
-           tv.animate.next_to(vote2[-1].get_end(), RIGHT, buff=0.15).shift(DOWN * 0.2),
-           tr.animate.next_to(ver2[-1].get_end(), RIGHT, buff=0.15).shift(UP * 0.2), run_time=1.2)
-    budget = Rectangle(width=5.2 * 0.5, height=3.2, stroke_width=0).set_fill(k.ACCENT, 0.08).move_to(at(0.25, 0.5))
-    btxt = k.label("ngân sách có hạn: bỏ phiếu thắng", 22, k.ACCENT, bold=True, width_chars=16)
-    btxt.move_to(at(0.25, 0.88))
-    sc.run(FadeIn(budget), FadeIn(btxt), run_time=0.6)
+    fixed = [grid[i] for i in (61, 68, 73, 79, 84, 90, 95, 99)]
+    t2 = k.label("CS 20%: sửa được 8", 26, k.GOLD, bold=True).next_to(t1, DOWN, buff=0.25)
+    sc.run(*[d.animate.set_color(k.GOLD).scale(1.3) for d in fixed], FadeIn(t2), run_time=0.8)
 
     sc.wait_until(sc.at(6))
-    cost = card(k, "hơn 3,8% cần hơn 100 lần tính toán", k.PINK, 24, 22).move_to(RIGHT * 4.6 + DOWN * 1.2)
-    sc.run(FadeIn(cost, shift=LEFT * 0.2), run_time=0.6)
+    total = VGroup(Text("54 + 8 = 62", font=k.MONO, font_size=34, color=k.INK),
+                   k.label("chỉ nhích hơn 60 một chút", 24, k.MUTED)).arrange(DOWN, buff=0.1)
+    total.next_to(t2, DOWN, buff=0.35)
+    sc.run(Write(total[0]), FadeIn(total[1]), run_time=0.8)
+
     sc.wait_until(sc.at(7))
+    worse = VGroup(Text("CL 80%: 48 + 8 = 56", font=k.MONO, font_size=28, color=k.PINK),
+                   k.label("tự sửa xong còn tệ hơn lúc đầu", 24, k.PINK, bold=True)).arrange(DOWN, buff=0.1)
+    worse.move_to(total)
+    sc.run(FadeOut(total), FadeIn(worse), run_time=0.6)
+
+
+@_part(2)
+def personalities(sc, s, k):
+    head = k.label("Phần lớn mô hình: cứng đầu", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
+    def meter(name, value, color, y):
+        t = k.label(name, 30, color, bold=True).move_to([-4.6, y, 0])
+        track = RoundedRectangle(corner_radius=0.15, width=6.0, height=0.45, color=k.MUTED, stroke_width=2).move_to([0.6, y, 0])
+        fill = RoundedRectangle(corner_radius=0.15, width=6.0 * value, height=0.45, stroke_width=0).set_fill(color, 0.9)
+        fill.move_to(track.get_left(), aligned_edge=LEFT)
+        num = k.label(f"{round(value * 100)}%", 28, color, bold=True).next_to(track, RIGHT, buff=0.3)
+        return VGroup(t, track, fill, num)
+    cl = meter("CL", 0.9, k.GREEN, 1.2)
+    cs = meter("CS", 0.15, k.GOLD, 0.0)
+    sc.run(FadeIn(cl[:2]), GrowFromEdge(cl[2], LEFT), FadeIn(cl[3]), run_time=0.8)
+    sc.run(FadeIn(cs[:2]), GrowFromEdge(cs[2], LEFT), FadeIn(cs[3]), run_time=0.8)
+    a = k.label("ít khi làm hỏng câu đúng", 24, k.GREEN).next_to(cl[1], DOWN, buff=0.08)
+    b = k.label("ít khi sửa được câu sai", 24, k.GOLD).next_to(cs[1], DOWN, buff=0.08)
+    sc.run(FadeIn(a), FadeIn(b), run_time=0.5)
+
+    sc.wait_until(sc.at(1))
+    easy = _student(k, k.ACCENT, "dễ nghe góp ý").move_to(LEFT * 5.6 + DOWN * 2.3)
+    hard = _student(k, k.ORANGE, "cứng đầu").move_to(RIGHT * 0.6 + DOWN * 2.3)
+    pull = VGroup(easy, hard)
+    p1 = k.label("sửa được nhiều lỗi, nhưng dễ lung lay cả chỗ đúng", 22, k.ACCENT, width_chars=24)
+    p1.next_to(easy, RIGHT, buff=0.25)
+    p2 = k.label("giữ chắc chỗ đúng, nhưng ít khi sửa", 22, k.ORANGE, width_chars=22).next_to(hard, RIGHT, buff=0.25)
+    sc.run(FadeIn(pull[0]), FadeIn(p1), run_time=0.6)
+    sc.run(FadeIn(pull[1]), FadeIn(p2), run_time=0.6)
+
+
+@_part(2)
+def three_prompts(sc, s, k):
+    head = k.label("Câu chèn vào đổi cả tính cách", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
+
+    def row(text, color, cl_up):
+        b = bubble(k, text, color, 26, 28)
+        cl = VGroup(k.label("CL", 28, k.GREEN, bold=True), k.label("tăng" if cl_up else "giảm", 26, k.GREEN))
+        cs = VGroup(k.label("CS", 28, k.GOLD, bold=True), k.label("giảm" if cl_up else "tăng", 26, k.GOLD))
+        cl.arrange(RIGHT, buff=0.1)
+        cs.arrange(RIGHT, buff=0.1)
+        return VGroup(b, VGroup(cl, cs).arrange(RIGHT, buff=0.5))
+
+    praise = row("Chắc bạn đúng rồi.", k.GREEN, True)
+    doubt = row("Bạn chắc chưa?", k.PINK, False)
+    for r, y in ((praise, 1.0), (doubt, -0.8)):
+        r[0].move_to([-4.0, y, 0])
+        r[1].move_to([0.6, y, 0])
+    pt = k.label("tự tin hơn, cố chấp hơn", 24, k.GREEN).next_to(praise[1], RIGHT, buff=0.4)
+    dt = k.label("dễ đổi ý hơn", 24, k.PINK).next_to(doubt[1], RIGHT, buff=0.4)
+
+    sc.wait_until(sc.at(1))
+    sc.run(FadeIn(praise[0], shift=RIGHT * 0.2), run_time=0.5)
+    sc.run(FadeIn(praise[1]), FadeIn(pt), run_time=0.5)
+    sc.wait_until(sc.at(2))
+    sc.run(FadeIn(doubt[0], shift=RIGHT * 0.2), run_time=0.5)
+    sc.run(FadeIn(doubt[1]), FadeIn(dt), run_time=0.5)
+
+    sc.wait_until(sc.at(3))
+    straw = k.label("chỉ một câu do chương trình tự chèn", 28, k.GOLD, bold=True).to_edge(DOWN, buff=1.0)
+    sc.run(FadeIn(straw), run_time=0.5)
+    sc.wait_until(sc.at(4))
+    mix = k.label("mỗi paper chèn một câu khác, nên kết luận lẫn lộn", 26, k.MUTED).next_to(straw, DOWN, buff=0.2)
+    sc.run(FadeIn(mix), run_time=0.5)
+
+
+@_part(2)
+def majority_vote(sc, s, k):
+    head = k.label("Còn chuyện chi phí", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
+    sc.wait_until(sc.at(1))
+    title = k.label("Bỏ phiếu đa số: giải nhiều lần, chọn đáp án hay gặp nhất", 30, k.ACCENT, bold=True)
+    title.next_to(head, DOWN, buff=0.3)
+    sc.run(FadeIn(title), run_time=0.6)
+
+    sc.wait_until(sc.at(2))
+    answers = ["42", "42", "40", "42", "38"]
+    cards = VGroup(*[card(k, a, k.ACCENT if a == "42" else k.PINK, 36, 4, pad=0.5) for a in answers])
+    cards.arrange(RIGHT, buff=0.35).move_to(UP * 0.3)
+    nums = VGroup(*[k.label(f"lần {i + 1}", 20, k.MUTED).next_to(c, UP, buff=0.12) for i, c in enumerate(cards)])
+    for c, n in zip(cards, nums):
+        sc.run(FadeIn(c, shift=DOWN * 0.2), FadeIn(n), run_time=0.3)
+    tally = VGroup(
+        VGroup(Text("42", font=k.MONO, font_size=34, color=k.ACCENT), k.label("× 3", 30, k.ACCENT, bold=True)).arrange(RIGHT, buff=0.2),
+        VGroup(Text("40", font=k.MONO, font_size=34, color=k.PINK), k.label("× 1", 30, k.PINK)).arrange(RIGHT, buff=0.2),
+        VGroup(Text("38", font=k.MONO, font_size=34, color=k.PINK), k.label("× 1", 30, k.PINK)).arrange(RIGHT, buff=0.2),
+    ).arrange(RIGHT, buff=0.8).move_to(DOWN * 1.3)
+    sc.run(FadeIn(tally, lag_ratio=0.3), run_time=0.8)
+    win = SurroundingRectangle(tally[0], color=k.GOLD, buff=0.15, corner_radius=0.1)
+    pick = k.label("chọn 42", 30, k.GOLD, bold=True).next_to(win, DOWN, buff=0.2)
+    sc.run(Create(win), FadeIn(pick), run_time=0.6)
+
+    sc.wait_until(sc.at(3))
+    why = card(k, "sai thì mỗi lần một kiểu · đúng thì hay lặp lại", k.GOLD, 26, 60).to_edge(DOWN, buff=0.3)
+    sc.run(Indicate(cards[2], color=k.PINK), Indicate(cards[4], color=k.PINK), run_time=0.6)
+    sc.run(FadeIn(why, shift=UP * 0.2), run_time=0.6)
+
+
+@_part(2)
+def vote_vs_verify(sc, s, k):
+    head = k.label("Cùng một lượng tính toán", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
+
+    sc.wait_until(sc.at(1))
+    one_check = card(k, "kiểm 1 lời giải", k.PINK, 26, 16)
+    eq = k.label("≈", 44, k.INK, bold=True)
+    sols = VGroup(*[card(k, "giải", k.ACCENT, 24, 6, pad=0.3) for _ in range(3)]).arrange(RIGHT, buff=0.1)
+    scale = VGroup(one_check, eq, sols).arrange(RIGHT, buff=0.4).next_to(head, DOWN, buff=0.4)
+    sc.run(FadeIn(one_check), run_time=0.4)
+    sc.run(FadeIn(eq), FadeIn(sols, lag_ratio=0.3), run_time=0.7)
+
+    sc.wait_until(sc.at(2))
+    axes, at = _chart(k, 6.0, 3.0, "lượng tính toán", "điểm")
+    axes.move_to(LEFT * 2.4 + DOWN * 1.4)
+    vote = _polyline(k, at, [(0, 0.2), (0.15, 0.5), (0.3, 0.63), (0.55, 0.7), (1, 0.71)], k.ACCENT)
+    ver = _polyline(k, at, [(0.12, 0.12), (0.3, 0.33), (0.55, 0.55), (0.8, 0.68), (1, 0.76)], k.PINK)
+    tv = k.label("bỏ phiếu", 24, k.ACCENT, bold=True).next_to(vote[-1].get_end(), RIGHT, buff=0.15).shift(DOWN * 0.2)
+    tr = k.label("+ kiểm tra", 24, k.PINK, bold=True).next_to(ver[-1].get_end(), RIGHT, buff=0.15).shift(UP * 0.2)
+    sc.run(FadeIn(axes), run_time=0.4)
+    sc.run(Create(vote), FadeIn(tv), run_time=0.8)
+    sc.run(Create(ver), FadeIn(tr), run_time=0.8)
+    budget = Rectangle(width=6.0 * 0.5, height=3.0, stroke_width=0).set_fill(k.ACCENT, 0.1).move_to(at(0.25, 0.5))
+    bt = k.label("ngân sách có hạn: bỏ phiếu thắng", 22, k.ACCENT, bold=True, width_chars=18).move_to(at(0.25, 0.92))
+    sc.run(FadeIn(budget), FadeIn(bt), run_time=0.6)
+
+    sc.wait_until(sc.at(3))
+    cost = card(k, "+3,8% cần hơn 100 lần tính toán", k.PINK, 24, 18).move_to(RIGHT * 4.6 + DOWN * 0.6)
+    sc.run(FadeIn(cost, shift=LEFT * 0.2), run_time=0.6)
+    sc.wait_until(sc.at(4))
     lux = card(k, "kiểm tra = món xa xỉ", k.GOLD, 28, 24).next_to(cost, DOWN, buff=0.3)
     sc.run(GrowFromCenter(lux), run_time=0.6)
-    sc.wait_until(sc.at(8))
-    rule = k.label("workflow mới phải so với bỏ phiếu đa số, cùng lượng tính toán", 26, k.GOLD, bold=True)
-    rule.to_edge(DOWN, buff=0.25)
+    sc.wait_until(sc.at(5))
+    rule = k.label("quy trình mới: nhớ so với bỏ phiếu đa số, cùng lượng tính toán", 26, k.GOLD, bold=True)
+    rule.to_edge(DOWN, buff=0.2)
     sc.run(FadeIn(rule, shift=UP * 0.2), run_time=0.6)
 
 
-
-# ── PHẦN 3: HUẤN LUYỆN ĐỂ TỰ SỬA ─────────────────────────────
-def drop_prompt(sc, s, k):
-    head = k.label("Phần 3 · Huấn luyện để tự sửa", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(Write(head), run_time=0.8)
-    gen = card(k, "Sinh", k.ACCENT, 32, 10, min_w=2.2)
-    chk = card(k, "“Kiểm tra lại đi”", k.GOLD, 30, 20)
-    regen = card(k, "Sinh lại", k.GREEN, 32, 10, min_w=2.2)
-    row = VGroup(gen, chk, regen).arrange(RIGHT, buff=1.0).move_to(UP * 0.8)
-    a1, a2 = arrow(k, gen, chk), arrow(k, chk, regen)
-    always = k.label("lần nào cũng ép nghĩ thêm, dù đúng hay sai", 26, k.PINK).next_to(row, DOWN, buff=0.4)
-    sc.run(FadeIn(row), GrowArrow(a1), GrowArrow(a2), run_time=0.7)
-    sc.run(FadeIn(always), run_time=0.5)
-
+@_part(2)
+def part2_recap(sc, s, k):
+    head = k.label("Tóm lại phần hai", 40, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(head), run_time=0.6)
     sc.wait_until(sc.at(1))
-    sc.run(FadeOut(VGroup(row, a1, a2, always)), run_time=0.4)
-    model = _model(k, "LLM", w=3.0, h=1.6).move_to(DOWN * 0.3)
-    loop = CurvedArrow(model.get_corner(UP + RIGHT) + LEFT * 0.4, model.get_corner(UP + LEFT) + RIGHT * 0.4,
-                       angle=2.2, color=k.GOLD, stroke_width=5)
-    inner = k.label("tự biết lúc nào cần sửa", 28, k.GOLD, bold=True).next_to(loop, UP, buff=0.15)
-    sc.run(GrowFromCenter(model), run_time=0.5)
-    sc.run(Create(loop), FadeIn(inner), run_time=0.8)
+    pts = VGroup(card(k, "tự kiểm: chập chờn", k.PINK, 26, 20), card(k, "phản hồi ngoài: chắc ăn", k.GREEN, 26, 24),
+                 card(k, "kiểm tra: tốn kém", k.GOLD, 26, 20)).arrange(RIGHT, buff=0.3).move_to(UP * 1.6)
+    sc.run(FadeIn(pts, lag_ratio=0.4), run_time=1.2)
 
     sc.wait_until(sc.at(2))
-    gains = VGroup(card(k, "đỡ tốn", k.GREEN, 28, 10), card(k, "thông minh hơn", k.GREEN, 28, 16)).arrange(RIGHT, buff=0.5)
-    gains.to_edge(DOWN, buff=0.6)
-    sc.run(FadeIn(gains, shift=UP * 0.2), run_time=0.6)
+    always = VGroup(*[VGroup(card(k, a, k.GREEN if a == "đúng" else k.PINK, 24, 6, pad=0.3),
+                             k.label("rồi vẫn nghĩ thêm", 24, k.MUTED)).arrange(RIGHT, buff=0.2) for a in ("đúng", "sai", "đúng")])
+    always.arrange(DOWN, buff=0.2).move_to(LEFT * 3.4 + DOWN * 1.2)
+    sc.run(FadeIn(always, lag_ratio=0.3), run_time=0.8)
+    waste = k.label("đúng rồi vẫn bị ép nghĩ thêm", 24, k.PINK).next_to(always, DOWN, buff=0.2)
+    sc.run(FadeIn(waste), run_time=0.4)
+
+    sc.wait_until(sc.at(3))
+    model = _model(k, "LLM", w=2.4, h=1.2).move_to(RIGHT * 3.4 + DOWN * 1.2)
+    loop = CurvedArrow(model.get_corner(UP + RIGHT) + LEFT * 0.3, model.get_corner(UP + LEFT) + RIGHT * 0.3,
+                       angle=2.2, color=k.GOLD, stroke_width=5)
+    inner = k.label("tự biết lúc nào cần sửa", 26, k.GOLD, bold=True).next_to(loop, UP, buff=0.12)
+    sc.run(GrowFromCenter(model), Create(loop), FadeIn(inner), run_time=0.9)
+
+    sc.wait_until(sc.at(4))
+    nxt = card(k, "Phần 3 · Huấn luyện", k.GOLD, 30, 30).to_edge(DOWN, buff=0.3).shift(RIGHT * 3.4)
+    sc.run(FadeIn(nxt, shift=UP * 0.2), run_time=0.5)
 
 
+# ── PHẦN 3: HUẤN LUYỆN ĐỂ TỰ SỬA ─────────────────────────────
+def _knob(k, color, r=0.42, angle=0.0):
+    dial = Circle(radius=r, color=color, stroke_width=4).set_fill(color, 0.15)
+    tick = Line(ORIGIN, UP * r * 0.85, color=k.INK, stroke_width=5).rotate(angle, about_point=ORIGIN)
+    return VGroup(dial, tick.shift(dial.get_center()))
+
+
+@_part(3)
+def knobs(sc, s, k):
+    head = k.label("Huấn luyện là gì?", 38, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(head), run_time=0.6)
+
+    sc.wait_until(sc.at(1))
+    rnd = random.Random(9)
+    grid = VGroup(*[_knob(k, k.PURPLE, angle=rnd.uniform(-2.5, 2.5)) for _ in range(24)]).arrange_in_grid(4, 6, buff=0.3)
+    grid.move_to(LEFT * 2.6 + DOWN * 0.4)
+    frame = RoundedRectangle(corner_radius=0.3, width=grid.width + 0.8, height=grid.height + 0.8, color=k.PURPLE,
+                             stroke_width=3).move_to(grid)
+    lab = k.label("tham số: hàng tỉ núm vặn", 28, k.PURPLE, bold=True).next_to(frame, UP, buff=0.2)
+    sc.run(Create(frame), FadeIn(grid, lag_ratio=0.03), FadeIn(lab), run_time=1.2)
+
+    sc.wait_until(sc.at(2))
+    ans = bubble(k, "câu trả lời", k.ACCENT, 14, 28).move_to(RIGHT * 4.4 + UP * 0.8)
+    a = Arrow(frame.get_right(), ans.get_left(), buff=0.15, color=k.MUTED, stroke_width=4)
+    sc.run(GrowArrow(a), FadeIn(ans), run_time=0.6)
+    sub = k.label("vị trí các núm quyết định câu trả lời", 22, k.MUTED, width_chars=18).next_to(ans, DOWN, buff=0.2)
+    sc.run(FadeIn(sub), run_time=0.4)
+
+    sc.wait_until(sc.at(3))
+    loop = VGroup(card(k, "làm bài", k.ACCENT, 24, 10), card(k, "xem kết quả", k.GOLD, 24, 12),
+                  card(k, "vặn nhẹ núm", k.GREEN, 24, 12)).arrange(DOWN, buff=0.35).move_to(RIGHT * 4.4 + DOWN * 1.6)
+    sc.run(FadeOut(sub), FadeIn(loop, lag_ratio=0.3), run_time=0.8)
+    sc.run(*[Rotate(kn[1], angle=rnd.uniform(-0.6, 0.6), about_point=kn[0].get_center()) for kn in grid], run_time=1.0)
+
+    sc.wait_until(sc.at(4))
+    p12 = k.label("phần 1, 2: không đụng núm nào", 26, k.MUTED).to_edge(DOWN, buff=0.3).shift(LEFT * 2.6)
+    sc.run(FadeIn(p12), run_time=0.5)
+    sc.wait_until(sc.at(5))
+    p3 = k.label("phần 3: vặn núm", 28, k.GOLD, bold=True).move_to(p12)
+    sc.run(Transform(p12, p3), *[Indicate(kn, color=k.GOLD, scale_factor=1.1) for kn in grid[::3]], run_time=0.8)
+
+
+@_part(3)
 def hillary(sc, s, k):
     naive = k.label("dạy thêm kiến thức thì tự sửa giỏi hơn?", 30, k.MUTED, bold=True).to_edge(UP, buff=0.5)
     sc.run(FadeIn(naive), run_time=0.5)
@@ -1302,358 +1327,360 @@ def hillary(sc, s, k):
     q1 = bubble(k, "Kể tên một chính trị gia sinh ở New York.", k.ACCENT, 24, 26).move_to(LEFT * 3.4 + UP * 1.3)
     sc.run(FadeIn(q1, shift=UP * 0.2), run_time=0.5)
     sc.wait_until(sc.at(3))
-    a1 = bubble(k, "Hillary Clinton.", k.PURPLE, 20, 28).next_to(q1, DOWN, buff=0.3).align_to(q1, RIGHT)
+    a1 = bubble(k, "Hillary Clinton.", k.PURPLE, 20, 30).next_to(q1, DOWN, buff=0.3).align_to(q1, RIGHT)
     sc.run(FadeIn(a1, shift=UP * 0.2), run_time=0.5)
+    sc.wait_until(sc.at(4))
     sc.run(Create(cross(k, a1)), run_time=0.4)
 
-    sc.wait_until(sc.at(4))
+    sc.wait_until(sc.at(5))
     q2 = bubble(k, "Hillary Clinton sinh ở đâu?", k.ACCENT, 24, 26).move_to(RIGHT * 3.4 + UP * 1.3)
     sc.run(FadeIn(q2, shift=UP * 0.2), run_time=0.5)
-    sc.wait_until(sc.at(5))
-    a2 = bubble(k, "Chicago.", k.PURPLE, 20, 28).next_to(q2, DOWN, buff=0.3).align_to(q2, RIGHT)
+    sc.wait_until(sc.at(6))
+    a2 = bubble(k, "Chicago.", k.PURPLE, 20, 30).next_to(q2, DOWN, buff=0.3).align_to(q2, RIGHT)
     tick = check(k, 0.45).next_to(a2, RIGHT, buff=0.2)
     sc.run(FadeIn(a2, shift=UP * 0.2), Create(tick), run_time=0.6)
 
-    sc.wait_until(sc.at(6))
-    mid = k.label("có kiến thức, mà không giật mình", 30, k.GOLD, bold=True).move_to(DOWN * 1.0)
-    sc.run(FadeIn(mid), run_time=0.5)
-
     sc.wait_until(sc.at(7))
-    vec = Arrow(LEFT * 1.6, RIGHT * 1.6, buff=0, color=k.GOLD, stroke_width=8).move_to(DOWN * 2.1 + LEFT * 2.6)
-    vt = k.label("steering vector “tự sửa”", 24, k.GOLD).next_to(vec, DOWN, buff=0.15)
-    eff = k.label("cộng vào: sửa cả lúc không cần", 24, k.PINK).move_to(DOWN * 2.1 + RIGHT * 3.0)
-    sc.run(GrowArrow(vec), FadeIn(vt), run_time=0.6)
-    sc.run(FadeIn(eff), run_time=0.4)
-
+    mid = k.label("có kiến thức, mà lúc nói sai không giật mình", 30, k.GOLD, bold=True).move_to(DOWN * 1.2)
+    sc.run(FadeIn(mid), run_time=0.5)
     sc.wait_until(sc.at(8))
-    skill = card(k, "tự sửa là một kỹ năng riêng", k.GREEN, 28, 30).to_edge(DOWN, buff=0.2)
-    sc.run(FadeOut(VGroup(vec, vt, eff)), FadeIn(skill, shift=UP * 0.2), run_time=0.6)
+    skill = VGroup(card(k, "biết", k.ACCENT, 30, 8), Text("≠", font=k.MONO, font_size=44, color=k.INK),
+                   card(k, "tự sửa: kỹ năng riêng", k.GREEN, 30, 24)).arrange(RIGHT, buff=0.4).to_edge(DOWN, buff=0.4)
+    sc.run(FadeIn(skill, shift=UP * 0.2), run_time=0.6)
 
 
 def _token(k, text, color, size=26):
-    return card(k, text, color, size, 14, pad=0.35)
+    return card(k, text, color, size, 24, pad=0.35)
 
 
-def revise(sc, s, k):
-    head = k.label("ReVISE", 44, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(Write(head), run_time=0.6)
+@_part(3)
+def new_errors(sc, s, k):
+    head = k.label("Dạy thẳng cách sửa?", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
+    sc.run(FadeIn(head), run_time=0.5)
+    ex = VGroup(_token(k, "câu trả lời sai", k.PINK), _token(k, "bản sửa đúng", k.GREEN)).arrange(RIGHT, buff=1.0)
+    ex.next_to(head, DOWN, buff=0.4)
+    sc.run(FadeIn(ex[0]), run_time=0.4)
+    ex_a = arrow(k, ex[0], ex[1])
+    sc.run(GrowArrow(ex_a), FadeIn(ex[1]), run_time=0.6)
+
     sc.wait_until(sc.at(1))
-    split = VGroup(card(k, "phát hiện", k.PINK, 28, 12), card(k, "sửa", k.GREEN, 28, 8)).arrange(RIGHT, buff=0.9)
-    split.next_to(head, DOWN, buff=0.4)
-    apart = k.label("tách ra học thì dễ hơn", 24, k.MUTED).next_to(split, DOWN, buff=0.15)
-    sc.run(FadeIn(split), FadeIn(apart), run_time=0.6)
+    trap = k.label("Nhưng có một cái bẫy", 32, k.PINK, bold=True).move_to(head)
+    sc.run(Transform(head, trap), FadeOut(ex), FadeOut(ex_a), run_time=0.5)
 
     sc.wait_until(sc.at(2))
-    s1 = k.label("Bước 1", 28, k.PINK, bold=True).move_to(LEFT * 5.8 + DOWN * 0.4)
-    wrong = _token(k, "đáp án sai", k.PINK)
-    refine = _token(k, "[Refine]", k.GOLD)
-    right = _token(k, "đáp án đúng", k.GREEN)
-    eos = _token(k, "[Kết thúc]", k.MUTED)
-    r1 = VGroup(wrong, refine).arrange(RIGHT, buff=0.6).next_to(s1, RIGHT, buff=0.4)
-    r2 = VGroup(right, eos).arrange(RIGHT, buff=0.6).next_to(r1, RIGHT, buff=0.6)
-    sc.run(FadeIn(s1), FadeIn(wrong), run_time=0.4)
-    sc.run(GrowArrow(arrow(k, wrong, refine)), FadeIn(refine), run_time=0.5)
-    sc.run(FadeIn(right), run_time=0.3)
-    sc.run(GrowArrow(arrow(k, right, eos)), FadeIn(eos), run_time=0.5)
-
-    sc.wait_until(sc.at(3))
-    s2 = k.label("Bước 2", 28, k.GREEN, bold=True).move_to(LEFT * 5.8 + DOWN * 2.2)
-    w2, rf2, ok2 = _token(k, "đáp án sai", k.PINK), _token(k, "[Refine]", k.GOLD), _token(k, "đáp án đúng", k.GREEN)
-    VGroup(w2, rf2).arrange(RIGHT, buff=0.12).next_to(s2, RIGHT, buff=0.5)
-    ok2.next_to(rf2, RIGHT, buff=0.8)
-    sc.run(FadeIn(s2), FadeIn(w2), FadeIn(rf2), run_time=0.5)
-    sc.run(GrowArrow(arrow(k, rf2, ok2, color=k.GREEN)), FadeIn(ok2), run_time=0.6)
-
-
-def new_errors(sc, s, k):
-    head = k.label("Cái bẫy (paper 2024)", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(head), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    before = _model(k, "mô hình cũ", k.PURPLE, w=3.4, h=1.0).move_to(LEFT * 4.2 + UP * 0.6)
-    err_g = _token(k, "lỗi xanh", k.GREEN).next_to(before, DOWN, buff=0.5)
-    taught = k.label("được dạy sửa", 22, k.GREEN).next_to(err_g, DOWN, buff=0.15)
+    before = _model(k, "mô hình cũ", k.PURPLE, w=3.4, h=1.0).move_to(LEFT * 4.0 + UP * 0.6)
+    err_g = _token(k, "lỗi màu xanh", k.ACCENT).next_to(before, DOWN, buff=0.5)
+    taught = k.label("được dạy sửa", 24, k.ACCENT).next_to(err_g, DOWN, buff=0.15)
     sc.run(FadeIn(before), run_time=0.4)
     sc.run(FadeIn(err_g), FadeIn(taught), run_time=0.5)
 
-    sc.wait_until(sc.at(2))
+    sc.wait_until(sc.at(3))
     after = _model(k, "mô hình mới", k.ORANGE, w=3.4, h=1.0).move_to(RIGHT * 3.6 + UP * 0.6)
     change = Arrow(before.get_right(), after.get_left(), buff=0.2, color=k.GOLD, stroke_width=5)
-    ct = k.label("tham số đổi", 24, k.GOLD).next_to(change, UP, buff=0.15)
+    ct = k.label("núm vặn đã đổi", 24, k.GOLD).next_to(change, UP, buff=0.15)
     sc.run(GrowArrow(change), FadeIn(ct), FadeIn(after), run_time=0.8)
 
-    sc.wait_until(sc.at(3))
-    err_r = _token(k, "lỗi đỏ", k.PINK).next_to(after, DOWN, buff=0.5)
-    never = k.label("chưa từng được dạy sửa", 22, k.PINK).next_to(err_r, DOWN, buff=0.15)
+    sc.wait_until(sc.at(4))
+    err_r = _token(k, "lỗi màu đỏ", k.PINK).next_to(after, DOWN, buff=0.5)
+    never = k.label("chưa từng được dạy sửa", 24, k.PINK).next_to(err_r, DOWN, buff=0.15)
     sc.run(FadeIn(err_r, scale=0.8), FadeIn(never), run_time=0.6)
-    exam = k.label("như luyện đề cũ cho một đề thi đã đổi", 26, k.MUTED).to_edge(DOWN, buff=0.4)
+    sc.wait_until(sc.at(5))
+    exam = card(k, "như luyện kỹ đề cũ cho một đề thi đã đổi", k.MUTED, 26, 50).to_edge(DOWN, buff=0.4)
     sc.run(FadeIn(exam), run_time=0.5)
 
 
+@_part(3)
 def rlvr(sc, s, k):
-    head = k.label("Học tăng cường", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(Write(head), run_time=0.6)
+    head = k.label("Học tăng cường · reinforcement learning (RL)", 30, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(head), run_time=0.8)
+
     sc.wait_until(sc.at(1))
-    inp = _token(k, "đầu vào", k.ACCENT).move_to(LEFT * 5.4 + UP * 0.6)
-    think = VGroup(*[Line(LEFT * 0.0, RIGHT * w, color=k.MUTED, stroke_width=4) for w in (3.6, 3.0, 3.4, 2.4)])
-    think.arrange(DOWN, aligned_edge=LEFT, buff=0.25).next_to(inp, RIGHT, buff=0.6)
-    free = k.label("muốn nghĩ gì thì nghĩ", 22, k.MUTED).next_to(think, UP, buff=0.15)
-    ans = _token(k, "đáp án", k.PURPLE).next_to(think, RIGHT, buff=0.6)
+    pet = k.label("như dạy thú cưng: không chỉ từng động tác, chỉ thưởng khi làm đúng", 26, k.MUTED)
+    pet.next_to(head, DOWN, buff=0.25)
+    sc.run(FadeIn(pet), run_time=0.5)
+
+    sc.wait_until(sc.at(2))
+    inp = _token(k, "bài toán", k.ACCENT).move_to(LEFT * 5.4 + UP * 0.4)
+    think = VGroup(*[Line(LEFT * 0.0, RIGHT * w, color=k.MUTED, stroke_width=4) for w in (3.6, 3.0, 3.4, 2.4, 3.2)])
+    think.arrange(DOWN, aligned_edge=LEFT, buff=0.22).next_to(inp, RIGHT, buff=0.6)
+    free = k.label("nghĩ gì cũng được, nháp dài bao nhiêu cũng được", 22, k.MUTED).next_to(think, UP, buff=0.15)
     sc.run(FadeIn(inp), run_time=0.3)
-    sc.run(Create(think, lag_ratio=0.3), FadeIn(free), run_time=1.0)
+    sc.run(Create(think, lag_ratio=0.3), FadeIn(free), run_time=1.2)
+
+    sc.wait_until(sc.at(3))
+    ans = _token(k, "đáp án", k.PURPLE).next_to(think, RIGHT, buff=0.6)
+    plus = k.label("đúng: +1", 32, k.GREEN, bold=True).next_to(ans, RIGHT, buff=0.4).shift(UP * 0.35)
+    zero = k.label("sai: 0", 32, k.PINK, bold=True).next_to(ans, RIGHT, buff=0.4).shift(DOWN * 0.35)
+    only = k.label("chỉ chấm đáp án cuối", 22, k.GOLD).next_to(ans, DOWN, buff=0.3)
     sc.run(FadeIn(ans), run_time=0.3)
-    plus = k.label("+1", 36, k.GREEN, bold=True).next_to(ans, RIGHT, buff=0.4).shift(UP * 0.3)
-    zero = k.label("0", 36, k.PINK, bold=True).next_to(ans, RIGHT, buff=0.4).shift(DOWN * 0.4)
-    sc.run(FadeIn(plus), FadeIn(zero), run_time=0.5)
-
-    sc.wait_until(sc.at(2))
-    name = card(k, "RLVR: phần thưởng kiểm chứng được (toán, code)", k.GOLD, 26, 60).move_to(DOWN * 1.9)
-    sc.run(FadeIn(name, shift=UP * 0.2), run_time=0.6)
-
-    sc.wait_until(sc.at(3))
-    aha = bubble(k, "Khoan, chỗ này hình như sai...", k.GOLD, 34, 26).next_to(think, DOWN, buff=0.35)
-    sc.run(FadeIn(aha, scale=0.9), run_time=0.6)
-    nobody = k.label("không ai dạy, tự nó biết kiểm lại", 26, k.GREEN, bold=True).to_edge(DOWN, buff=0.4)
-    sc.run(FadeIn(nobody), run_time=0.5)
-
-
-def _student(k, color, label):
-    head = Circle(radius=0.28, color=color, stroke_width=4).set_fill(color, 0.25)
-    body = RoundedRectangle(corner_radius=0.25, width=0.9, height=0.6, color=color, stroke_width=4).set_fill(color, 0.15)
-    body.next_to(head, DOWN, buff=0.05)
-    t = k.label(label, 20, color, bold=True).next_to(body, DOWN, buff=0.1)
-    return VGroup(head, body, t)
-
-
-def err_first(sc, s, k):
-    q = k.label("Sao phải sai rồi mới đúng?", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(q), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    senior = _student(k, k.ORANGE, "đàn anh").move_to(LEFT * 5.0 + UP * 0.6)
-    junior = _student(k, k.ACCENT, "đàn em").move_to(LEFT * 2.6 + UP * 0.6)
-    scold = bubble(k, "Sao lại mắc lỗi này?", k.ORANGE, 20, 22).next_to(VGroup(senior, junior), UP, buff=0.2)
-    sc.run(FadeIn(senior), FadeIn(junior), run_time=0.5)
-    sc.run(FadeIn(scold), run_time=0.5)
-    loop = CurvedArrow(junior.get_bottom() + DOWN * 0.1, senior.get_bottom() + DOWN * 0.1, angle=-1.2,
-                       color=k.MUTED, stroke_width=3)
-    year = k.label("năm sau, lại mắng đàn em mới", 22, k.MUTED).next_to(loop, DOWN, buff=0.15)
-    sc.run(Create(loop), FadeIn(year), run_time=0.6)
-
-    sc.wait_until(sc.at(2))
-    mine = k.label("có lỗi phải tự giẫm một lần", 26, k.GOLD, bold=True).move_to(LEFT * 3.8 + DOWN * 2.4)
-    sc.run(FadeIn(mine), run_time=0.5)
-
-    sc.wait_until(sc.at(3))
-    axes, at = _chart(k, 3.6, 2.6, "token của mô hình", "thời gian người giải")
-    axes.move_to(RIGHT * 3.6 + UP * 0.2)
-    rnd = random.Random(11)
-    dots = VGroup(*[Dot(at(x, min(0.95, max(0.05, x * 0.85 + rnd.uniform(-0.1, 0.1)))), radius=0.07, color=k.ACCENT)
-                    for x in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]])
-    tag = k.label("“Cost of Thinking” · MIT News", 22, k.MUTED).next_to(axes, UP, buff=0.3)
-    sc.run(FadeIn(axes), FadeIn(tag), run_time=0.5)
-    sc.run(FadeIn(dots, lag_ratio=0.1), run_time=0.8)
+    sc.run(FadeIn(plus), FadeIn(zero), FadeIn(only), run_time=0.6)
 
     sc.wait_until(sc.at(4))
-    both = k.label("carbon hay silicon, nghĩ đều tốn công", 24, k.GOLD, bold=True).next_to(axes, DOWN, buff=0.7)
-    sc.run(FadeIn(both), run_time=0.5)
+    rnd = random.Random(3)
+    ks = VGroup(*[_knob(k, k.PURPLE, r=0.3, angle=rnd.uniform(-2, 2)) for _ in range(6)]).arrange(RIGHT, buff=0.25)
+    ks.move_to(DOWN * 1.8)
+    kt = k.label("vặn núm để cách nghĩ được thưởng dễ xuất hiện hơn", 22, k.GREEN).next_to(ks, DOWN, buff=0.2)
+    sc.run(FadeIn(ks), FadeIn(kt), run_time=0.5)
+    sc.run(*[Rotate(kn[1], angle=0.7, about_point=kn[0].get_center()) for kn in ks], run_time=0.8)
+
     sc.wait_until(sc.at(5))
-    crit = k.label("token so với thời gian?", 24, k.PINK).next_to(both, DOWN, buff=0.2)
-    sc.run(FadeIn(crit), run_time=0.4)
-    sc.wait_until(sc.at(6))
-    better = k.label("nên so với số chữ viết nháp", 24, k.GREEN).next_to(crit, DOWN, buff=0.15)
-    sc.run(FadeIn(better), run_time=0.4)
+    name = card(k, "RLVR: phần thưởng kiểm chứng được (toán, code)", k.GOLD, 26, 60).to_edge(DOWN, buff=0.25)
+    sc.run(FadeIn(name, shift=UP * 0.2), run_time=0.6)
 
 
-def k_power(sc, s, k):
-    tag = card(k, "3 paper · 02/2025", k.MUTED, 24, 20).to_edge(UP, buff=0.4)
-    sc.run(FadeIn(tag), run_time=0.4)
+@_part(3)
+def rl_aha(sc, s, k):
+    head = k.label("Vì sao RL tránh được cái bẫy?", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
+    now = _model(k, "mô hình hiện tại", k.ORANGE, w=4.6, h=1.0).move_to(LEFT * 3.6 + UP * 1.5)
+    err = _token(k, "lỗi nó đang mắc", k.PINK).next_to(now, DOWN, buff=0.4)
+    grade = card(k, "được chấm ngay trên lỗi đó", k.GREEN, 24, 30).next_to(err, DOWN, buff=0.35)
+    sc.run(FadeIn(now), FadeIn(err), run_time=0.6)
+    sc.run(FadeIn(grade), run_time=0.5)
+
     sc.wait_until(sc.at(1))
-    steps = VGroup(*[RoundedRectangle(corner_radius=0.1, width=1.2, height=0.8, color=k.ACCENT, stroke_width=3)
-                     .set_fill(k.ACCENT, 0.12) for _ in range(5)]).arrange(RIGHT, buff=0.35).move_to(UP * 1.3)
-    kk = VGroup(*[k.label("K", 30, k.INK, bold=True).move_to(b) for b in steps])
-    links = VGroup(*[arrow(k, steps[i], steps[i + 1]) for i in range(4)])
-    under = k.label("T + 1 bước, mỗi bước K biến thể", 24, k.MUTED).next_to(steps, DOWN, buff=0.2)
-    sc.run(FadeIn(steps, lag_ratio=0.15), FadeIn(kk, lag_ratio=0.15), run_time=0.8)
-    sc.run(*[GrowArrow(l) for l in links], FadeIn(under), run_time=0.5)
+    lines = VGroup(bubble(k, "Đáp án là 42.", k.PURPLE, 20, 26),
+                   bubble(k, "Khoan, đúng không nhỉ?", k.GOLD, 24, 26),
+                   bubble(k, "À, sai bước 2. Đáp án là 40.", k.GREEN, 26, 26)).arrange(DOWN, buff=0.25, aligned_edge=LEFT)
+    lines.move_to(RIGHT * 3.4 + UP * 0.6)
+    nobody = k.label("không ai dạy", 24, k.MUTED).next_to(lines, UP, buff=0.2)
+    sc.run(FadeIn(nobody), run_time=0.3)
+    for b in lines:
+        sc.run(FadeIn(b, shift=UP * 0.2), run_time=0.5)
 
     sc.wait_until(sc.at(2))
-    step_way = VGroup(k.label("học từng bước", 28, k.GREEN, bold=True),
-                      Text("K × (T + 1)", font=k.MONO, font_size=40, color=k.GREEN)).arrange(DOWN, buff=0.2)
-    step_way.move_to(LEFT * 3.4 + DOWN * 1.6)
-    sc.run(FadeIn(step_way, shift=UP * 0.2), run_time=0.6)
+    bars = VGroup()
+    for name, v, c in (("không kiểm lại", 0.35, k.MUTED), ("chịu kiểm lại", 0.8, k.GREEN)):
+        bar = Rectangle(width=1.2, height=1.7 * v, stroke_width=0).set_fill(c, 0.9)
+        bars.add(VGroup(bar, k.label(name, 22, c, bold=True).next_to(bar, DOWN, buff=0.12)))
+    bars.arrange(RIGHT, buff=0.8, aligned_edge=DOWN).move_to(RIGHT * 2.8 + DOWN * 3.7, aligned_edge=DOWN)
+    bl = k.label("phần thưởng", 22, k.MUTED).next_to(bars[1][0], UP, buff=0.12)
+    sc.run(*[GrowFromEdge(b[0], DOWN) for b in bars], FadeIn(VGroup(*[b[1] for b in bars])), FadeIn(bl), run_time=0.8)
+    kept = k.label("thói quen kiểm lại được giữ", 26, k.GREEN, bold=True).move_to(LEFT * 3.6 + DOWN * 1.5)
+    sc.run(FadeIn(kept), run_time=0.4)
 
     sc.wait_until(sc.at(3))
-    direct = VGroup(k.label("học thẳng ra đáp án", 28, k.PINK, bold=True),
-                    Text("K ^ (T + 1)", font=k.MONO, font_size=40, color=k.PINK)).arrange(DOWN, buff=0.2)
-    direct.move_to(RIGHT * 3.4 + DOWN * 1.6)
-    expo = k.label("tăng theo hàm mũ", 24, k.PINK).next_to(direct, DOWN, buff=0.15)
-    sc.run(FadeIn(direct, shift=UP * 0.2), run_time=0.6)
-    sc.run(FadeIn(expo), run_time=0.4)
+    rs = card(k, "mô hình reasoning bây giờ", k.GOLD, 26, 30).next_to(kept, DOWN, buff=0.3)
+    sc.run(FadeIn(rs, shift=UP * 0.2), run_time=0.5)
 
 
-def parity(sc, s, k):
+@_part(3)
+def err_first(sc, s, k):
+    q = k.label("Sao phải sai rồi mới đúng?", 38, k.INK, bold=True).to_edge(UP, buff=0.5)
+    sc.run(FadeIn(q), run_time=0.5)
+    sc.wait_until(sc.at(1))
+    senior = _student(k, k.ORANGE, "đàn anh", 1.4).move_to(LEFT * 2.2 + DOWN * 0.5)
+    junior = _student(k, k.ACCENT, "đàn em", 1.4).move_to(RIGHT * 2.2 + DOWN * 0.5)
+    scold = bubble(k, "Sao làm thí nghiệm lại mắc lỗi này?", k.ORANGE, 22, 26).next_to(senior, UP, buff=0.3)
+    sc.run(FadeIn(senior), FadeIn(junior), run_time=0.5)
+    sc.run(FadeIn(scold), run_time=0.5)
+    year = k.label("năm sau", 26, k.GOLD, bold=True).move_to(DOWN * 2.5)
+    swap = CurvedArrow(junior.get_bottom() + DOWN * 0.1, senior.get_bottom() + DOWN * 0.1, angle=-1.0,
+                       color=k.GOLD, stroke_width=4)
+    sc.run(Create(swap), FadeIn(year), run_time=0.7)
+    newbie = _student(k, k.GREEN, "đàn em mới", 1.4).move_to(RIGHT * 5.4 + DOWN * 0.5)
+    scold2 = bubble(k, "Sao lại mắc lỗi này?", k.ACCENT, 20, 26).next_to(junior, UP, buff=0.3)
+    sc.run(FadeIn(newbie), FadeIn(scold2), run_time=0.7)
+
+    sc.wait_until(sc.at(2))
+    mine = card(k, "có những lỗi phải tự giẫm một lần mới gỡ được", k.GOLD, 28, 50).to_edge(DOWN, buff=0.35)
+    sc.run(FadeIn(mine, shift=UP * 0.2), run_time=0.6)
+
+
+def _bits(k, bits, color=None, size=40):
+    return VGroup(*[card(k, str(b), color or k.ACCENT, size, 3, pad=0.45) for b in bits]).arrange(RIGHT, buff=0.15)
+
+
+@_part(3)
+def parity_rote(sc, s, k):
     head = k.label("Parity check", 40, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.wait_until(sc.at(0))
     sc.run(Write(head), run_time=0.6)
     sc.wait_until(sc.at(1))
-    bits = [0, 1, 1, 0, 1, 0]
-    cells = VGroup(*[card(k, str(b), k.ACCENT, 34, 3, pad=0.45) for b in bits]).arrange(RIGHT, buff=0.15)
-    cells.next_to(head, DOWN, buff=0.4)
-    q = k.label("số bit 1 chẵn hay lẻ?", 26, k.MUTED).next_to(cells, RIGHT, buff=0.4)
+    cells = _bits(k, [0, 1, 1, 0, 1, 0]).next_to(head, DOWN, buff=0.4)
+    q = k.label("có chẵn hay lẻ số chữ 1?", 28, k.MUTED).next_to(cells, DOWN, buff=0.25)
     sc.run(FadeIn(cells, lag_ratio=0.1), FadeIn(q), run_time=0.8)
 
     sc.wait_until(sc.at(2))
-    table = VGroup(*[Text(f"{i:06b} → {bin(i).count('1') % 2}", font=k.MONO, font_size=18, color=k.MUTED)
-                     for i in range(10)]).arrange(DOWN, buff=0.06)
-    dots = Text("...", font=k.MONO, font_size=22, color=k.MUTED)
-    rote = VGroup(table, dots).arrange(DOWN, buff=0.05).scale(1.2).to_edge(LEFT, buff=1.0).shift(DOWN * 1.4)
-    count = k.label("học thuộc: 64 trường hợp", 26, k.PINK, bold=True).next_to(rote, UP, buff=0.2)
-    count.align_to(rote, LEFT).shift(LEFT * 0.4)
-    sc.run(FadeIn(rote, lag_ratio=0.05), FadeIn(count), run_time=0.9)
-
+    rote = k.label("học thuộc: nhìn cả dãy, đoán ngay", 28, k.PINK, bold=True).move_to(DOWN * 0.4)
+    sc.run(FadeIn(rote), run_time=0.5)
     sc.wait_until(sc.at(3))
-    chain = VGroup()
-    acc = bits[0]
-    prev = card(k, str(acc), k.GOLD, 28, 3, pad=0.4)
-    chain.add(prev)
-    for b in bits[1:]:
-        acc ^= b
-        op = k.label(f"XOR {b}", 22, k.MUTED)
-        nxt = card(k, str(acc), k.GOLD, 28, 3, pad=0.4)
-        chain.add(op, nxt)
-    chain.arrange(RIGHT, buff=0.16).scale(0.92).move_to(RIGHT * 2.3 + DOWN * 0.6)
-    rule = VGroup(*[Text(t, font=k.MONO, font_size=24, color=k.GREEN) for t in ("00 → 0", "01 → 1", "10 → 1", "11 → 0")])
-    rule.arrange(RIGHT, buff=0.4).next_to(chain, DOWN, buff=0.4)
-    few = k.label("mỗi bước 4 trường hợp, 5 bước: 20 ví dụ", 26, k.GREEN, bold=True).next_to(rule, DOWN, buff=0.3)
-    for m in chain:
-        sc.run(FadeIn(m), run_time=0.15)
-    sc.run(FadeIn(rule), run_time=0.5)
-    sc.run(FadeIn(few), run_time=0.5)
-
-    sc.wait_until(sc.at(4))
-    gen = card(k, "muốn tổng quát sang bài mới thì phải dạy suy luận", k.GOLD, 26, 60).to_edge(DOWN, buff=0.25)
-    sc.run(FadeIn(gen, shift=UP * 0.2), run_time=0.6)
+    per = VGroup(*[k.label("×2", 26, k.PINK, bold=True).next_to(c, UP, buff=0.1) for c in cells])
+    sc.run(FadeIn(per, lag_ratio=0.15), run_time=0.8)
+    # Một khối Text duy nhất: 64 Text rời làm cảnh render quá 10 phút.
+    rows = ["  ".join(f"{i:06b}" for i in range(r * 8, r * 8 + 8)) for r in range(8)]
+    table = Text("\n".join(rows), font=k.MONO, font_size=18, color=k.MUTED, line_spacing=0.8)
+    table.scale_to_fit_height(2.6).move_to(DOWN * 2.2)
+    count = k.label("2 mũ 6 = 64 trường hợp", 30, k.PINK, bold=True).next_to(table, UP, buff=0.2)
+    sc.run(FadeOut(rote), FadeIn(table), FadeIn(count), run_time=1.2)
 
 
-def _tree(k, depth=4, width=6.0, height=3.2):
-    nodes, edges = [], VGroup()
-    level = [ORIGIN + UP * height / 2]
-    nodes.append(level)
-    for d in range(1, depth):
-        n = 2 ** d
-        y = height / 2 - d * height / (depth - 1)
-        xs = [(-width / 2 + (i + 0.5) * width / n) for i in range(n)]
-        cur = [RIGHT * x + UP * y for x in xs]
-        for i, p in enumerate(cur):
-            edges.add(Line(level[i // 2], p, color=k.MUTED, stroke_width=3))
-        nodes.append(cur)
-        level = cur
-    return nodes, edges
-
-
-def pass_at_k(sc, s, k):
-    q = k.label("RL dạy cái mới, hay làm lộ cái có sẵn?", 32, k.INK, bold=True).to_edge(UP, buff=0.45)
-    sc.run(FadeIn(q), run_time=0.5)
+@_part(3)
+def parity_steps(sc, s, k):
+    head = k.label("Làm từng bước", 38, k.GREEN, bold=True).to_edge(UP, buff=0.45)
+    sc.run(FadeIn(head), run_time=0.5)
     sc.wait_until(sc.at(1))
-    nodes, edges = _tree(k, 4, 5.4, 3.0)
-    tree = VGroup(edges).move_to(LEFT * 3.6 + DOWN * 0.4)
-    shift = tree.get_center() - VGroup(*[Dot(p) for lvl in nodes for p in lvl]).get_center()
-    path = VGroup()
-    pts = [nodes[0][0], nodes[1][0], nodes[2][1], nodes[3][2]]
-    for a, b in zip(pts, pts[1:]):
-        path.add(Line(a + shift, b + shift, color=k.GREEN, stroke_width=3))
-    sc.run(Create(edges), run_time=0.8)
-    sc.run(Create(path), run_time=0.6)
-    thin = k.label("đường đúng có sẵn, nhưng mảnh", 22, k.GREEN).next_to(tree, DOWN, buff=0.2)
-    sc.run(FadeIn(thin), run_time=0.4)
-    sc.run(path.animate.set_stroke(width=10), run_time=0.6)
-    thick = k.label("sau RL: dày lên, dễ được chọn", 22, k.GREEN, bold=True).move_to(thin)
-    sc.run(Transform(thin, thick), run_time=0.4)
+    bits = [0, 1, 1, 0, 1, 0]
+    cells = _bits(k, bits, size=40).next_to(head, DOWN, buff=0.4)
+    sc.run(FadeIn(cells, lag_ratio=0.1), run_time=0.6)
+
+    states = ["lẻ", "chẵn", "chẵn", "lẻ", "lẻ"]
+    slots = VGroup()
+    for i in range(5):
+        slots.add(card(k, states[i], k.GOLD, 28, 6, pad=0.35))
+    slots.arrange(RIGHT, buff=0.55).next_to(cells, DOWN, buff=0.8)
+    marks = [2] + list(range(3, 7))
+    for i, st in enumerate(slots):
+        sc.wait_until(sc.at(marks[i]))
+        span = cells[: i + 2]
+        ring = SurroundingRectangle(cells[i + 1] if i else span, color=k.GOLD, buff=0.08, corner_radius=0.1)
+        sc.run(Create(ring), FadeIn(st, shift=DOWN * 0.2), run_time=0.6)
+        if i:
+            sc.run(GrowArrow(Arrow(slots[i - 1].get_right(), st.get_left(), buff=0.08, color=k.GOLD, stroke_width=4,
+                                   max_tip_length_to_length_ratio=0.3)), FadeOut(ring), run_time=0.4)
+        else:
+            sc.run(FadeOut(ring), run_time=0.2)
+
+    sc.wait_until(sc.at(7))
+    ans = card(k, "Đáp án: lẻ", k.GOLD, 32, 14).next_to(slots, DOWN, buff=0.4)
+    sc.run(GrowFromCenter(ans), run_time=0.5)
+
+    sc.wait_until(sc.at(8))
+    sc.run(FadeOut(ans), run_time=0.3)
+    rules = VGroup(*[Text(t, font=k.MONO, font_size=26, color=k.GREEN) for t in
+                     ("chẵn + 0 = chẵn", "chẵn + 1 = lẻ", "lẻ + 0 = lẻ", "lẻ + 1 = chẵn")])
+    rules.arrange_in_grid(2, 2, buff=(0.8, 0.2)).next_to(slots, DOWN, buff=0.45)
+    rt = k.label("mỗi bước chỉ 1 quy tắc nhỏ, 4 khả năng", 26, k.GREEN, bold=True).next_to(rules, DOWN, buff=0.2)
+    sc.run(FadeIn(rules, lag_ratio=0.2), FadeIn(rt), run_time=0.9)
+
+    sc.wait_until(sc.at(9))
+    cmp = VGroup(k.label("từng bước: 5 × 4 = 20 ví dụ", 28, k.GREEN, bold=True),
+                 k.label("học thuộc: 64", 28, k.PINK, bold=True)).arrange(RIGHT, buff=0.8)
+    cmp.to_edge(DOWN, buff=0.35)
+    sc.run(FadeOut(rt), FadeIn(cmp), run_time=0.6)
+
+    sc.wait_until(sc.at(10))
+    big = VGroup(k.label("dãy 20 chữ số:", 26, k.INK, bold=True), k.label("học thuộc > 1 triệu", 26, k.PINK, bold=True),
+                 k.label("từng bước: vài chục", 26, k.GREEN, bold=True)).arrange(RIGHT, buff=0.5).to_edge(DOWN, buff=0.35)
+    sc.run(FadeOut(cmp), FadeIn(big), run_time=0.6)
+
+    sc.wait_until(sc.at(11))
+    gen = card(k, "muốn làm được bài chưa từng gặp: phải suy luận từng bước", k.GOLD, 26, 60).to_edge(DOWN, buff=0.3)
+    sc.run(FadeOut(big), FadeIn(gen, shift=UP * 0.2), run_time=0.6)
+
+
+def _target(k, r=1.5):
+    rings = VGroup(*[Circle(radius=r * f, color=k.MUTED, stroke_width=3) for f in (1.0, 0.66, 0.33)])
+    bull = Dot(radius=r * 0.1, color=k.GOLD)
+    return VGroup(rings, bull)
+
+
+@_part(3)
+def pass_at_k(sc, s, k):
+    q = k.label("RL dạy điều mới, hay làm lộ điều có sẵn?", 34, k.INK, bold=True).to_edge(UP, buff=0.45)
+    sc.run(Write(q), run_time=0.8)
+    sc.wait_until(sc.at(1))
+    name = k.label("pass@k: giải k lần, đúng một lần là đậu", 30, k.GOLD, bold=True).next_to(q, DOWN, buff=0.4)
+    sc.run(FadeIn(name), run_time=0.5)
+    sc.wait_until(sc.at(2))
+    tgt = _target(k, 1.8).move_to(DOWN * 0.8)
+    sc.run(FadeIn(tgt), run_time=0.5)
+    rnd = random.Random(5)
+    darts = VGroup(*[Dot(tgt.get_center() + RIGHT * rnd.uniform(-1.8, 1.8) + UP * rnd.uniform(-1.6, 1.6),
+                         radius=0.09, color=k.PINK) for _ in range(5)])
+    hit = Dot(tgt.get_center() + RIGHT * 0.05, radius=0.11, color=k.GREEN)
+    sc.run(FadeIn(darts, lag_ratio=0.3), run_time=0.8)
+    sc.run(FadeIn(hit, scale=2), run_time=0.4)
+    ok = k.label("trúng một phát: đậu", 26, k.GREEN, bold=True).next_to(tgt, RIGHT, buff=0.5)
+    sc.run(FadeIn(ok), run_time=0.4)
+
+
+@_part(3)
+def darts(sc, s, k):
+    tag = card(k, "paper 04/2025", k.MUTED, 22, 20).to_edge(UP, buff=0.35)
+    sc.run(FadeIn(tag), run_time=0.4)
+    t_rl = _target(k, 1.5).move_to(LEFT * 3.4 + UP * 0.3)
+    t_base = _target(k, 1.5).move_to(RIGHT * 3.4 + UP * 0.3)
+    l_rl = k.label("qua RL", 30, k.GOLD, bold=True).next_to(t_rl, UP, buff=0.25)
+    l_base = k.label("mô hình gốc", 30, k.INK, bold=True).next_to(t_base, UP, buff=0.25)
+    sc.run(FadeIn(t_rl), FadeIn(t_base), FadeIn(l_rl), FadeIn(l_base), run_time=0.6)
+
+    first_rl = Dot(t_rl.get_center() + RIGHT * 0.08, radius=0.11, color=k.GREEN)
+    first_base = Dot(t_base.get_center() + RIGHT * 0.9 + UP * 0.7, radius=0.11, color=k.PINK)
+    k1 = k.label("ném 1 lần", 30, k.INK, bold=True).move_to(UP * 2.4)
+    sc.run(FadeIn(k1), FadeIn(first_rl, scale=2), FadeIn(first_base, scale=2), run_time=0.6)
+    w1 = k.label("RL thắng xa", 26, k.GOLD, bold=True).next_to(t_rl, DOWN, buff=0.3)
+    sc.run(FadeIn(w1), run_time=0.4)
+
+    sc.wait_until(sc.at(1))
+    rnd = random.Random(8)
+    # RL: dồn quanh một chỗ quen tay, lệch khỏi hồng tâm một chút
+    spot = t_rl.get_center() + RIGHT * 0.5 + DOWN * 0.4
+    rl_more = VGroup(*[Dot(spot + RIGHT * rnd.gauss(0, 0.15) + UP * rnd.gauss(0, 0.15), radius=0.07, color=k.GOLD)
+                       for _ in range(30)])
+    base_more = VGroup(*[Dot(t_base.get_center() + RIGHT * rnd.uniform(-1.5, 1.5) + UP * rnd.uniform(-1.4, 1.4),
+                             radius=0.07, color=k.MUTED) for _ in range(30)])
+    lucky = Dot(t_base.get_center() + LEFT * 0.06 + UP * 0.04, radius=0.11, color=k.GREEN)
+    k256 = k.label("ném 256 lần", 30, k.INK, bold=True).move_to(k1)
+    sc.run(Transform(k1, k256), FadeOut(w1), FadeIn(rl_more, lag_ratio=0.03), FadeIn(base_more, lag_ratio=0.03),
+           run_time=1.2)
+    sc.run(FadeIn(lucky, scale=2), run_time=0.4)
+    tie = k.label("mô hình gốc ngang ngửa", 26, k.INK, bold=True).next_to(t_base, DOWN, buff=0.3)
+    sc.run(FadeIn(tie), run_time=0.4)
 
     sc.wait_until(sc.at(2))
-    axes, at = _chart(k, 4.6, 3.0, "k (1 đến 256)", "pass@k")
-    axes.move_to(RIGHT * 3.4 + DOWN * 0.3)
-    tag = k.label("paper 04/2025", 22, k.MUTED).next_to(axes, UP, buff=0.35)
-    sc.run(FadeIn(axes), FadeIn(tag), run_time=0.5)
+    why = k.label("Vì sao?", 30, k.INK, bold=True).to_edge(DOWN, buff=0.9)
+    sc.run(FadeIn(why), run_time=0.3)
     sc.wait_until(sc.at(3))
-    rl = _polyline(k, at, [(0, 0.55), (0.25, 0.68), (0.5, 0.75), (0.75, 0.79), (1, 0.81)], k.GOLD)
-    base = _polyline(k, at, [(0, 0.25), (0.25, 0.48), (0.5, 0.66), (0.75, 0.78), (1, 0.84)], k.MUTED)
-    tr = k.label("qua RL", 22, k.GOLD, bold=True).move_to(at(0.15, 0.82))
-    sc.run(Create(rl), FadeIn(tr), run_time=0.8)
+    coach = k.label("luôn ném về một chỗ quen tay", 24, k.GOLD).next_to(t_rl, DOWN, buff=0.3)
+    sc.run(Indicate(rl_more, color=k.GOLD), FadeIn(coach), run_time=0.7)
     sc.wait_until(sc.at(4))
-    tb = k.label("mô hình gốc", 22, k.INK, bold=True).next_to(at(1, 0.84), UP, buff=0.12).shift(LEFT * 0.4)
-    sc.run(Create(base), FadeIn(tb), run_time=1.0)
+    sc.run(Indicate(base_more, color=k.INK), run_time=0.7)
+    spread = k.label("ném tản mát, đủ nhiều thì cũng trúng", 24, k.MUTED).next_to(tie, DOWN, buff=0.1)
+    sc.run(FadeIn(spread), run_time=0.4)
 
     sc.wait_until(sc.at(5))
+    msg = k.label("đáp án đúng có sẵn trong mô hình gốc · RL chỉ làm nó dễ được chọn hơn", 26, k.GOLD, bold=True)
+    msg.to_edge(DOWN, buff=0.35)
+    sc.run(FadeOut(why), FadeIn(msg), run_time=0.5)
+    sc.wait_until(sc.at(6))
     sutra = card(k, "Hoa Nghiêm: ai cũng sẵn trí tuệ Như Lai, chỉ bị vọng tưởng che lấp", k.GOLD, 24, 70)
-    sutra.to_edge(DOWN, buff=0.25)
-    sc.run(FadeIn(sutra, shift=UP * 0.2), run_time=0.7)
+    sutra.move_to(msg)
+    sc.run(FadeOut(msg), FadeIn(sutra, shift=UP * 0.2), run_time=0.6)
 
 
-def no_training(sc, s, k):
-    q = k.label("Đã có sẵn thì cần gì RL?", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(q), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    zen = card(k, "Thiền tông đốn ngộ: buông được là ngộ", k.GOLD, 26, 50).next_to(q, DOWN, buff=0.3)
-    sc.run(FadeIn(zen), run_time=0.6)
-    sc.wait_until(sc.at(2))
-    base = Line(LEFT * 3.4, RIGHT * 3.4, color=k.MUTED, stroke_width=3).move_to(DOWN * 2.4)
-    vals = [("mô hình gốc", 1.4, k.MUTED), ("qua RL", 2.8, k.GOLD), ("gốc + cách lấy mẫu mới", 2.7, k.GREEN)]
-    bars = VGroup()
-    for i, (name, h, c) in enumerate(vals):
-        bar = Rectangle(width=1.3, height=h, stroke_width=0).set_fill(c, 0.85)
-        bar.move_to(base.get_left() + RIGHT * (1.1 + i * 2.3), aligned_edge=DOWN)
-        t = k.label(name, 22, c, bold=True, width_chars=14).next_to(bar, DOWN, buff=0.15)
-        bars.add(VGroup(bar, t))
-    sc.run(Create(base), run_time=0.3)
-    for b in bars:
-        sc.run(GrowFromEdge(b[0], DOWN), FadeIn(b[1]), run_time=0.45)
-    note = k.label("không huấn luyện gì · 10/2025", 22, k.GREEN).next_to(bars[2][0], UP, buff=0.15)
-    sc.run(FadeIn(note), run_time=0.4)
-
-
+@_part(3)
 def other_camp(sc, s, k):
-    head = k.label("Phe còn lại phản bác", 36, k.INK, bold=True).to_edge(UP, buff=0.5)
+    head = k.label("Phe kia phản bác", 36, k.INK, bold=True).to_edge(UP, buff=0.45)
     sc.run(FadeIn(head), run_time=0.5)
     nums = VGroup(*[card(k, str(i), k.MUTED, 24, 3, pad=0.35) for i in range(1, 11)]).arrange(RIGHT, buff=0.1)
     nums.next_to(head, DOWN, buff=0.35)
-    guess = k.label("thử 1024 lần, đoán bừa cũng trúng", 24, k.PINK).next_to(nums, DOWN, buff=0.15)
-    sc.run(FadeIn(nums, lag_ratio=0.08), FadeIn(guess), run_time=0.8)
+    guess = k.label("đáp án chỉ là số nhỏ: thử 256 lần, đoán bừa cũng trúng", 24, k.PINK).next_to(nums, DOWN, buff=0.15)
+    sc.run(FadeIn(nums, lag_ratio=0.08), FadeIn(guess), run_time=0.9)
 
     sc.wait_until(sc.at(1))
-    axes, at = _chart(k, 4.6, 2.6, "k", "CoT-pass@k")
-    axes.move_to(LEFT * 3.0 + DOWN * 1.3)
+    axes, at = _chart(k, 4.4, 2.4, "số lần thử k", "đậu: lời giải cũng phải đúng")
+    axes.move_to(LEFT * 3.6 + DOWN * 1.1)
     rl = _polyline(k, at, [(0, 0.5), (0.5, 0.7), (1, 0.82)], k.GOLD)
     base = _polyline(k, at, [(0, 0.2), (0.5, 0.42), (1, 0.55)], k.MUTED)
-    tag = k.label("lời giải cũng phải đúng · 06/2025", 22, k.MUTED).next_to(axes, UP, buff=0.3)
+    tag = k.label("paper 06/2025", 22, k.MUTED).next_to(axes, UP, buff=0.4)
     sc.run(FadeIn(axes), FadeIn(tag), run_time=0.5)
     sc.run(Create(rl), Create(base), run_time=0.9)
-    win = k.label("qua RL hơn hẳn", 24, k.GOLD, bold=True).next_to(at(1, 0.82), RIGHT, buff=0.15)
+    win = k.label("qua RL hơn hẳn", 24, k.GOLD, bold=True).next_to(at(1, 0.82), UP, buff=0.15).shift(LEFT * 0.6)
     sc.run(FadeIn(win), run_time=0.4)
 
     sc.wait_until(sc.at(2))
-    who = bubble(k, "1024 lời giải, ai chấm?", k.GOLD, 24, 26).move_to(RIGHT * 3.8 + DOWN * 1.3)
-    sc.run(FadeIn(who), run_time=0.5)
+    axis = Arrow(LEFT * 2.4, RIGHT * 2.4, buff=0, color=k.MUTED, stroke_width=4).move_to(RIGHT * 4.3 + DOWN * 1.8)
+    at_t = k.label("thời gian huấn luyện RL", 22, k.MUTED).next_to(axis, DOWN, buff=0.15)
+    early = card(k, "đầu: khai thác cái có sẵn", k.ACCENT, 20, 14)
+    late = card(k, "sau: mọc năng lực mới", k.GREEN, 20, 14)
+    VGroup(early, late).arrange(RIGHT, buff=0.25).next_to(axis, UP, buff=0.3)
+    both = k.label("cả hai phe đều đúng", 26, k.GOLD, bold=True).next_to(VGroup(early, late), UP, buff=0.25)
+    sc.run(GrowArrow(axis), FadeIn(at_t), run_time=0.5)
+    sc.run(FadeIn(early), FadeIn(late), FadeIn(both), run_time=0.7)
+
     sc.wait_until(sc.at(3))
-    judge = _model(k, "LLM chấm", k.PURPLE, w=2.8, h=0.9).next_to(who, DOWN, buff=0.3)
-    sc.run(FadeIn(judge), run_time=0.5)
-    sc.wait_until(sc.at(4))
-    hmm = k.label("?", 60, k.PINK, bold=True).next_to(judge, RIGHT, buff=0.3)
-    sc.run(FadeIn(hmm, scale=0.6), run_time=0.4)
-
-
-def open_debate(sc, s, k):
-    title = card(k, "The Debate on RLVR Reasoning Capability Boundary", k.MUTED, 24, 60).to_edge(UP, buff=0.5)
-    sc.run(FadeIn(title), run_time=0.5)
-    axis = Arrow(LEFT * 5.5, RIGHT * 5.5, buff=0, color=k.MUTED, stroke_width=4).move_to(DOWN * 0.2)
-    at = k.label("thời gian huấn luyện RL", 24, k.MUTED).next_to(axis, DOWN, buff=0.2)
-    sc.run(GrowArrow(axis), FadeIn(at), run_time=0.6)
-    early = card(k, "đầu: khai thác đường có sẵn", k.ACCENT, 26, 30).move_to(LEFT * 3.0 + UP * 1.2)
-    late = card(k, "sau: mọc năng lực mới", k.GREEN, 26, 30).move_to(RIGHT * 3.0 + UP * 1.2)
-    sc.run(FadeIn(early, shift=DOWN * 0.2), run_time=0.5)
-    sc.run(FadeIn(late, shift=DOWN * 0.2), run_time=0.5)
-    sc.wait_until(sc.at(1))
-    q = k.label("RL kiểu nào, phần thưởng kiểu nào? vẫn đang tranh luận", 26, k.GOLD, bold=True).to_edge(DOWN, buff=0.8)
-    sc.run(FadeIn(q), run_time=0.6)
+    still = card(k, "đến giờ vẫn đang tranh luận", k.MUTED, 26, 40).to_edge(DOWN, buff=0.25)
+    sc.run(FadeIn(still, shift=UP * 0.2), run_time=0.5)
 
 
 def outro(sc, s, k):
@@ -1661,14 +1688,14 @@ def outro(sc, s, k):
     head = k.label("Video này đã đi qua", 40, k.INK, bold=True).to_edge(UP, buff=0.45)
     sc.run(Write(head), run_time=0.7)
     cols = [("1 · Lúc sinh chữ", "bản sai rồi trừ đi", k.ACCENT,
-             ["probe + vector vàng", "GPT-2 lớn − Small", "DoLa, Layer CD", "câu thần chú, RAG",
+             ["probe + vector vàng", "bạn học kém: trừ đi", "Obama: 40 − 60", "DoLa: tầng nông",
               "quả chuối đen", "MTI: “Output Error”"]),
             ("2 · Sinh rồi kiểm", "đổi quy trình", k.GREEN,
              ["chê dễ hơn làm?", "tự kiểm: chập chờn", "phản hồi ngoài: chắc ăn", "CL và CS",
               "khen hay hỏi vặn", "so với bỏ phiếu đa số"]),
             ("3 · Huấn luyện", "học tăng cường", k.GOLD,
-             ["Hillary sinh ở đâu?", "ReVISE, lỗi mới", "RLVR tự biết kiểm lại", "parity: 64 hay 20",
-              "pass@k: có sẵn hay mới?", "hai phe đều đúng"])]
+             ["núm vặn, Hillary/Chicago", "lỗi xanh, lỗi đỏ", "RLVR tự biết kiểm lại", "parity: 64 hay 20",
+              "phi tiêu pass@k", "hai phe đều đúng"])]
     panels = VGroup()
     for title, sub, color, items in cols:
         top = VGroup(k.label(title, 32, color, bold=True), k.label(sub, 24, k.MUTED)).arrange(DOWN, buff=0.08)
