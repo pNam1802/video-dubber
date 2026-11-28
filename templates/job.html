@@ -325,6 +325,24 @@
       return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
     }
 
+    // ── Trình phát tự thử lại ──────────────────────────────
+    // Lần xin file đầu có thể rơi vào lúc file chưa sẵn trên server (vừa xong
+    // job). <video> lỗi một lần là đứng im ở 0:00 mãi, nên tự nạp lại vài lần.
+    (function retryPlayerOnError() {
+      const player = document.getElementById("resultVideo");
+      if (!player || !player.getAttribute("src")) return;
+      const baseSrc = player.getAttribute("src");
+      let attempts = 0;
+      player.addEventListener("error", function () {
+        if (attempts >= 5) return;
+        attempts += 1;
+        setTimeout(function () {
+          player.src = baseSrc + (baseSrc.indexOf("?") === -1 ? "?" : "&") + "r=" + attempts;
+          player.load();
+        }, 2000 * attempts);
+      });
+    })();
+
     // ── Lời thoại tương tác ────────────────────────────────
     // Job chạy trước khi có bảng transcript_segment thì API trả
     // available: false — panel giữ nguyên trạng thái ẩn, không có gì phải

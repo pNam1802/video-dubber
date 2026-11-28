@@ -19,6 +19,7 @@ from app.extensions import db
 from app.mailer import notify_job_status
 from app.models import Job, JobStatus, TranscriptSegment, utcnow
 from app.quota import estimate_cost, estimate_cpu_cost, estimate_image_cost
+from app.storage import commit_volume
 from config.settings import JOB_RUNNER, MODAL_APP_NAME
 from core.pipeline import DubbingConfig, DubbingPipeline
 from core.transcriber import Segment
@@ -368,6 +369,10 @@ def run_job_phase2(flask_app: Flask, job_id: int, video_path: Path, config: Dubb
             reason = " ".join(job.error.split())[:200]
             job.message = f"Xử lý thất bại: {reason}"[:500]
 
+        # Đẩy file lên volume TRƯỚC khi báo DONE: trang job thấy DONE là tải
+        # lại và xin video ngay; nếu volume chưa commit (vốn chỉ chạy ở
+        # finally của modal_app) thì trình phát nhận 404 và kẹt ở 0:00.
+        commit_volume()
         db.session.commit()
         notify_job_status(job, "done" if job.status == JobStatus.DONE else "failed")
 
@@ -445,6 +450,7 @@ def run_script_job(flask_app: Flask, job_id: int, config: DubbingConfig) -> None
             reason = " ".join(job.error.split())[:200]
             job.message = f"Xử lý thất bại: {reason}"[:500]
 
+        commit_volume()  # trước khi báo DONE, xem run_job_phase2
         db.session.commit()
         notify_job_status(job, "done" if job.status == JobStatus.DONE else "failed")
 
